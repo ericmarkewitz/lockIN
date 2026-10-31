@@ -1,3 +1,12 @@
+### Mobile App for tracking workouts
+
+Developed using React Native
+
+When you join the app you set up your weekly workout plan, choose days you’re exercising/resting then go into each individual day and pick out lift and set sets+reps (maybe weight as well)
+
+When you workout you can click the day and start the workout where you input weights, sets, and reps completed.
+
+
 # Welcome to your Expo app 👋
 
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
