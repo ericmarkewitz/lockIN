@@ -89,7 +89,7 @@ export function ExercisePicker({
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1, padding: 16, paddingTop: 20, gap: 12 },
+  wrap: { flex: 1, padding: 16, paddingTop: 20, paddingBottom: 32, gap: 12 },
   title: { fontSize: 22, fontWeight: '700' },
   chips: { flexGrow: 0 },
   chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, marginRight: 8 },
