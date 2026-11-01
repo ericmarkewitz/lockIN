@@ -52,6 +52,9 @@
     "type": "tsc --noEmit"
   },
   "private": true,
+  "engines": {
+    "node": ">=26"
+  },
   "jest": {
     "preset": "jest-expo",
     "setupFiles": [

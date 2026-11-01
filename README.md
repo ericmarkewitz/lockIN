@@ -17,7 +17,7 @@ npm install
 npx expo start
 ```
 
-Requires Node with the built-in `node:sqlite` module (Node 22.5+), which the tests use.
+Requires Node with the built-in `node:sqlite` module (Node 26, matching CI; `node:sqlite` needs 22.13+ at minimum), which the tests use.
 
 ## Scripts
 
