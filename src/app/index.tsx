@@ -1,17 +1,13 @@
-import { Text, View, StyleSheet } from "react-native";
+import { Redirect } from 'expo-router';
+
+import { isPlanComplete } from '@/data/plan';
+import { useDb } from '@/db/DbContext';
+import { useLoad } from '@/hooks/useLoad';
+import { CalendarScreen } from '@/screens/CalendarScreen';
 
 export default function Index() {
-  return (
-    <View style={styles.container}>
-      <Text>Edit src/app/index.tsx to edit this screen.</Text>
-    </View>
-  );
+  const db = useDb();
+  const { data: ready } = useLoad(() => isPlanComplete(db), [db]);
+  if (ready === null) return null;
+  return ready ? <CalendarScreen /> : <Redirect href="/setup" />;
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-});
