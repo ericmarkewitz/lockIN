@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { addExercise, listCategoriesWithExercises } from '@/data/exercises';
 import type { Exercise } from '@/data/types';
@@ -34,7 +34,11 @@ export function ExercisePicker({
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <View style={[styles.wrap, { backgroundColor: t.bg }]}>
+      <KeyboardAvoidingView
+        testID="picker-keyboard-avoider"
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={[styles.wrap, { backgroundColor: t.bg }]}
+      >
         <Text style={[styles.title, { color: t.text }]}>Choose exercise</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chips}>
           {cats?.map((c) => (
@@ -75,7 +79,7 @@ export function ExercisePicker({
         </View>
         {error && <Text style={{ color: t.danger }}>{error}</Text>}
         <Button title="Cancel" variant="secondary" onPress={onClose} />
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
