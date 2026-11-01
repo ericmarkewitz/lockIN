@@ -2,6 +2,11 @@ name: CI Workflow
 description: Run basic CI checks on the codebase.
 on:
   push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
