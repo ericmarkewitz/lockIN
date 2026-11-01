@@ -54,6 +54,9 @@
   "private": true,
   "jest": {
     "preset": "jest-expo",
+    "setupFiles": [
+      "react-native-gesture-handler/jestSetup"
+    ],
     "testTimeout": 20000,
     "testMatch": [
       "**/__tests__/**/*.test.ts?(x)"

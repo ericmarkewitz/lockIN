@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { ScrollView } from 'react-native-gesture-handler';
 
 import { Button, Card } from '@/components/ui';
+import { DragHandle } from '@/components/DragHandle';
 import { ExercisePicker } from '@/components/ExercisePicker';
 import { getPlan, markPlanComplete, setPlanDay } from '@/data/plan';
 import type { CategoryKind, Exercise } from '@/data/types';
@@ -10,15 +12,17 @@ import { useDb } from '@/db/DbContext';
 import { DAY_NAMES } from '@/lib/calendar';
 import { todayKey } from '@/lib/dates';
 import { parseNumber } from '@/lib/numbers';
+import { dropIndex, moveItem } from '@/lib/reorder';
 import { useTheme } from '@/theme';
 
 type Draft = {
-  exerciseId: number; name: string; kind: CategoryKind;
+  key: string; exerciseId: number; name: string; kind: CategoryKind;
   sets: string; reps: string; duration: string; distance: string;
 };
 type DayDraft = { weekday: number; isRest: boolean; items: Draft[] };
 
 const ORDER = [1, 2, 3, 4, 5, 6, 0]; // Monday first
+const ROW_GAP = 8; // Card gap between rows; part of the drag pitch
 const txt = (n: number | null | undefined) => (n === null || n === undefined ? '' : String(n));
 
 export function PlanEditor({ onSaved }: { onSaved: () => void }) {
@@ -27,6 +31,12 @@ export function PlanEditor({ onSaved }: { onSaved: () => void }) {
   const [days, setDays] = useState<DayDraft[] | null>(null);
   const [pickerFor, setPickerFor] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [drag, setDrag] = useState<{ weekday: number; from: number; over: number; pitch: number } | null>(null);
+  const dragRef = useRef(drag);
+  const [dragY] = useState(() => new Animated.Value(0));
+  const rowHeights = useRef(new Map<string, number>());
+  const nextKey = useRef(0);
+  const newKey = () => `row-${nextKey.current++}`;
 
   useEffect(() => {
     getPlan(db).then((plan) =>
@@ -37,7 +47,7 @@ export function PlanEditor({ onSaved }: { onSaved: () => void }) {
             weekday: w,
             isRest: d.isRest,
             items: d.items.map((i) => ({
-              exerciseId: i.exerciseId, name: i.exerciseName, kind: i.categoryKind,
+              key: newKey(), exerciseId: i.exerciseId, name: i.exerciseName, kind: i.categoryKind,
               sets: txt(i.targetSets), reps: txt(i.targetReps), duration: txt(i.targetDurationMin), distance: txt(i.targetDistance),
             })),
           };
@@ -53,12 +63,49 @@ export function PlanEditor({ onSaved }: { onSaved: () => void }) {
   const patchItem = (weekday: number, idx: number, p: Partial<Draft>) =>
     patchDay(weekday, (d) => ({ ...d, items: d.items.map((it, i) => (i === idx ? { ...it, ...p } : it)) }));
 
+  const reorder = (weekday: number, from: number, to: number) =>
+    patchDay(weekday, (d) => ({ ...d, items: moveItem(d.items, from, to) }));
+
+  const setDragState = (next: typeof drag) => {
+    dragRef.current = next;
+    setDrag(next);
+  };
+  const startDrag = (weekday: number, from: number, key: string) => {
+    dragY.setValue(0);
+    setDragState({ weekday, from, over: from, pitch: (rowHeights.current.get(key) ?? 0) + ROW_GAP });
+  };
+  const moveDrag = (d: DayDraft, dy: number) => {
+    const cur = dragRef.current;
+    if (!cur) return;
+    dragY.setValue(dy);
+    const over = dropIndex(cur.from, dy, cur.pitch, d.items.length);
+    if (over !== cur.over) setDragState({ ...cur, over });
+  };
+  const endDrag = (d: DayDraft, dy: number) => {
+    const cur = dragRef.current;
+    if (!cur) return;
+    reorder(d.weekday, cur.from, dropIndex(cur.from, dy, cur.pitch, d.items.length));
+    cancelDrag();
+  };
+  const cancelDrag = () => {
+    dragY.setValue(0);
+    setDragState(null);
+  };
+  /** Rows between the dragged row and its drop slot slide one pitch out of the way. */
+  const rowShift = (weekday: number, idx: number) => {
+    if (!drag || drag.weekday !== weekday || idx === drag.from) return 0;
+    const { pitch } = drag;
+    if (drag.from < drag.over && idx > drag.from && idx <= drag.over) return -pitch;
+    if (drag.from > drag.over && idx < drag.from && idx >= drag.over) return pitch;
+    return 0;
+  };
+
   const addExercise = (weekday: number, e: Exercise) => {
     patchDay(weekday, (d) => ({
       ...d,
       isRest: false,
       items: [...d.items, {
-        exerciseId: e.id, name: e.name, kind: e.categoryKind,
+        key: newKey(), exerciseId: e.id, name: e.name, kind: e.categoryKind,
         sets: e.categoryKind === 'strength' ? '3' : '', reps: e.categoryKind === 'strength' ? '10' : '', duration: '', distance: '',
       }],
     }));
@@ -90,7 +137,7 @@ export function PlanEditor({ onSaved }: { onSaved: () => void }) {
 
   return (
     <>
-      <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.wrap} style={{ backgroundColor: t.bg }}>
+      <ScrollView scrollEnabled={!drag} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.wrap} style={{ backgroundColor: t.bg }}>
         <Text style={{ color: t.muted }}>Pick the exercises for each day, or mark it as a rest day.</Text>
         {days.map((d) => (
           <Card key={d.weekday} style={{ gap: 8 }}>
@@ -108,7 +155,25 @@ export function PlanEditor({ onSaved }: { onSaved: () => void }) {
             {!d.isRest && (
               <>
                 {d.items.map((it, idx) => (
-                  <View key={`${it.exerciseId}-${idx}`} style={styles.item}>
+                  <Animated.View
+                    key={it.key}
+                    onLayout={(e) => rowHeights.current.set(it.key, e.nativeEvent.layout.height)}
+                    style={[
+                      styles.item,
+                      drag?.weekday === d.weekday && drag.from === idx
+                        ? [styles.dragging, { backgroundColor: t.card, transform: [{ translateY: dragY }] }]
+                        : { transform: [{ translateY: rowShift(d.weekday, idx) }] },
+                    ]}
+                  >
+                    <DragHandle
+                      label={`Reorder ${it.name} on ${DAY_NAMES[d.weekday]}`}
+                      onStart={() => startDrag(d.weekday, idx, it.key)}
+                      onMove={(dy) => moveDrag(d, dy)}
+                      onEnd={(dy) => endDrag(d, dy)}
+                      onCancel={cancelDrag}
+                      onMoveUp={() => reorder(d.weekday, idx, idx - 1)}
+                      onMoveDown={() => reorder(d.weekday, idx, idx + 1)}
+                    />
                     <Text style={[styles.itemName, { color: t.text }]}>{it.name}</Text>
                     {it.kind === 'strength' ? (
                       <>
@@ -128,7 +193,7 @@ export function PlanEditor({ onSaved }: { onSaved: () => void }) {
                       onPress={() => patchDay(d.weekday, (x) => ({ ...x, items: x.items.filter((_, i) => i !== idx) }))}
                       style={{ paddingHorizontal: 10, paddingVertical: 4 }}
                     />
-                  </View>
+                  </Animated.View>
                 ))}
                 <Button title="+ Add exercise" variant="secondary" label={`Add exercise to ${DAY_NAMES[d.weekday]}`} onPress={() => setPickerFor(d.weekday)} />
               </>
@@ -167,7 +232,8 @@ const styles = StyleSheet.create({
   dayHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   dayName: { fontSize: 18, fontWeight: '700' },
   restRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  item: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  item: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 52 },
+  dragging: { zIndex: 10, elevation: 6, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
   itemName: { flex: 1, fontSize: 15 },
   num: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   numInput: { width: 46, borderWidth: 1, borderRadius: 8, paddingVertical: 6, textAlign: 'center' },

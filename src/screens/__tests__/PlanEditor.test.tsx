@@ -56,4 +56,42 @@ describe('PlanEditor', () => {
     await fireEvent.press(await screen.findByLabelText('Remove Squat from Monday'));
     expect(screen.queryByLabelText('Remove Squat from Monday')).toBeNull();
   });
+
+  it('reorders exercises via the drag handle accessibility actions, keeping targets, and saves the order', async () => {
+    const db = await createTestDb();
+    const onSaved = jest.fn();
+    await renderWithDb(<PlanEditor onSaved={onSaved} />, db);
+    for (const name of ['Squat', 'Leg Press', 'Lunge']) {
+      await fireEvent.press(await screen.findByLabelText('Add exercise to Monday'));
+      await fireEvent.press(await screen.findByLabelText(`Add ${name}`));
+    }
+    await fireEvent.changeText(await screen.findByLabelText('1 Lunge sets'), '5');
+
+    const act = (label: string, actionName: string) =>
+      fireEvent(screen.getByLabelText(label), 'accessibilityAction', { nativeEvent: { actionName } });
+    await act('Reorder Lunge on Monday', 'moveUp'); // Squat, Lunge, Leg Press
+    await act('Reorder Squat on Monday', 'moveDown'); // Lunge, Squat, Leg Press
+    await fireEvent.press(screen.getByText('Save plan'));
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    const items = (await getPlan(db)).find((d) => d.weekday === 1)!.items;
+    expect(items.map((i) => i.exerciseName)).toEqual(['Lunge', 'Squat', 'Leg Press']);
+    expect(items[0]).toMatchObject({ targetSets: 5 });
+  });
+
+  it('ignores moves past either end of the list', async () => {
+    const db = await createTestDb();
+    const onSaved = jest.fn();
+    await renderWithDb(<PlanEditor onSaved={onSaved} />, db);
+    for (const name of ['Squat', 'Lunge']) {
+      await fireEvent.press(await screen.findByLabelText('Add exercise to Monday'));
+      await fireEvent.press(await screen.findByLabelText(`Add ${name}`));
+    }
+    await fireEvent(screen.getByLabelText('Reorder Squat on Monday'), 'accessibilityAction', { nativeEvent: { actionName: 'moveUp' } });
+    await fireEvent(screen.getByLabelText('Reorder Lunge on Monday'), 'accessibilityAction', { nativeEvent: { actionName: 'moveDown' } });
+    await fireEvent.press(screen.getByText('Save plan'));
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    const items = (await getPlan(db)).find((d) => d.weekday === 1)!.items;
+    expect(items.map((i) => i.exerciseName)).toEqual(['Squat', 'Lunge']);
+  });
 });
