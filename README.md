@@ -25,7 +25,7 @@ Requires Node with the built-in `node:sqlite` module (Node 22.5+), which the tes
 | --- | --- |
 | `npm test` | Run the Jest test suite |
 | `npm run test:watch` | Re-run tests on change |
-| `npm run typecheck` | TypeScript check (`tsc --noEmit`) |
+| `npm run type` | TypeScript check (`tsc --noEmit`) |
 | `npx expo lint` | Lint |
 
 CI runs typecheck, lint and tests on every push.

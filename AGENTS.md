@@ -63,7 +63,7 @@ Docs: https://docs.expo.dev/eas/index.md
 - Screen tests use `renderWithDb` from `src/test/render.tsx`. Mock only the router, `expo-file-system` and `expo-sharing`.
 - `@testing-library/react-native` v14 is async: `await render(...)` and `await fireEvent...`.
 - `jest.mock` factories may only reference variables prefixed with `mock`.
-- Run before finishing any task: `npm test`, `npm run typecheck`, `npx expo lint`. CI runs the same three.
+- Run before finishing any task: `npm test`, `npm run type`, `npx expo lint`. CI runs the same three.
 
 ### Conventions
 

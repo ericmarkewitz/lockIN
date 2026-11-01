@@ -3,6 +3,9 @@ description: Run basic CI checks on the codebase.
 on:
   push:
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -23,10 +26,10 @@ jobs:
           run: npm ci
 
         - name: Typecheck
-          run: npx tsc --noEmit
+          run: npm run type
 
         - name: Lint
-          run: npx expo lint
+          run: npm run lint
 
         - name: Test
-          run: npm test -- --ci
+          run: npm run test

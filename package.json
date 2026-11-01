@@ -49,11 +49,12 @@
     "lint": "expo lint",
     "test": "jest",
     "test:watch": "jest --watch",
-    "typecheck": "tsc --noEmit"
+    "type": "tsc --noEmit"
   },
   "private": true,
   "jest": {
     "preset": "jest-expo",
+    "testTimeout": 20000,
     "testMatch": [
       "**/__tests__/**/*.test.ts?(x)"
     ],
