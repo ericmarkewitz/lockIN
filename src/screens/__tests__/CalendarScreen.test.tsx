@@ -7,14 +7,18 @@ import { renderWithDb } from '@/test/render';
 import { createTestDb } from '@/test/testDb';
 import { CalendarScreen } from '../CalendarScreen';
 
+import { useEffect } from 'react';
+
 const mockPush = jest.fn();
-jest.mock('expo-router', () => {
-  const React = require('react');
-  return {
-    useRouter: () => ({ push: mockPush, replace: jest.fn() }),
-    useFocusEffect: (cb: () => void) => React.useEffect(cb, []),
-  };
-});
+function useMockFocusEffect(cb: () => void) {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(cb, []);
+}
+const mockUseFocusEffect = useMockFocusEffect;
+jest.mock('expo-router', () => ({
+  useRouter: () => ({ push: mockPush, replace: jest.fn() }),
+  useFocusEffect: (cb: () => void) => mockUseFocusEffect(cb),
+}));
 
 const TODAY = '2026-11-04'; // Wednesday
 
