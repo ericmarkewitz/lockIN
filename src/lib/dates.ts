@@ -1,32 +1,55 @@
-// Dates are stored as local calendar days ("YYYY-MM-DD"), never UTC timestamps,
-// so a workout logged at 11pm stays on the day you did it.
-export const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-export const DAYS_LONG = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+/** Dates are handled as local 'YYYY-MM-DD' keys everywhere to avoid timezone drift. */
+export type DateKey = string;
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
-export const toISO = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+export function toDateKey(d: Date): DateKey {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
 
-export const parseISO = (s: string) => {
-  const [y, m, d] = s.split('-').map(Number);
+export function parseDateKey(key: DateKey): Date {
+  const [y, m, d] = key.split('-').map(Number);
   return new Date(y, m - 1, d);
-};
+}
 
-export const addDays = (s: string, n: number) => {
-  const d = parseISO(s);
-  d.setDate(d.getDate() + n);
-  return toISO(d);
-};
+export function todayKey(): DateKey {
+  return toDateKey(new Date());
+}
 
-/** 0 = Monday ... 6 = Sunday */
-export const weekdayIndex = (s: string) => (parseISO(s).getDay() + 6) % 7;
+/** JS weekday: 0 = Sunday ... 6 = Saturday. */
+export function weekdayOf(key: DateKey): number {
+  return parseDateKey(key).getDay();
+}
 
-/** The date of the given weekday (0 = Monday) in the current Mon–Sun week. */
-export const dateForWeekday = (idx: number) => {
-  const t = new Date();
-  t.setDate(t.getDate() + (idx - ((t.getDay() + 6) % 7)));
-  return toISO(t);
-};
+export function addDays(key: DateKey, n: number): DateKey {
+  const d = parseDateKey(key);
+  d.setDate(d.getDate() + n); // calendar arithmetic, immune to DST
+  return toDateKey(d);
+}
 
-export const formatLong = (s: string) =>
-  parseISO(s).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+/** Monday of the week containing `key`. */
+export function startOfWeek(key: DateKey): DateKey {
+  return addDays(key, -((weekdayOf(key) + 6) % 7));
+}
+
+export function weekDates(key: DateKey): DateKey[] {
+  const start = startOfWeek(key);
+  return Array.from({ length: 7 }, (_, i) => addDays(start, i));
+}
+
+export function datesInRange(from: DateKey, to: DateKey): DateKey[] {
+  const out: DateKey[] = [];
+  for (let d = from; d <= to; d = addDays(d, 1)) out.push(d);
+  return out;
+}
+
+/** Monday-first grid of a month; leading/trailing cells are null. `month` is 0-based. */
+export function monthGrid(year: number, month: number): (DateKey | null)[] {
+  const first = toDateKey(new Date(year, month, 1));
+  const days = new Date(year, month + 1, 0).getDate();
+  const lead = (weekdayOf(first) + 6) % 7;
+  const cells: (DateKey | null)[] = Array(lead).fill(null);
+  for (let i = 0; i < days; i++) cells.push(addDays(first, i));
+  while (cells.length % 7 !== 0) cells.push(null);
+  return cells;
+}
