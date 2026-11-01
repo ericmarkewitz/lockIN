@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { addExercise, listCategoriesWithExercises } from '@/data/exercises';
 import type { Exercise } from '@/data/types';
@@ -7,6 +7,9 @@ import { useDb } from '@/db/DbContext';
 import { useLoad } from '@/hooks/useLoad';
 import { useTheme } from '@/theme';
 import { Button } from './ui';
+
+// Extra lift so the input clears the keyboard inside the page-sheet modal.
+const KEYBOARD_OFFSET = 16;
 
 export function ExercisePicker({
   visible, onPick, onClose,
@@ -34,54 +37,61 @@ export function ExercisePicker({
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <View style={[styles.wrap, { backgroundColor: t.bg }]}>
-        <Text style={[styles.title, { color: t.text }]}>Choose exercise</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chips}>
-          {cats?.map((c) => (
-            <Pressable
-              key={c.id}
-              accessibilityRole="button"
-              accessibilityLabel={`Category ${c.name}`}
-              onPress={() => setCatId(c.id)}
-              style={[styles.chip, { borderColor: t.border, backgroundColor: c.id === active?.id ? t.primary : t.card }]}
-            >
-              <Text style={{ color: c.id === active?.id ? t.onPrimary : t.text }}>{c.name}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-        <ScrollView style={{ flex: 1 }}>
-          {active?.exercises.map((e) => (
-            <Pressable
-              key={e.id}
-              accessibilityRole="button"
-              accessibilityLabel={`Add ${e.name}`}
-              onPress={() => onPick(e)}
-              style={[styles.item, { borderColor: t.border }]}
-            >
-              <Text style={{ color: t.text, fontSize: 16 }}>{e.name}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-        <View style={styles.customRow}>
-          <TextInput
-            accessibilityLabel="New exercise name"
-            value={custom}
-            onChangeText={setCustom}
-            placeholder={`New ${active?.name ?? ''} exercise`}
-            placeholderTextColor={t.muted}
-            style={[styles.input, { color: t.text, borderColor: t.border, backgroundColor: t.card }]}
-          />
-          <Button title="Create" onPress={create} variant="secondary" />
+      <KeyboardAvoidingView
+        testID="picker-keyboard-avoider"
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={KEYBOARD_OFFSET}
+        style={{ flex: 1, backgroundColor: t.bg }}
+      >
+        <View style={styles.wrap}>
+          <Text style={[styles.title, { color: t.text }]}>Choose exercise</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chips}>
+            {cats?.map((c) => (
+              <Pressable
+                key={c.id}
+                accessibilityRole="button"
+                accessibilityLabel={`Category ${c.name}`}
+                onPress={() => setCatId(c.id)}
+                style={[styles.chip, { borderColor: t.border, backgroundColor: c.id === active?.id ? t.primary : t.card }]}
+              >
+                <Text style={{ color: c.id === active?.id ? t.onPrimary : t.text }}>{c.name}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+          <ScrollView style={{ flex: 1 }}>
+            {active?.exercises.map((e) => (
+              <Pressable
+                key={e.id}
+                accessibilityRole="button"
+                accessibilityLabel={`Add ${e.name}`}
+                onPress={() => onPick(e)}
+                style={[styles.item, { borderColor: t.border }]}
+              >
+                <Text style={{ color: t.text, fontSize: 16 }}>{e.name}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+          <View style={styles.customRow}>
+            <TextInput
+              accessibilityLabel="New exercise name"
+              value={custom}
+              onChangeText={setCustom}
+              placeholder={`New ${active?.name ?? ''} exercise`}
+              placeholderTextColor={t.muted}
+              style={[styles.input, { color: t.text, borderColor: t.border, backgroundColor: t.card }]}
+            />
+            <Button title="Create" onPress={create} variant="secondary" />
+          </View>
+          {error && <Text style={{ color: t.danger }}>{error}</Text>}
+          <Button title="Cancel" variant="secondary" onPress={onClose} />
         </View>
-        {error && <Text style={{ color: t.danger }}>{error}</Text>}
-        <Button title="Cancel" variant="secondary" onPress={onClose} />
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1, padding: 16, paddingTop: 20, gap: 12 },
+  wrap: { flex: 1, padding: 16, paddingTop: 20, paddingBottom: 16, gap: 12 },
   title: { fontSize: 22, fontWeight: '700' },
   chips: { flexGrow: 0 },
   chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, marginRight: 8 },
