@@ -2,6 +2,7 @@ import { Stack } from 'expo-router';
 import { SQLiteProvider, useSQLiteContext } from 'expo-sqlite';
 import { Suspense, type ReactNode } from 'react';
 import { ActivityIndicator } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { useTheme } from '@/theme';
 
@@ -18,6 +19,7 @@ function Bridge({ children }: { children: ReactNode }) {
 export default function RootLayout() {
   const t = useTheme();
   return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <Suspense fallback={<ActivityIndicator style={{ flex: 1 }} />}>
       <SQLiteProvider databaseName={DATABASE_NAME} onInit={(db) => migrate(db as unknown as Db)} useSuspense>
         <Bridge>
@@ -38,5 +40,6 @@ export default function RootLayout() {
         </Bridge>
       </SQLiteProvider>
     </Suspense>
+    </GestureHandlerRootView>
   );
 }
