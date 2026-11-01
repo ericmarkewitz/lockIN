@@ -1,23 +1,23 @@
-name: CI Workflow
-description: Run basic CI checks on the codebase.
-on:
-  push:
+# name: CI Workflow
+# description: Run basic CI checks on the codebase.
+# on:
+#   push:
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+# concurrency:
+#   group: ${{ github.workflow }}-${{ github.ref }}
+#   cancel-in-progress: true
 
-jobs:
-    build:
-        runs-on: ubuntu-latest
-        steps:
-        - name: Checkout code
-          uses: actions/checkout@v7
+# jobs:
+#     build:
+#         runs-on: ubuntu-latest
+#         steps:
+#         - name: Checkout code
+#           uses: actions/checkout@v7
         
-        - name: Set up Node.js
-          uses: actions/setup-node@v7
-          with:
-            node-version: '26'
+#         - name: Set up Node.js
+#           uses: actions/setup-node@v7
+#           with:
+#             node-version: '26'
         
-        - name: Install dependencies
-          run: npm ci
+#         - name: Install dependencies
+#           run: npm ci
