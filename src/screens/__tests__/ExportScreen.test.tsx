@@ -48,23 +48,48 @@ describe('ExportScreen', () => {
     expect((Sharing.shareAsync as jest.Mock).mock.calls[0][0]).toBe('file:///cache/lockin-all.csv');
   });
 
-  it('validates custom dates', async () => {
+  it('exports only the dates picked on the calendar', async () => {
+    const db = await setup();
+    const w = await ensureWorkout(db, '2026-11-02');
+    await updateSet(db, w.exercises[0].sets[0].id, { weight: 140, reps: 8, completed: true });
+    await renderWithDb(<ExportScreen today="2026-11-04" />, db);
+    await fireEvent.press(screen.getByLabelText('Pick dates'));
+    await fireEvent.press(screen.getByLabelText('2026-11-02'));
+    await fireEvent.press(screen.getByLabelText('Export CSV'));
+    await waitFor(() => expect(Sharing.shareAsync).toHaveBeenCalled());
+    const csv = mockWrite.mock.calls[0][0] as string;
+    expect(csv).toContain('2026-11-02');
+    expect(csv).not.toContain('2026-10-26');
+    expect((Sharing.shareAsync as jest.Mock).mock.calls[0][0]).toBe('file:///cache/lockin-2026-11-02.csv');
+  });
+
+  it('exports non-contiguous dates', async () => {
+    const db = await setup();
+    const w = await ensureWorkout(db, '2026-11-02');
+    await updateSet(db, w.exercises[0].sets[0].id, { weight: 140, reps: 8, completed: true });
+    await renderWithDb(<ExportScreen today="2026-11-04" />, db);
+    await fireEvent.press(screen.getByLabelText('Pick dates'));
+    await fireEvent.press(screen.getByLabelText('2026-11-02'));
+    await fireEvent.press(screen.getByLabelText('Previous month'));
+    await fireEvent.press(screen.getByLabelText('2026-10-26'));
+    await fireEvent.press(screen.getByText('Preview'));
+    expect(await screen.findByText('2 rows match.')).toBeTruthy();
+  });
+
+  it('asks for at least one date when picking dates', async () => {
     const db = await setup();
     await renderWithDb(<ExportScreen today="2026-11-04" />, db);
-    await fireEvent.press(screen.getByLabelText('Custom'));
-    await fireEvent.changeText(screen.getByLabelText('From date'), '10/01/2026');
-    await fireEvent.changeText(screen.getByLabelText('To date'), '2026-10-31');
+    await fireEvent.press(screen.getByLabelText('Pick dates'));
     await fireEvent.press(screen.getByText('Export CSV'));
-    expect(await screen.findByText('Enter dates as YYYY-MM-DD.')).toBeTruthy();
+    expect(await screen.findByText('Pick at least one date.')).toBeTruthy();
     expect(Sharing.shareAsync).not.toHaveBeenCalled();
   });
 
-  it('applies a custom range', async () => {
+  it('reports when the picked dates have no logged workouts', async () => {
     const db = await setup();
     await renderWithDb(<ExportScreen today="2026-11-04" />, db);
-    await fireEvent.press(screen.getByLabelText('Custom'));
-    await fireEvent.changeText(screen.getByLabelText('From date'), '2026-11-01');
-    await fireEvent.changeText(screen.getByLabelText('To date'), '2026-11-30');
+    await fireEvent.press(screen.getByLabelText('Pick dates'));
+    await fireEvent.press(screen.getByLabelText('2026-11-03'));
     await fireEvent.press(screen.getByText('Export CSV'));
     expect(await screen.findByText('No logged workouts in that range.')).toBeTruthy();
   });

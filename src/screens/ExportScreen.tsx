@@ -1,34 +1,33 @@
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
+import { DateMultiPicker } from '@/components/DateMultiPicker';
 import { Button, Card, Segmented } from '@/components/ui';
 import { EXPORT_FIELDS, buildExport, exportFileName, type ExportFieldKey } from '@/data/export';
 import { useDb } from '@/db/DbContext';
 import { addDays, todayKey } from '@/lib/dates';
 import { useTheme } from '@/theme';
 
-type Range = 'all' | '30' | 'custom';
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+type Range = 'all' | '30' | 'pick';
+type Selection = { from?: string; to?: string; dates?: string[] };
 
 export function ExportScreen({ today = todayKey() }: { today?: string }) {
   const db = useDb();
   const t = useTheme();
   const [range, setRange] = useState<Range>('all');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
+  const [dates, setDates] = useState<string[]>([]);
   const [fields, setFields] = useState<Set<ExportFieldKey>>(new Set(EXPORT_FIELDS.map((f) => f.key)));
   const [includeUnlogged, setIncludeUnlogged] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
 
-  const selection = (): { from?: string; to?: string } | string => {
+  const selection = (): Selection | string => {
     if (range === 'all') return {};
     if (range === '30') return { from: addDays(today, -29), to: today };
-    if (!DATE_RE.test(from) || !DATE_RE.test(to)) return 'Enter dates as YYYY-MM-DD.';
-    if (from > to) return 'The start date must be before the end date.';
-    return { from, to };
+    if (!dates.length) return 'Pick at least one date.';
+    return { dates };
   };
 
   const run = async (share: boolean) => {
@@ -67,18 +66,11 @@ export function ExportScreen({ today = todayKey() }: { today?: string }) {
   return (
     <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: t.bg }} contentContainerStyle={styles.wrap}>
       <Segmented<Range>
-        options={[{ value: 'all', label: 'All data' }, { value: '30', label: 'Last 30 days' }, { value: 'custom', label: 'Custom' }]}
+        options={[{ value: 'all', label: 'All data' }, { value: '30', label: 'Last 30 days' }, { value: 'pick', label: 'Pick dates' }]}
         value={range}
         onChange={setRange}
       />
-      {range === 'custom' && (
-        <View style={styles.dates}>
-          <TextInput accessibilityLabel="From date" placeholder="From YYYY-MM-DD" placeholderTextColor={t.muted} value={from} onChangeText={setFrom}
-            autoCapitalize="none" style={[styles.input, { color: t.text, borderColor: t.border, backgroundColor: t.card }]} />
-          <TextInput accessibilityLabel="To date" placeholder="To YYYY-MM-DD" placeholderTextColor={t.muted} value={to} onChangeText={setTo}
-            autoCapitalize="none" style={[styles.input, { color: t.text, borderColor: t.border, backgroundColor: t.card }]} />
-        </View>
-      )}
+      {range === 'pick' && <DateMultiPicker selected={dates} onChange={setDates} initialDate={today} />}
       <Card style={{ gap: 4 }}>
         <Text style={{ color: t.text, fontWeight: '700', marginBottom: 4 }}>Fields to include</Text>
         {EXPORT_FIELDS.map((f) => (
@@ -102,8 +94,6 @@ export function ExportScreen({ today = todayKey() }: { today?: string }) {
 
 const styles = StyleSheet.create({
   wrap: { padding: 16, gap: 12 },
-  dates: { flexDirection: 'row', gap: 8 },
-  input: { flex: 1, borderWidth: 1, borderRadius: 10, padding: 10 },
   fieldRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 2 },
   preview: { fontFamily: 'Courier', fontSize: 11, padding: 10, borderWidth: 1, borderRadius: 8 },
 });
