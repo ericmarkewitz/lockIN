@@ -168,6 +168,55 @@ describe('history helpers', () => {
   });
 });
 
+describe('sets with values but no tick', () => {
+  const LATER = '2026-11-09';
+
+  /** Monday's Bench Press has 3 sets; the first `n` get values and are left unticked. */
+  async function typedSets(n: number) {
+    const db = await planned();
+    const w = await ensureWorkout(db, MON);
+    for (const s of w.exercises[0].sets.slice(0, n)) await updateSet(db, s.id, { weight: 100, reps: 5 });
+    return { db, exerciseId: w.exercises[0].exerciseId };
+  }
+
+  it('makes the calendar show partial when only some sets have values', async () => {
+    const { db } = await typedSets(1);
+    const [day] = await getRangeSummary(db, MON, MON, LATER);
+    expect(day.status).toBe('partial');
+  });
+
+  it('makes the calendar show completed when every set has values', async () => {
+    const { db } = await typedSets(3);
+    const [day] = await getRangeSummary(db, MON, MON, LATER);
+    expect(day.status).toBe('completed');
+  });
+
+  it('still shows missed when a past day has no values or ticks', async () => {
+    const { db } = await typedSets(0);
+    const [day] = await getRangeSummary(db, MON, MON, LATER);
+    expect(day.status).toBe('missed');
+  });
+
+  it('feeds the last performance hint, leaving out blank sets', async () => {
+    const { db, exerciseId } = await typedSets(2);
+    const last = await getLastPerformance(db, exerciseId, LATER);
+    expect(last?.date).toBe(MON);
+    expect(last?.sets.map((s) => [s.setNumber, s.weight, s.reps, s.completed])).toEqual([
+      [1, 100, 5, false], [2, 100, 5, false],
+    ]);
+  });
+
+  it('counts a duration-only cardio set as logged', async () => {
+    const db = await planned();
+    const wed = '2026-11-04';
+    const w = await ensureWorkout(db, wed);
+    await updateSet(db, w.exercises[0].sets[0].id, { durationMin: 30 });
+    const [day] = await getRangeSummary(db, wed, wed, LATER);
+    expect(day.status).toBe('completed');
+    expect((await getLastPerformance(db, w.exercises[0].exerciseId, LATER))?.date).toBe(wed);
+  });
+});
+
 describe('getRangeSummary', () => {
   const TODAY = '2026-11-04'; // Wednesday
 

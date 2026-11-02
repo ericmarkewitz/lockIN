@@ -1,5 +1,6 @@
 import { datesInRange, weekdayOf } from '@/lib/dates';
 import type { Db } from '@/db/types';
+import { LOGGED_SET } from './logged';
 import { getPlan } from './plan';
 import type {
   CategoryKind, DaySummary, DayStatus, Targets, Workout, WorkoutExercise, WorkoutSet,
@@ -198,7 +199,7 @@ export async function setWorkoutNotes(db: Db, date: string, notes: string): Prom
   await db.runAsync('UPDATE workouts SET notes = ? WHERE date = ?', [notes.trim() || null, date]);
 }
 
-/** Most recent workout before `beforeDate` with completed sets for this exercise. */
+/** Most recent workout before `beforeDate` with logged sets for this exercise. */
 export async function getLastPerformance(
   db: Db, exerciseId: number, beforeDate: string,
 ): Promise<{ date: string; sets: WorkoutSet[] } | null> {
@@ -206,13 +207,13 @@ export async function getLastPerformance(
     `SELECT w.date, we.id AS we_id FROM workouts w
      JOIN workout_exercises we ON we.workout_id = w.id
      WHERE we.exercise_id = ? AND w.date < ?
-       AND EXISTS (SELECT 1 FROM sets s WHERE s.workout_exercise_id = we.id AND s.completed = 1)
+       AND EXISTS (SELECT 1 FROM sets s WHERE s.workout_exercise_id = we.id AND ${LOGGED_SET})
      ORDER BY w.date DESC LIMIT 1`,
     [exerciseId, beforeDate],
   );
   if (!row) return null;
   const sets = await db.getAllAsync<SetRow>(
-    'SELECT * FROM sets WHERE workout_exercise_id = ? AND completed = 1 ORDER BY set_number', [row.we_id],
+    `SELECT * FROM sets s WHERE s.workout_exercise_id = ? AND ${LOGGED_SET} ORDER BY s.set_number`, [row.we_id],
   );
   return { date: row.date, sets: sets.map(toSet) };
 }
@@ -226,7 +227,7 @@ export async function getRangeSummary(db: Db, from: string, to: string, today: s
   }>(
     `SELECT w.date, w.is_rest, c.kind, we.id AS we_id,
        (SELECT COUNT(*) FROM sets s WHERE s.workout_exercise_id = we.id) AS total,
-       (SELECT COUNT(*) FROM sets s WHERE s.workout_exercise_id = we.id AND s.completed = 1) AS done
+       (SELECT COUNT(*) FROM sets s WHERE s.workout_exercise_id = we.id AND ${LOGGED_SET}) AS done
      FROM workouts w
      LEFT JOIN workout_exercises we ON we.workout_id = w.id
      LEFT JOIN exercises e ON e.id = we.exercise_id
@@ -267,8 +268,7 @@ export async function refreshUntouchedWorkouts(db: Db, fromDate: string): Promis
   await db.runAsync(
     `DELETE FROM workouts WHERE date >= ? AND notes IS NULL AND is_customized = 0 AND NOT EXISTS (
        SELECT 1 FROM workout_exercises we JOIN sets s ON s.workout_exercise_id = we.id
-       WHERE we.workout_id = workouts.id AND (s.completed = 1 OR s.weight IS NOT NULL OR s.reps IS NOT NULL
-         OR s.duration_min IS NOT NULL OR s.distance IS NOT NULL))`,
+       WHERE we.workout_id = workouts.id AND ${LOGGED_SET})`,
     [fromDate],
   );
 }
