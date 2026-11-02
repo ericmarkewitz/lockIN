@@ -8,9 +8,6 @@ import { useLoad } from '@/hooks/useLoad';
 import { useTheme } from '@/theme';
 import { Button } from './ui';
 
-// Extra lift so the input clears the keyboard inside the page-sheet modal.
-const KEYBOARD_OFFSET = 16;
-
 export function ExercisePicker({
   visible, onPick, onClose,
 }: { visible: boolean; onPick: (e: Exercise) => void; onClose: () => void }) {
@@ -40,7 +37,6 @@ export function ExercisePicker({
       <KeyboardAvoidingView
         testID="picker-keyboard-avoider"
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={KEYBOARD_OFFSET}
         style={{ flex: 1, backgroundColor: t.bg }}
       >
         <View style={styles.wrap}>
