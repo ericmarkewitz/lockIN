@@ -1,9 +1,9 @@
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { useState } from 'react';
+import { Calendar } from 'react-native-calendars';
 import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
-import { DateMultiPicker } from '@/components/DateMultiPicker';
 import { Button, Card, Segmented } from '@/components/ui';
 import { EXPORT_FIELDS, buildExport, exportFileName, type ExportFieldKey } from '@/data/export';
 import { useDb } from '@/db/DbContext';
@@ -56,6 +56,9 @@ export function ExportScreen({ today = todayKey() }: { today?: string }) {
     }
   };
 
+  const toggleDate = (d: string) =>
+    setDates((cur) => (cur.includes(d) ? cur.filter((x) => x !== d) : [...cur, d].sort()));
+
   const toggle = (k: ExportFieldKey) => {
     const next = new Set(fields);
     if (next.has(k)) next.delete(k);
@@ -70,7 +73,24 @@ export function ExportScreen({ today = todayKey() }: { today?: string }) {
         value={range}
         onChange={setRange}
       />
-      {range === 'pick' && <DateMultiPicker selected={dates} onChange={setDates} initialDate={today} />}
+      {range === 'pick' && (
+        <Card>
+          <Calendar
+            testID="export-calendar"
+            current={today}
+            firstDay={1}
+            markedDates={Object.fromEntries(dates.map((d) => [d, { selected: true }]))}
+            onDayPress={({ dateString }) => toggleDate(dateString)}
+            theme={{
+              calendarBackground: t.card, dayTextColor: t.text, monthTextColor: t.text, textDisabledColor: t.muted,
+              textSectionTitleColor: t.muted, arrowColor: t.primary, todayTextColor: t.primary,
+              selectedDayBackgroundColor: t.primary, selectedDayTextColor: t.onPrimary,
+            }}
+            key={t.bg} // theme is only read on mount; remount when light/dark changes
+          />
+          <Text style={{ color: t.muted }}>{dates.length} day{dates.length === 1 ? '' : 's'} selected</Text>
+        </Card>
+      )}
       <Card style={{ gap: 4 }}>
         <Text style={{ color: t.text, fontWeight: '700', marginBottom: 4 }}>Fields to include</Text>
         {EXPORT_FIELDS.map((f) => (

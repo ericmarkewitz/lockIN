@@ -54,7 +54,7 @@ describe('ExportScreen', () => {
     await updateSet(db, w.exercises[0].sets[0].id, { weight: 140, reps: 8, completed: true });
     await renderWithDb(<ExportScreen today="2026-11-04" />, db);
     await fireEvent.press(screen.getByLabelText('Pick dates'));
-    await fireEvent.press(screen.getByLabelText('2026-11-02'));
+    await fireEvent.press(screen.getByTestId('export-calendar.day_2026-11-02'));
     await fireEvent.press(screen.getByLabelText('Export CSV'));
     await waitFor(() => expect(Sharing.shareAsync).toHaveBeenCalled());
     const csv = mockWrite.mock.calls[0][0] as string;
@@ -69,9 +69,9 @@ describe('ExportScreen', () => {
     await updateSet(db, w.exercises[0].sets[0].id, { weight: 140, reps: 8, completed: true });
     await renderWithDb(<ExportScreen today="2026-11-04" />, db);
     await fireEvent.press(screen.getByLabelText('Pick dates'));
-    await fireEvent.press(screen.getByLabelText('2026-11-02'));
-    await fireEvent.press(screen.getByLabelText('Previous month'));
-    await fireEvent.press(screen.getByLabelText('2026-10-26'));
+    await fireEvent.press(screen.getByTestId('export-calendar.day_2026-11-02'));
+    await fireEvent.press(screen.getByTestId('export-calendar.header.leftArrow', { includeHiddenElements: true }));
+    await fireEvent.press(screen.getByTestId('export-calendar.day_2026-10-26'));
     await fireEvent.press(screen.getByText('Preview'));
     expect(await screen.findByText('2 rows match.')).toBeTruthy();
   });
@@ -89,7 +89,7 @@ describe('ExportScreen', () => {
     const db = await setup();
     await renderWithDb(<ExportScreen today="2026-11-04" />, db);
     await fireEvent.press(screen.getByLabelText('Pick dates'));
-    await fireEvent.press(screen.getByLabelText('2026-11-03'));
+    await fireEvent.press(screen.getByTestId('export-calendar.day_2026-11-03'));
     await fireEvent.press(screen.getByText('Export CSV'));
     expect(await screen.findByText('No logged workouts in that range.')).toBeTruthy();
   });
