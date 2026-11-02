@@ -48,6 +48,7 @@ export function CalendarScreen({ today = todayKey() }: { today?: string }) {
         <Text style={[styles.h1, { color: t.text }]}>lockIN</Text>
         <View style={styles.topBtns}>
           <Button title="Plan" variant="secondary" onPress={() => router.push('/setup')} style={styles.small} />
+          <Button title="History" variant="secondary" onPress={() => router.push('/history')} style={styles.small} />
           <Button title="Export" variant="secondary" onPress={() => router.push('/export')} style={styles.small} />
         </View>
       </View>

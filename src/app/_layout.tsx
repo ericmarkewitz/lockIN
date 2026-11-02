@@ -36,6 +36,7 @@ export default function RootLayout() {
             <Stack.Screen name="setup" options={{ title: 'Weekly plan', headerBackVisible: false }} />
             <Stack.Screen name="day/[date]" options={{ title: 'Workout' }} />
             <Stack.Screen name="export" options={{ title: 'Export' }} />
+            <Stack.Screen name="history" options={{ title: 'History' }} />
           </Stack>
         </Bridge>
       </SQLiteProvider>
