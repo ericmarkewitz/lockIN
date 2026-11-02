@@ -47,7 +47,7 @@ src/
 ### How the data works
 
 - The **weekly plan** (`plan_days`, `plan_items`) is a template.
-- A **workout** for a specific date is created from the plan the first time that day is opened. After that it is independent, so editing the plan never rewrites logged history. Saving the plan only regenerates future workouts that have nothing logged.
+- A **workout** for a specific date is created from the plan the first time that day is opened. After that it is independent, so editing the plan never rewrites logged history. Saving the plan only regenerates future workouts that have nothing logged and haven't been changed by hand.
 - Dates are local `YYYY-MM-DD` strings; weekdays use JS numbering (0 = Sunday), and the UI shows weeks starting Monday.
 - Schema changes are append-only migrations in `src/db/migrations.ts`, tracked with `PRAGMA user_version`.
 

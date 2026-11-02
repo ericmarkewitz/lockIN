@@ -92,6 +92,10 @@ const MIGRATIONS: ((db: Db) => Promise<void>)[] = [
     await db.execAsync(SCHEMA_V1);
     await seed(db);
   },
+  // Marks workouts the user changed by hand, so plan edits don't regenerate them.
+  async (db) => {
+    await db.execAsync('ALTER TABLE workouts ADD COLUMN is_customized INTEGER NOT NULL DEFAULT 0');
+  },
 ];
 
 export const LATEST_VERSION = MIGRATIONS.length;
