@@ -1,6 +1,7 @@
 import { EXPORT_FIELDS, buildExport, exportFileName } from '../export';
 import { setPlanDay } from '../plan';
 import { ensureWorkout, setRestDay, setWorkoutNotes, updateSet } from '../workouts';
+import { fromDisplayWeight } from '@/lib/units';
 import { findByName } from '@/test/helpers';
 import { createTestDb } from '@/test/testDb';
 import type { Db } from '@/db/types';
@@ -70,6 +71,14 @@ describe('buildExport', () => {
     const { csv, rows } = await buildExport(db, { fields: ['weight'] });
     expect(csv.split('\r\n')[1]).toBe('61.23');
     expect(rows[0].weight).toBe(61.23);
+  });
+
+  it('rounds a weight entered in kg when exporting in pounds', async () => {
+    const db = await seeded();
+    const { exercises } = await ensureWorkout(db, '2026-10-26');
+    await updateSet(db, exercises[0].sets[0].id, { weight: fromDisplayWeight(60, 'kg') });
+    const { csv } = await buildExport(db, { fields: ['weight'] });
+    expect(csv.split('\r\n')[1]).toBe('132.28');
   });
 
   it('includes notes and weekday, and skips rest days', async () => {
