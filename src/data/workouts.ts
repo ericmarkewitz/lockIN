@@ -129,7 +129,17 @@ export async function updateSet(db: Db, setId: number, patch: SetPatch): Promise
   await db.runAsync(`UPDATE sets SET ${sets.join(', ')} WHERE id = ?`, [...params, setId]);
 }
 
+/** Records that the user changed this workout's structure, so plan edits leave it alone. */
+function markCustomizedByExercise(db: Db, workoutExerciseId: number) {
+  return db.runAsync(
+    'UPDATE workouts SET is_customized = 1 WHERE id = (SELECT workout_id FROM workout_exercises WHERE id = ?)',
+    [workoutExerciseId],
+  );
+}
+
 export async function addSet(db: Db, workoutExerciseId: number): Promise<void> {
+  // Marked first: if the insert then fails, an extra flag only stops the day regenerating.
+  await markCustomizedByExercise(db, workoutExerciseId);
   const r = await db.getFirstAsync<{ n: number | null; t: number | null }>(
     'SELECT MAX(set_number) AS n, (SELECT target_reps FROM workout_exercises WHERE id = ?) AS t FROM sets WHERE workout_exercise_id = ?',
     [workoutExerciseId, workoutExerciseId],
@@ -145,6 +155,7 @@ export async function removeSet(db: Db, setId: number): Promise<void> {
   );
   if (!s) return;
   await db.withTransactionAsync(async () => {
+    await markCustomizedByExercise(db, s.workout_exercise_id);
     await db.runAsync('DELETE FROM sets WHERE id = ?', [setId]);
     const rest = await db.getAllAsync<{ id: number }>(
       'SELECT id FROM sets WHERE workout_exercise_id = ? ORDER BY set_number', [s.workout_exercise_id],
@@ -164,12 +175,14 @@ export async function addExerciseToWorkout(
       'SELECT MAX(position) AS n FROM workout_exercises WHERE workout_id = ?', [workoutId],
     );
     id = await insertWorkoutExercise(db, workoutId, exerciseId, (r?.n ?? -1) + 1, targets);
+    await db.runAsync('UPDATE workouts SET is_customized = 1 WHERE id = ?', [workoutId]);
   });
   return { id };
 }
 
 export async function removeExerciseFromWorkout(db: Db, workoutExerciseId: number): Promise<void> {
   await db.withTransactionAsync(async () => {
+    await markCustomizedByExercise(db, workoutExerciseId);
     await db.runAsync('DELETE FROM sets WHERE workout_exercise_id = ?', [workoutExerciseId]);
     await db.runAsync('DELETE FROM workout_exercises WHERE id = ?', [workoutExerciseId]);
   });
@@ -177,7 +190,7 @@ export async function removeExerciseFromWorkout(db: Db, workoutExerciseId: numbe
 
 export async function setRestDay(db: Db, date: string, isRest: boolean): Promise<void> {
   await ensureWorkout(db, date);
-  await db.runAsync('UPDATE workouts SET is_rest = ? WHERE date = ?', [isRest ? 1 : 0, date]);
+  await db.runAsync('UPDATE workouts SET is_rest = ?, is_customized = 1 WHERE date = ?', [isRest ? 1 : 0, date]);
 }
 
 export async function setWorkoutNotes(db: Db, date: string, notes: string): Promise<void> {
@@ -249,10 +262,10 @@ export async function getRangeSummary(db: Db, from: string, to: string, today: s
   });
 }
 
-/** After a plan edit: drop future workouts with nothing logged so they regenerate from the new plan. */
+/** After a plan edit: drop future workouts with nothing logged or changed by hand so they regenerate from the new plan. */
 export async function refreshUntouchedWorkouts(db: Db, fromDate: string): Promise<void> {
   await db.runAsync(
-    `DELETE FROM workouts WHERE date >= ? AND notes IS NULL AND NOT EXISTS (
+    `DELETE FROM workouts WHERE date >= ? AND notes IS NULL AND is_customized = 0 AND NOT EXISTS (
        SELECT 1 FROM workout_exercises we JOIN sets s ON s.workout_exercise_id = we.id
        WHERE we.workout_id = workouts.id AND (s.completed = 1 OR s.weight IS NOT NULL OR s.reps IS NOT NULL
          OR s.duration_min IS NOT NULL OR s.distance IS NOT NULL))`,

@@ -1,4 +1,5 @@
 import { setPlanDay } from '../plan';
+import type { Workout } from '../types';
 import {
   addExerciseToWorkout,
   addSet,
@@ -219,6 +220,62 @@ describe('refreshUntouchedWorkouts', () => {
     expect(await getWorkout(db, '2026-11-09')).toBeNull(); // will regenerate on open
     expect((await ensureWorkout(db, '2026-11-09')).exercises[0].exerciseName).toBe('Squat');
     expect((await getWorkout(db, '2026-11-16'))!.exercises[0].exerciseName).toBe('Bench Press');
+  });
+
+  describe('keeps days the user changed by hand', () => {
+    const DAY = '2026-11-09'; // future Monday: Bench Press 3×10 in the plan
+
+    /** Edits the day, changes Monday's plan to Squat, then refreshes as a plan save does. */
+    async function editThenSavePlan(edit: (db: Db, w: Workout) => Promise<unknown>) {
+      const db = await planned();
+      await edit(db, await ensureWorkout(db, DAY));
+      const squat = await findByName(db, 'Squat');
+      await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: squat, targetSets: 5, targetReps: 5 }] });
+      await refreshUntouchedWorkouts(db, '2026-11-05');
+      return getWorkout(db, DAY);
+    }
+
+    it('switched to a rest day', async () => {
+      const w = await editThenSavePlan((db) => setRestDay(db, DAY, true));
+      expect(w?.isRest).toBe(true);
+    });
+
+    it('switched from a planned rest day to a workout day', async () => {
+      const db = await planned();
+      const TUE = '2026-11-10'; // Tuesday is a rest day in the plan
+      await setRestDay(db, TUE, false);
+      await refreshUntouchedWorkouts(db, '2026-11-05');
+      expect((await getWorkout(db, TUE))?.isRest).toBe(false);
+    });
+
+    it('with an added exercise', async () => {
+      const w = await editThenSavePlan(async (db, wk) =>
+        addExerciseToWorkout(db, wk.id, await findByName(db, 'Deadlift')),
+      );
+      expect(w?.exercises.map((e) => e.exerciseName)).toEqual(['Bench Press', 'Deadlift']);
+    });
+
+    it('with a removed exercise', async () => {
+      const w = await editThenSavePlan((db, wk) => removeExerciseFromWorkout(db, wk.exercises[0].id));
+      expect(w?.exercises).toEqual([]);
+    });
+
+    it('with an added set', async () => {
+      const w = await editThenSavePlan((db, wk) => addSet(db, wk.exercises[0].id));
+      expect(w?.exercises[0].sets).toHaveLength(4);
+    });
+
+    it('with a removed set', async () => {
+      const w = await editThenSavePlan((db, wk) => removeSet(db, wk.exercises[0].sets[0].id));
+      expect(w?.exercises[0].sets).toHaveLength(2);
+    });
+  });
+
+  it('still regenerates a day that was only opened', async () => {
+    const db = await planned();
+    await ensureWorkout(db, '2026-11-09');
+    await refreshUntouchedWorkouts(db, '2026-11-05');
+    expect(await getWorkout(db, '2026-11-09')).toBeNull();
   });
 
   it('never touches dates before the cutoff', async () => {
