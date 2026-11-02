@@ -9,6 +9,7 @@ import {
   addExerciseToWorkout, addSet, ensureWorkout, getLastPerformance, removeExerciseFromWorkout, removeSet,
   setRestDay, setWorkoutNotes, updateSet, type SetPatch,
 } from '@/data/workouts';
+import { getWeightUnit } from '@/data/settings';
 import { useDb } from '@/db/DbContext';
 import { useLoad } from '@/hooks/useLoad';
 import { useTheme } from '@/theme';
@@ -17,7 +18,7 @@ type Mode = 'plan' | 'focus';
 
 async function loadDay(db: ReturnType<typeof useDb>, date: string) {
   const workout = await ensureWorkout(db, date);
-  const unit = (await db.getFirstAsync<{ value: string }>("SELECT value FROM settings WHERE key = 'weight_unit'"))?.value ?? 'lb';
+  const unit = await getWeightUnit(db);
   const last: Record<number, { date: string; sets: WorkoutSet[] } | null> = {};
   for (const e of workout.exercises) last[e.exerciseId] = await getLastPerformance(db, e.exerciseId, date);
   return { workout, unit, last };

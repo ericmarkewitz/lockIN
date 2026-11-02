@@ -6,6 +6,7 @@ import { Button, Card, Segmented } from '@/components/ui';
 import {
   getExerciseHistory, listLoggedExercises, listLoggedWorkouts, type ExerciseSession, type LoggedExercise,
 } from '@/data/history';
+import { getWeightUnit } from '@/data/settings';
 import { useDb } from '@/db/DbContext';
 import { useLoad } from '@/hooks/useLoad';
 import { DAY_NAMES } from '@/lib/calendar';
@@ -38,10 +39,7 @@ export function HistoryScreen() {
     async () => (exercise ? getExerciseHistory(db, exercise.id) : []),
     [db, exercise?.id],
   );
-  const unit = useLoad(
-    async () => (await db.getFirstAsync<{ value: string }>("SELECT value FROM settings WHERE key = 'weight_unit'"))?.value ?? 'lb',
-    [db],
-  ).data ?? 'lb';
+  const unit = useLoad(() => getWeightUnit(db), [db]).data ?? 'lb';
 
   return (
     <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: t.bg }} contentContainerStyle={styles.wrap}>

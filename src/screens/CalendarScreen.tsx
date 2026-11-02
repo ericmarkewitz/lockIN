@@ -50,6 +50,7 @@ export function CalendarScreen({ today = todayKey() }: { today?: string }) {
           <Button title="Plan" variant="secondary" onPress={() => router.push('/setup')} style={styles.small} />
           <Button title="History" variant="secondary" onPress={() => router.push('/history')} style={styles.small} />
           <Button title="Export" variant="secondary" onPress={() => router.push('/export')} style={styles.small} />
+          <Button title="⚙" label="Settings" variant="secondary" onPress={() => router.push('/settings')} style={styles.small} />
         </View>
       </View>
       <Segmented<ViewMode>

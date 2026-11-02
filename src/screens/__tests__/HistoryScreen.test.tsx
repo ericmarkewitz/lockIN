@@ -1,6 +1,7 @@
 import { fireEvent, screen } from '@testing-library/react-native';
 
 import { setPlanDay } from '@/data/plan';
+import { setWeightUnit } from '@/data/settings';
 import { ensureWorkout, updateSet } from '@/data/workouts';
 import { findByName } from '@/test/helpers';
 import { renderWithDb } from '@/test/render';
@@ -55,6 +56,15 @@ describe('HistoryScreen', () => {
     expect(await screen.findByText('2026-11-02')).toBeTruthy();
     expect(screen.getByText('Best 140 lb × 5 · Est. 1RM 163.3 lb')).toBeTruthy();
     expect(screen.getByText('Best 130 lb × 10 · Est. 1RM 173.3 lb')).toBeTruthy();
+  });
+
+  it('uses the selected weight unit', async () => {
+    const db = await setup();
+    await setWeightUnit(db, 'kg');
+    await renderWithDb(<HistoryScreen />, db);
+    await fireEvent.press(await screen.findByLabelText('Exercises'));
+    await fireEvent.press(await screen.findByLabelText('Bench Press history'));
+    expect(await screen.findByText('Best 140 kg × 5 · Est. 1RM 163.3 kg')).toBeTruthy();
   });
 
   it('returns from an exercise to the exercise list', async () => {

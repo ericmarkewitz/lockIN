@@ -1,5 +1,6 @@
 import type { Db } from '@/db/types';
 import { parseDateKey } from '@/lib/dates';
+import { getWeightUnit } from './settings';
 import { toCsv, type CsvColumn } from './csv';
 
 export type ExportFieldKey =
@@ -86,7 +87,7 @@ export async function buildExport(
     notes: r.notes,
   }));
 
-  const unit = (await db.getFirstAsync<{ value: string }>("SELECT value FROM settings WHERE key = 'weight_unit'"))?.value ?? 'lb';
+  const unit = await getWeightUnit(db);
   const columns: CsvColumn[] = EXPORT_FIELDS.filter((f) => opts.fields.includes(f.key)).map((f) => ({
     key: f.key,
     header: f.key === 'weight' ? `Weight (${unit})` : f.header,

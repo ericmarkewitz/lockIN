@@ -1,5 +1,6 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 
+import { setWeightUnit } from '@/data/settings';
 import { setPlanDay } from '@/data/plan';
 import { getWorkout, updateSet, ensureWorkout } from '@/data/workouts';
 import { findByName } from '@/test/helpers';
@@ -21,6 +22,15 @@ async function setup() {
 }
 
 describe('WorkoutView', () => {
+  it('labels weights with the selected unit', async () => {
+    const db = await setup();
+    await setWeightUnit(db, 'kg');
+    await renderWithDb(<WorkoutView date={MON} />, db);
+    await screen.findByText('Bench Press');
+    expect(screen.getAllByText('kg').length).toBeGreaterThan(0);
+    expect(screen.queryByText('lb')).toBeNull();
+  });
+
   it('shows the full plan with a row per set', async () => {
     const db = await setup();
     await renderWithDb(<WorkoutView date={MON} />, db);
