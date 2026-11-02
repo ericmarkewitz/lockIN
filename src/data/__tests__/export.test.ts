@@ -64,6 +64,14 @@ describe('buildExport', () => {
     expect(csv.split('\r\n')[0]).toBe('Weight (kg)');
   });
 
+  it('converts stored pounds to the configured unit', async () => {
+    const db = await seeded(); // 135 lb bench
+    await db.runAsync("UPDATE settings SET value = 'kg' WHERE key = 'weight_unit'");
+    const { csv, rows } = await buildExport(db, { fields: ['weight'] });
+    expect(csv.split('\r\n')[1]).toBe('61.23');
+    expect(rows[0].weight).toBe(61.23);
+  });
+
   it('includes notes and weekday, and skips rest days', async () => {
     const db = await seeded();
     await setWorkoutNotes(db, '2026-10-26', 'Felt strong, "PR" attempt');

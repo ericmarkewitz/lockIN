@@ -1,5 +1,6 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 
+import { setWeightUnit } from '@/data/settings';
 import { setPlanDay } from '@/data/plan';
 import { getWorkout, updateSet, ensureWorkout } from '@/data/workouts';
 import { findByName } from '@/test/helpers';
@@ -21,6 +22,41 @@ async function setup() {
 }
 
 describe('WorkoutView', () => {
+  it('labels weights with the selected unit', async () => {
+    const db = await setup();
+    await setWeightUnit(db, 'kg');
+    await renderWithDb(<WorkoutView date={MON} />, db);
+    await screen.findByText('Bench Press');
+    expect(screen.getAllByText('kg').length).toBeGreaterThan(0);
+    expect(screen.queryByText('lb')).toBeNull();
+  });
+
+  it('shows last performance in the selected unit', async () => {
+    const db = await setup();
+    await setWeightUnit(db, 'kg');
+    const prev = await ensureWorkout(db, '2026-10-26');
+    await updateSet(db, prev.exercises[0].sets[0].id, { weight: 135, reps: 10, completed: true });
+    await renderWithDb(<WorkoutView date={MON} />, db);
+    expect(await screen.findByText('Last (2026-10-26): 61.23×10')).toBeTruthy();
+  });
+
+  it('shows stored pounds in kilograms and stores kg entries as pounds', async () => {
+    const db = await setup();
+    await setWeightUnit(db, 'kg');
+    const w = await ensureWorkout(db, MON);
+    await updateSet(db, w.exercises[0].sets[0].id, { weight: 135 });
+    await renderWithDb(<WorkoutView date={MON} />, db);
+    const [first, second] = await screen.findAllByLabelText(/Weight for set/);
+    expect(first.props.value).toBe('61.23');
+    await fireEvent.changeText(second, '100');
+    await fireEvent(second, 'blur');
+    await waitFor(async () => {
+      const sets = (await getWorkout(db, MON))!.exercises[0].sets;
+      expect(sets[1].weight).toBeCloseTo(220.462262185, 6);
+      expect(sets[0].weight).toBe(135); // untouched
+    });
+  });
+
   it('shows the full plan with a row per set', async () => {
     const db = await setup();
     await renderWithDb(<WorkoutView date={MON} />, db);

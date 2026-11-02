@@ -1,5 +1,7 @@
 import type { Db } from '@/db/types';
 import { parseDateKey } from '@/lib/dates';
+import { getWeightUnit } from './settings';
+import { toDisplayWeight } from '@/lib/units';
 import { toCsv, type CsvColumn } from './csv';
 
 export type ExportFieldKey =
@@ -72,6 +74,7 @@ export async function buildExport(
     params,
   );
 
+  const unit = await getWeightUnit(db);
   const rows = data.map((r) => ({
     date: r.date,
     weekday: WEEKDAYS[parseDateKey(r.date).getDay()],
@@ -79,14 +82,13 @@ export async function buildExport(
     exercise: r.exercise,
     set: r.set_number,
     reps: r.reps,
-    weight: r.weight,
+    weight: toDisplayWeight(r.weight, unit),
     duration_min: r.duration_min,
     distance: r.distance,
     completed: !!r.completed,
     notes: r.notes,
   }));
 
-  const unit = (await db.getFirstAsync<{ value: string }>("SELECT value FROM settings WHERE key = 'weight_unit'"))?.value ?? 'lb';
   const columns: CsvColumn[] = EXPORT_FIELDS.filter((f) => opts.fields.includes(f.key)).map((f) => ({
     key: f.key,
     header: f.key === 'weight' ? `Weight (${unit})` : f.header,

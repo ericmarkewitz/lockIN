@@ -9,24 +9,26 @@ import {
   addExerciseToWorkout, addSet, ensureWorkout, getLastPerformance, removeExerciseFromWorkout, removeSet,
   setRestDay, setWorkoutNotes, updateSet, type SetPatch,
 } from '@/data/workouts';
+import { getWeightUnit, type WeightUnit } from '@/data/settings';
 import { useDb } from '@/db/DbContext';
 import { useLoad } from '@/hooks/useLoad';
+import { toDisplayWeight } from '@/lib/units';
 import { useTheme } from '@/theme';
 
 type Mode = 'plan' | 'focus';
 
 async function loadDay(db: ReturnType<typeof useDb>, date: string) {
   const workout = await ensureWorkout(db, date);
-  const unit = (await db.getFirstAsync<{ value: string }>("SELECT value FROM settings WHERE key = 'weight_unit'"))?.value ?? 'lb';
+  const unit = await getWeightUnit(db);
   const last: Record<number, { date: string; sets: WorkoutSet[] } | null> = {};
   for (const e of workout.exercises) last[e.exerciseId] = await getLastPerformance(db, e.exerciseId, date);
   return { workout, unit, last };
 }
 
-const fmtLast = (l: { date: string; sets: WorkoutSet[] }, kind: WorkoutExercise['categoryKind']) =>
+const fmtLast = (l: { date: string; sets: WorkoutSet[] }, kind: WorkoutExercise['categoryKind'], unit: WeightUnit) =>
   `Last (${l.date}): ` +
   l.sets
-    .map((s) => (kind === 'strength' ? `${s.weight ?? '–'}×${s.reps ?? '–'}` : `${s.durationMin ?? '–'}min${s.distance ? ` ${s.distance}` : ''}`))
+    .map((s) => (kind === 'strength' ? `${toDisplayWeight(s.weight, unit) ?? '–'}×${s.reps ?? '–'}` : `${s.durationMin ?? '–'}min${s.distance ? ` ${s.distance}` : ''}`))
     .join(', ');
 
 export function WorkoutView({ date }: { date: string }) {
@@ -82,7 +84,7 @@ export function WorkoutView({ date }: { date: string }) {
                 </View>
                 <Button title="Remove" variant="danger" label={`Remove ${ex.exerciseName}`} onPress={() => act(() => removeExerciseFromWorkout(db, ex.id))} style={styles.small} />
               </View>
-              {last[ex.exerciseId] && <Text style={{ color: t.muted, fontSize: 12 }}>{fmtLast(last[ex.exerciseId]!, ex.categoryKind)}</Text>}
+              {last[ex.exerciseId] && <Text style={{ color: t.muted, fontSize: 12 }}>{fmtLast(last[ex.exerciseId]!, ex.categoryKind, unit)}</Text>}
               {ex.sets.map((s) => (
                 <SetRow
                   key={s.id}

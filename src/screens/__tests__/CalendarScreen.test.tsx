@@ -35,6 +35,20 @@ async function setup() {
 beforeEach(() => mockPush.mockClear());
 
 describe('CalendarScreen', () => {
+  it('opens settings', async () => {
+    const db = await setup();
+    await renderWithDb(<CalendarScreen today={TODAY} />, db);
+    await fireEvent.press(screen.getByLabelText('Settings'));
+    expect(mockPush).toHaveBeenCalledWith('/settings');
+  });
+
+  it('opens the history screen', async () => {
+    const db = await setup();
+    await renderWithDb(<CalendarScreen today={TODAY} />, db);
+    await fireEvent.press(screen.getByLabelText('History'));
+    expect(mockPush).toHaveBeenCalledWith('/history');
+  });
+
   it('defaults to the current week, showing each day of the plan', async () => {
     const db = await setup();
     await renderWithDb(<CalendarScreen today={TODAY} />, db);
