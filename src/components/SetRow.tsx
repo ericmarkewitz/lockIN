@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import type { WeightUnit } from '@/data/settings';
 import type { CategoryKind, WorkoutSet } from '@/data/types';
 import type { SetPatch } from '@/data/workouts';
 import { parseNumber } from '@/lib/numbers';
+import { fromDisplayWeight, toDisplayWeight } from '@/lib/units';
 import { useTheme } from '@/theme';
 
 type Props = {
   kind: CategoryKind;
   set: WorkoutSet;
-  unit: string;
+  unit: WeightUnit;
   onChange: (patch: SetPatch) => void;
   onRemove: () => void;
 };
@@ -55,7 +57,8 @@ export function SetRow({ kind, set, unit, onChange, onRemove }: Props) {
       <Text style={[styles.num, { color: t.muted }]}>{n}</Text>
       {kind === 'strength' ? (
         <>
-          <NumField label={`Weight for set ${n}`} value={set.weight} suffix={unit} onCommit={(weight) => onChange({ weight })} />
+          <NumField label={`Weight for set ${n}`} value={toDisplayWeight(set.weight, unit)} suffix={unit}
+            onCommit={(weight) => onChange({ weight: fromDisplayWeight(weight, unit) })} />
           <NumField
             label={`Reps for set ${n}`}
             value={set.reps}

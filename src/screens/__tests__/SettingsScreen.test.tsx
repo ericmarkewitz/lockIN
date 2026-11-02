@@ -21,9 +21,9 @@ describe('SettingsScreen', () => {
     expect(screen.getByLabelText('Kilograms (kg)').props.accessibilityState).toMatchObject({ selected: true });
   });
 
-  it('explains that existing weights are relabeled, not converted', async () => {
+  it('explains that weights are stored once and converted for display', async () => {
     const db = await createTestDb();
     await renderWithDb(<SettingsScreen />, db);
-    expect(await screen.findByText(/not converted/i)).toBeTruthy();
+    expect(await screen.findByText(/converted for display/i)).toBeTruthy();
   });
 });

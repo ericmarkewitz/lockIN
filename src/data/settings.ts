@@ -8,7 +8,7 @@ export async function getWeightUnit(db: Db): Promise<WeightUnit> {
   return WEIGHT_UNITS.find((u) => u === row?.value) ?? 'lb';
 }
 
-/** Only relabels: logged weights are stored as entered and are never converted. */
+/** Weights are always stored in pounds; this only changes how they are shown and entered. */
 export async function setWeightUnit(db: Db, unit: WeightUnit): Promise<void> {
   if (!WEIGHT_UNITS.includes(unit)) throw new Error(`Unsupported weight unit: ${unit}`);
   await db.runAsync(

@@ -6,21 +6,22 @@ import { Button, Card, Segmented } from '@/components/ui';
 import {
   getExerciseHistory, listLoggedExercises, listLoggedWorkouts, type ExerciseSession, type LoggedExercise,
 } from '@/data/history';
-import { getWeightUnit } from '@/data/settings';
+import { getWeightUnit, type WeightUnit } from '@/data/settings';
 import { useDb } from '@/db/DbContext';
 import { useLoad } from '@/hooks/useLoad';
 import { DAY_NAMES } from '@/lib/calendar';
 import { parseDateKey } from '@/lib/dates';
+import { toDisplayWeight } from '@/lib/units';
 import { useTheme } from '@/theme';
 
 type Tab = 'workouts' | 'exercises';
 
 const dayLabel = (date: string) => `${DAY_NAMES[parseDateKey(date).getDay()].slice(0, 3)} ${date}`;
 
-function sessionSummary(s: ExerciseSession, unit: string): string {
+function sessionSummary(s: ExerciseSession, unit: WeightUnit): string {
   const parts: string[] = [];
-  if (s.best) parts.push(`Best ${s.best.weight} ${unit} × ${s.best.reps}`);
-  if (s.estimatedOneRepMax !== null) parts.push(`Est. 1RM ${s.estimatedOneRepMax} ${unit}`);
+  if (s.best) parts.push(`Best ${toDisplayWeight(s.best.weight, unit)} ${unit} × ${s.best.reps}`);
+  if (s.estimatedOneRepMax !== null) parts.push(`Est. 1RM ${toDisplayWeight(s.estimatedOneRepMax, unit)} ${unit}`);
   if (s.durationMin !== null) parts.push(`${s.durationMin} min`);
   if (s.distance !== null) parts.push(`${s.distance} distance`);
   return parts.length ? parts.join(' · ') : `${s.setCount} set${s.setCount === 1 ? '' : 's'}`;

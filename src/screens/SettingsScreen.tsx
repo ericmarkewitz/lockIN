@@ -35,7 +35,7 @@ export function SettingsScreen() {
           />
         )}
         <Text style={{ color: t.muted }}>
-          Changing the unit only changes the label. Weights you have already logged are not converted, and CSV exports use the unit selected here.
+          Weights are stored once and converted for display, so you can switch units at any time without losing or altering data. Logging, history and CSV exports all use the unit selected here.
         </Text>
         {error && <Text style={{ color: t.danger }}>{error}</Text>}
       </Card>

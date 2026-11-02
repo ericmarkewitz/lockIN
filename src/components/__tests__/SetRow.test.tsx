@@ -7,6 +7,32 @@ const set: WorkoutSet = {
   id: 1, setNumber: 2, targetReps: 10, reps: null, weight: null, durationMin: null, distance: null, completed: false,
 };
 
+describe('SetRow weight units', () => {
+  it('shows a stored pound weight in kilograms', async () => {
+    await render(<SetRow kind="strength" set={{ ...set, weight: 135 }} unit="kg" onChange={jest.fn()} onRemove={jest.fn()} />);
+    expect(screen.getByLabelText('Weight for set 2').props.value).toBe('61.23');
+    expect(screen.getByText('kg')).toBeTruthy();
+  });
+
+  it('stores a weight typed in kilograms as pounds', async () => {
+    const onChange = jest.fn();
+    await render(<SetRow kind="strength" set={set} unit="kg" onChange={onChange} onRemove={jest.fn()} />);
+    const input = screen.getByLabelText('Weight for set 2');
+    await fireEvent.changeText(input, '100');
+    await fireEvent(input, 'blur');
+    expect(onChange).toHaveBeenCalledWith({ weight: expect.closeTo(220.462262185, 6) });
+  });
+
+  it('does not re-save when the displayed kg value is unchanged', async () => {
+    const onChange = jest.fn();
+    await render(<SetRow kind="strength" set={{ ...set, weight: 220.462262185 }} unit="kg" onChange={onChange} onRemove={jest.fn()} />);
+    const input = screen.getByLabelText('Weight for set 2');
+    await fireEvent.changeText(input, '100');
+    await fireEvent(input, 'blur');
+    expect(onChange).not.toHaveBeenCalled();
+  });
+});
+
 describe('SetRow (strength)', () => {
   it('shows the set number and rep target as placeholder', async () => {
     await render(<SetRow kind="strength" set={set} unit="lb" onChange={jest.fn()} onRemove={jest.fn()} />);

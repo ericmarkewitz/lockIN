@@ -64,7 +64,7 @@ describe('HistoryScreen', () => {
     await renderWithDb(<HistoryScreen />, db);
     await fireEvent.press(await screen.findByLabelText('Exercises'));
     await fireEvent.press(await screen.findByLabelText('Bench Press history'));
-    expect(await screen.findByText('Best 140 kg × 5 · Est. 1RM 163.3 kg')).toBeTruthy();
+    expect(await screen.findByText('Best 63.5 kg × 5 · Est. 1RM 74.07 kg')).toBeTruthy();
   });
 
   it('returns from an exercise to the exercise list', async () => {
