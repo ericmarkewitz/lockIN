@@ -8,7 +8,7 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 /** Stored pounds -> the user's unit, rounded to 2 decimals for display. */
 export function toDisplayWeight(lb: number | null, unit: WeightUnit): number | null {
   if (lb === null) return null;
-  return unit === 'kg' ? round2(lb / LB_PER_KG) : lb;
+  return round2(unit === 'kg' ? lb / LB_PER_KG : lb);
 }
 
 /** A value typed in the user's unit -> pounds, at full precision so kg entries round-trip. */

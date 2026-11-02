@@ -6,6 +6,10 @@ describe('weight units', () => {
     expect(fromDisplayWeight(135.25, 'lb')).toBe(135.25);
   });
 
+  it('rounds pounds to 2 decimals for a weight entered in kg', () => {
+    expect(toDisplayWeight(fromDisplayWeight(60, 'kg'), 'lb')).toBe(132.28);
+  });
+
   it('converts stored pounds to kilograms, rounded to 2 decimals', () => {
     expect(toDisplayWeight(135, 'kg')).toBe(61.23);
     expect(toDisplayWeight(220.462262185, 'kg')).toBe(100);
