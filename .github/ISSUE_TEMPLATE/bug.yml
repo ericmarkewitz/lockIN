@@ -41,6 +41,18 @@ body:
       render: shell
     validations:
       required: false
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How soon should this be picked up? Android-only work is low priority while we focus on iPhone. A maintainer applies the matching `priority:` label.
+      options:
+        - High
+        - Medium
+        - Low
+      default: 1
+    validations:
+      required: true
   - type: upload
     id: screenshots
     attributes:
