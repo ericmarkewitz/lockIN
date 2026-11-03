@@ -96,6 +96,25 @@ const MIGRATIONS: ((db: Db) => Promise<void>)[] = [
   async (db) => {
     await db.execAsync('ALTER TABLE workouts ADD COLUMN is_customized INTEGER NOT NULL DEFAULT 0');
   },
+  // Groups lifts by muscle. Backfills the seeded lifts; custom ones stay uncategorized.
+  async (db) => {
+    await db.execAsync('ALTER TABLE exercises ADD COLUMN subcategory TEXT');
+    const lifts: Record<string, string[]> = {
+      Chest: ['Bench Press', 'Incline Bench Press'],
+      Back: ['Deadlift', 'Barbell Row', 'Pull-up', 'Lat Pulldown'],
+      Shoulders: ['Overhead Press', 'Lateral Raise'],
+      Arms: ['Dumbbell Curl', 'Tricep Pushdown'],
+      Legs: ['Squat', 'Front Squat', 'Romanian Deadlift', 'Leg Press', 'Lunge'],
+    };
+    for (const [subcategory, names] of Object.entries(lifts)) {
+      await db.runAsync(
+        `UPDATE exercises SET subcategory = ?
+         WHERE is_custom = 0 AND category_id = (SELECT id FROM categories WHERE name = 'Lifts')
+           AND name IN (${names.map(() => '?').join(',')})`,
+        [subcategory, ...names],
+      );
+    }
+  },
 ];
 
 export const LATEST_VERSION = MIGRATIONS.length;

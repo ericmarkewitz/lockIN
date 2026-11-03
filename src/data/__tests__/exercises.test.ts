@@ -1,4 +1,4 @@
-import { addExercise, findExercise, listCategoriesWithExercises } from '../exercises';
+import { LIFT_SUBCATEGORIES, addExercise, findExercise, listCategoriesWithExercises } from '../exercises';
 import { createTestDb } from '@/test/testDb';
 
 describe('exercises', () => {
@@ -19,6 +19,30 @@ describe('exercises', () => {
     expect(ex.name).toBe('Hip Thrust');
     expect(ex.isCustom).toBe(true);
     expect((await findExercise(db, ex.id))?.categoryKind).toBe('strength');
+  });
+
+  it('offers muscle groups as subcategories for lifts only', async () => {
+    const db = await createTestDb();
+    const cats = await listCategoriesWithExercises(db);
+    expect(cats.find((c) => c.name === 'Lifts')!.subcategories).toEqual(LIFT_SUBCATEGORIES);
+    for (const name of ['Cardio', 'Yoga', 'Mobility']) {
+      expect(cats.find((c) => c.name === name)!.subcategories).toEqual([]);
+    }
+  });
+
+  it('returns the subcategory with each exercise', async () => {
+    const db = await createTestDb();
+    const cats = await listCategoriesWithExercises(db);
+    const lifts = cats.find((c) => c.name === 'Lifts')!;
+    expect(lifts.exercises.find((e) => e.name === 'Bench Press')!.subcategory).toBe('Chest');
+    expect(cats.find((c) => c.name === 'Cardio')!.exercises[0].subcategory).toBeNull();
+  });
+
+  it('adds a custom exercise to a subcategory, defaulting to none', async () => {
+    const db = await createTestDb();
+    const lifts = (await listCategoriesWithExercises(db)).find((c) => c.name === 'Lifts')!;
+    expect((await addExercise(db, lifts.id, 'Cable Fly', 'Chest')).subcategory).toBe('Chest');
+    expect((await addExercise(db, lifts.id, 'Farmer Carry')).subcategory).toBeNull();
   });
 
   it('rejects blank and duplicate names (case-insensitive)', async () => {
