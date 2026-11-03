@@ -151,6 +151,15 @@ describe('logging', () => {
     await setRestDay(db, MON, false);
     expect((await getWorkout(db, MON))!.isRest).toBe(false);
   });
+
+  it('flags which exercises have logged sets', async () => {
+    const db = await planned();
+    const w = await ensureWorkout(db, MON);
+    await addExerciseToWorkout(db, w.id, await findByName(db, 'Squat'));
+    await updateSet(db, w.exercises[0].sets[0].id, { reps: 5 });
+    const { exercises } = (await getWorkout(db, MON))!;
+    expect(exercises.map((e) => [e.exerciseName, e.hasLoggedSets])).toEqual([['Bench Press', true], ['Squat', false]]);
+  });
 });
 
 describe('history helpers', () => {

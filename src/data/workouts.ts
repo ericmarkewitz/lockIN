@@ -9,7 +9,7 @@ import type {
 type WeRow = {
   id: number; exercise_id: number; position: number; target_sets: number | null; target_reps: number | null;
   target_duration_min: number | null; target_distance: number | null;
-  exercise_name: string; category_name: string; category_kind: CategoryKind;
+  exercise_name: string; category_name: string; category_kind: CategoryKind; has_logged_sets: number;
 };
 type SetRow = {
   id: number; workout_exercise_id: number; set_number: number; target_reps: number | null; reps: number | null;
@@ -34,7 +34,8 @@ export async function getWorkout(db: Db, date: string): Promise<Workout | null> 
   );
   if (!w) return null;
   const wes = await db.getAllAsync<WeRow>(
-    `SELECT we.*, e.name AS exercise_name, c.name AS category_name, c.kind AS category_kind
+    `SELECT we.*, e.name AS exercise_name, c.name AS category_name, c.kind AS category_kind,
+       EXISTS (SELECT 1 FROM sets s WHERE s.workout_exercise_id = we.id AND ${LOGGED_SET}) AS has_logged_sets
      FROM workout_exercises we JOIN exercises e ON e.id = we.exercise_id JOIN categories c ON c.id = e.category_id
      WHERE we.workout_id = ? ORDER BY we.position, we.id`,
     [w.id],
@@ -55,6 +56,7 @@ export async function getWorkout(db: Db, date: string): Promise<Workout | null> 
     targetReps: we.target_reps,
     targetDurationMin: we.target_duration_min,
     targetDistance: we.target_distance,
+    hasLoggedSets: !!we.has_logged_sets,
     sets: sets.filter((s) => s.workout_exercise_id === we.id).map(toSet),
   }));
   return { id: w.id, date: w.date, isRest: !!w.is_rest, notes: w.notes, exercises };

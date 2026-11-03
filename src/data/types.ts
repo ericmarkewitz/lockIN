@@ -57,6 +57,7 @@ export type WorkoutExercise = {
   targetReps: number | null;
   targetDurationMin: number | null;
   targetDistance: number | null;
+  hasLoggedSets: boolean;
   sets: WorkoutSet[];
 };
 
