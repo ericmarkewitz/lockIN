@@ -95,6 +95,7 @@ export function WorkoutView({ date }: { date: string }) {
                   key={s.id}
                   kind={ex.categoryKind}
                   set={s}
+                  targetDurationMin={ex.targetDurationMin}
                   unit={unit}
                   onChange={(patch: SetPatch) => act(() => updateSet(db, s.id, patch))}
                   onRemove={() => act(() => removeSet(db, s.id))}

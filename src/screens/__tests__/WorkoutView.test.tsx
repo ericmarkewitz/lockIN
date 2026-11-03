@@ -79,6 +79,15 @@ describe('WorkoutView', () => {
     expect(await screen.findByText('Cardio · 30 min')).toBeTruthy();
   });
 
+  it('logs the planned duration from the wheel', async () => {
+    const db = await createTestDb();
+    await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: await findByName(db, 'Running'), targetDurationMin: 30 }] });
+    await renderWithDb(<WorkoutView date={MON} />, db);
+    await fireEvent.press(await screen.findByLabelText('Duration for set 1'));
+    await fireEvent.press(screen.getByLabelText('Done'));
+    await waitFor(async () => expect((await getWorkout(db, MON))!.exercises[0].sets[0].durationMin).toBe(30));
+  });
+
   it('persists a logged weight and completion', async () => {
     const db = await setup();
     await renderWithDb(<WorkoutView date={MON} />, db);
