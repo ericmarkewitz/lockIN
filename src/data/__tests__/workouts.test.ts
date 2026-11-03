@@ -232,6 +232,46 @@ describe('sets with values but no tick', () => {
   });
 });
 
+describe('isLogged on sets', () => {
+  const firstSet = async (db: Db) => (await getWorkout(db, MON))!.exercises[0].sets[0];
+
+  it('is false for a set with nothing entered', async () => {
+    const db = await planned();
+    await ensureWorkout(db, MON);
+    expect((await firstSet(db)).isLogged).toBe(false);
+  });
+
+  it.each([
+    ['reps', { reps: 0 }],
+    ['weight', { weight: 135 }],
+    ['duration', { durationMin: 30 }],
+    ['distance', { distance: 3 }],
+    ['completed', { completed: true }],
+  ])('is true once a set has %s', async (_name, patch) => {
+    const db = await planned();
+    const w = await ensureWorkout(db, MON);
+    await updateSet(db, w.exercises[0].sets[0].id, patch);
+    expect((await firstSet(db)).isLogged).toBe(true);
+  });
+
+  it('is false again once the value is cleared', async () => {
+    const db = await planned();
+    const w = await ensureWorkout(db, MON);
+    const id = w.exercises[0].sets[0].id;
+    await updateSet(db, id, { weight: 135 });
+    await updateSet(db, id, { weight: null });
+    expect((await firstSet(db)).isLogged).toBe(false);
+  });
+
+  it('is true on the sets of a last performance', async () => {
+    const db = await planned();
+    const w = await ensureWorkout(db, MON);
+    await updateSet(db, w.exercises[0].sets[0].id, { weight: 135 });
+    const last = await getLastPerformance(db, w.exercises[0].exerciseId, '2026-11-09');
+    expect(last!.sets.map((s) => s.isLogged)).toEqual([true]);
+  });
+});
+
 describe('getRangeSummary', () => {
   const TODAY = '2026-11-04'; // Wednesday
 

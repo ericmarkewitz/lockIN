@@ -4,7 +4,7 @@ import { SetRow } from '../SetRow';
 import type { WorkoutSet } from '@/data/types';
 
 const set: WorkoutSet = {
-  id: 1, setNumber: 2, targetReps: 10, reps: null, weight: null, durationMin: null, distance: null, completed: false,
+  id: 1, setNumber: 2, targetReps: 10, reps: null, weight: null, durationMin: null, distance: null, completed: false, isLogged: false,
 };
 
 describe('SetRow weight units', () => {
