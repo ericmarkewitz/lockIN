@@ -1,5 +1,6 @@
 import type { Db } from '@/db/types';
 import { parseDateKey } from '@/lib/dates';
+import { LOGGED_SET } from './logged';
 import { getWeightUnit } from './settings';
 import { toDisplayWeight } from '@/lib/units';
 import { toCsv, type CsvColumn } from './csv';
@@ -58,7 +59,7 @@ export async function buildExport(
     if (opts.to) { where.push('w.date <= ?'); params.push(opts.to); }
   }
   if (!opts.includeUnlogged) {
-    where.push('(s.completed = 1 OR s.reps IS NOT NULL OR s.weight IS NOT NULL OR s.duration_min IS NOT NULL OR s.distance IS NOT NULL)');
+    where.push(LOGGED_SET);
   }
 
   const data = await db.getAllAsync<Row>(

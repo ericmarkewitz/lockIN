@@ -1,9 +1,7 @@
 import type { Db } from '@/db/types';
 import { estimateOneRepMax } from '@/lib/strength';
+import { LOGGED_SET } from './logged';
 import type { CategoryKind } from './types';
-
-/** A set counts as logged if it was checked off or has any value entered (same rule as the CSV export). */
-const LOGGED = '(s.completed = 1 OR s.reps IS NOT NULL OR s.weight IS NOT NULL OR s.duration_min IS NOT NULL OR s.distance IS NOT NULL)';
 
 export type LoggedWorkout = { date: string; exerciseNames: string[]; setCount: number };
 
@@ -11,7 +9,7 @@ export type LoggedWorkout = { date: string; exerciseNames: string[]; setCount: n
 export async function listLoggedWorkouts(
   db: Db, opts: { limit?: number; before?: string } = {},
 ): Promise<LoggedWorkout[]> {
-  const where = ['w.is_rest = 0', LOGGED];
+  const where = ['w.is_rest = 0', LOGGED_SET];
   const params: unknown[] = [];
   if (opts.before) { where.push('w.date < ?'); params.push(opts.before); }
   const rows = await db.getAllAsync<{ date: string; name: string; sets: number }>(
@@ -47,7 +45,7 @@ export async function listLoggedExercises(db: Db): Promise<LoggedExercise[]> {
      JOIN workouts w ON w.id = we.workout_id
      JOIN exercises e ON e.id = we.exercise_id
      JOIN categories c ON c.id = e.category_id
-     WHERE w.is_rest = 0 AND ${LOGGED}
+     WHERE w.is_rest = 0 AND ${LOGGED_SET}
      GROUP BY e.id
      ORDER BY lastDate DESC, e.name`,
   );
@@ -73,7 +71,7 @@ export async function getExerciseHistory(db: Db, exerciseId: number): Promise<Ex
      FROM sets s
      JOIN workout_exercises we ON we.id = s.workout_exercise_id
      JOIN workouts w ON w.id = we.workout_id
-     WHERE we.exercise_id = ? AND w.is_rest = 0 AND ${LOGGED}
+     WHERE we.exercise_id = ? AND w.is_rest = 0 AND ${LOGGED_SET}
      ORDER BY w.date DESC, s.set_number`,
     [exerciseId],
   );
