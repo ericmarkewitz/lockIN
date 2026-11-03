@@ -12,6 +12,7 @@ import {
 import { getWeightUnit, type WeightUnit } from '@/data/settings';
 import { useDb } from '@/db/DbContext';
 import { useLoad } from '@/hooks/useLoad';
+import { formatDuration } from '@/lib/duration';
 import { toDisplayWeight } from '@/lib/units';
 import { useTheme } from '@/theme';
 
@@ -28,7 +29,7 @@ async function loadDay(db: ReturnType<typeof useDb>, date: string) {
 const fmtLast = (l: { date: string; sets: WorkoutSet[] }, kind: WorkoutExercise['categoryKind'], unit: WeightUnit) =>
   `Last (${l.date}): ` +
   l.sets
-    .map((s) => (kind === 'strength' ? `${toDisplayWeight(s.weight, unit) ?? '–'}×${s.reps ?? '–'}` : `${s.durationMin ?? '–'}min${s.distance ? ` ${s.distance}` : ''}`))
+    .map((s) => (kind === 'strength' ? `${toDisplayWeight(s.weight, unit) ?? '–'}×${s.reps ?? '–'}` : `${formatDuration(s.durationMin) || '–'}${s.distance ? ` ${s.distance}` : ''}`))
     .join(', ');
 
 export function WorkoutView({ date }: { date: string }) {
@@ -83,7 +84,7 @@ export function WorkoutView({ date }: { date: string }) {
                     {ex.categoryName}
                     {ex.subcategory ? ` · ${ex.subcategory}` : ''}
                     {ex.categoryKind === 'strength' && ex.targetSets ? ` · ${ex.targetSets}×${ex.targetReps ?? '?'}` : ''}
-                    {ex.targetDurationMin ? ` · ${ex.targetDurationMin} min` : ''}
+                    {ex.targetDurationMin ? ` · ${formatDuration(ex.targetDurationMin)}` : ''}
                     {ex.targetDistance ? ` · ${ex.targetDistance} dist` : ''}
                   </Text>
                 </View>
@@ -95,6 +96,7 @@ export function WorkoutView({ date }: { date: string }) {
                   key={s.id}
                   kind={ex.categoryKind}
                   set={s}
+                  targetDurationMin={ex.targetDurationMin}
                   unit={unit}
                   onChange={(patch: SetPatch) => act(() => updateSet(db, s.id, patch))}
                   onRemove={() => act(() => removeSet(db, s.id))}

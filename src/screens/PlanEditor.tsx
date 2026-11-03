@@ -5,6 +5,8 @@ import { ScrollView } from 'react-native-gesture-handler';
 import { Button, Card } from '@/components/ui';
 import { DragHandle } from '@/components/DragHandle';
 import { ExercisePicker } from '@/components/ExercisePicker';
+import { DurationButton } from '@/components/DurationButton';
+import { WheelButton } from '@/components/WheelSheet';
 import { getPlan, markPlanComplete, setPlanDay } from '@/data/plan';
 import type { CategoryKind, Exercise } from '@/data/types';
 import { refreshUntouchedWorkouts } from '@/data/workouts';
@@ -13,6 +15,7 @@ import { DAY_NAMES } from '@/lib/calendar';
 import { todayKey } from '@/lib/dates';
 import { parseNumber } from '@/lib/numbers';
 import { dropIndex, moveItem } from '@/lib/reorder';
+import { MAX_REPS, MAX_SETS, wheelOptions } from '@/lib/wheel';
 import { useTheme } from '@/theme';
 
 type Draft = {
@@ -177,12 +180,23 @@ export function PlanEditor({ onSaved }: { onSaved: () => void }) {
                     <Text style={[styles.itemName, { color: t.text }]}>{it.name}</Text>
                     {it.kind === 'strength' ? (
                       <>
-                        <Num label={`${d.weekday} ${it.name} sets`} v={it.sets} suffix="sets" onChange={(sets) => patchItem(d.weekday, idx, { sets })} />
-                        <Num label={`${d.weekday} ${it.name} reps`} v={it.reps} suffix="reps" onChange={(reps) => patchItem(d.weekday, idx, { reps })} />
+                        <TargetsField
+                          label={`${d.weekday} ${it.name} sets and reps`}
+                          title={it.name}
+                          sets={it.sets}
+                          reps={it.reps}
+                          onChange={(sets, reps) => patchItem(d.weekday, idx, { sets, reps })}
+                        />
                       </>
                     ) : (
                       <>
-                        <Num label={`${d.weekday} ${it.name} minutes`} v={it.duration} suffix="min" onChange={(duration) => patchItem(d.weekday, idx, { duration })} />
+                        <DurationButton
+                          label={`${d.weekday} ${it.name} minutes`}
+                          title={it.name}
+                          value={parseNumber(it.duration)}
+                          onChange={(minutes) => patchItem(d.weekday, idx, { duration: txt(minutes) })}
+                          style={styles.duration}
+                        />
                         {it.kind === 'cardio' && (
                           <Num label={`${d.weekday} ${it.name} distance`} v={it.distance} suffix="dist" onChange={(distance) => patchItem(d.weekday, idx, { distance })} />
                         )}
@@ -211,7 +225,28 @@ export function PlanEditor({ onSaved }: { onSaved: () => void }) {
   );
 }
 
-function Num({ label, v, suffix, onChange }: { label: string; v: string; suffix: string; onChange: (s: string) => void }) {
+function TargetsField({
+  label, title, sets, reps, onChange,
+}: { label: string; title: string; sets: string; reps: string; onChange: (sets: string, reps: string) => void }) {
+  const setCount = parseNumber(sets);
+  const repCount = parseNumber(reps);
+  return (
+    <WheelButton
+      label={label}
+      valueText={`${sets || 'no'} sets, ${reps || 'no'} reps`}
+      text={`${sets || '–'} × ${reps || '–'}`}
+      title={title}
+      columns={[
+        { label: 'Sets', options: wheelOptions(1, MAX_SETS, setCount), value: setCount },
+        { label: 'Reps', options: wheelOptions(1, MAX_REPS, repCount), value: repCount },
+      ]}
+      onDone={([nextSets, nextReps]) => onChange(txt(nextSets), txt(nextReps))}
+      style={styles.targets}
+    />
+  );
+}
+
+function Num({ label, v, suffix, onChange }:{ label: string; v: string; suffix: string; onChange: (s: string) => void }) {
   const t = useTheme();
   return (
     <View style={styles.num}>
@@ -237,4 +272,6 @@ const styles = StyleSheet.create({
   itemName: { flex: 1, fontSize: 15 },
   num: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   numInput: { width: 46, borderWidth: 1, borderRadius: 8, paddingVertical: 6, textAlign: 'center' },
+  targets: { minWidth: 72 },
+  duration: { minWidth: 46 },
 });

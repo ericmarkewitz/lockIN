@@ -32,6 +32,16 @@ describe('buildExport', () => {
     expect(rows[2]).toMatchObject({ date: '2026-10-28', category: 'Cardio', exercise: 'Running', duration_min: 31, distance: 3.2 });
   });
 
+  it('rounds duration to 2 decimals of a minute, which still resolves to the exact second', async () => {
+    const db = await seeded();
+    const wed = await ensureWorkout(db, '2026-10-28');
+    await updateSet(db, wed.exercises[0].sets[0].id, { durationMin: 1 + 20 / 60 });
+    const { rows, csv } = await buildExport(db, { fields: ['exercise', 'duration_min'] });
+    expect(rows[2]).toMatchObject({ duration_min: 1.33 });
+    expect(csv).toContain('Running,1.33');
+    expect(Math.round(1.33 * 60)).toBe(80);
+  });
+
   it('exports the subcategory as a selectable column, blank when there is none', async () => {
     const db = await seeded();
     const { csv, rows } = await buildExport(db, { fields: ['category', 'subcategory', 'exercise'] });
