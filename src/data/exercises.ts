@@ -4,6 +4,22 @@ import type { Category, CategoryKind, Exercise } from './types';
 /** Muscle groups lifts are organized by, in display order. */
 export const LIFT_SUBCATEGORIES = ['Chest', 'Back', 'Shoulders', 'Arms', 'Legs', 'Core'] as const;
 
+/** Heading for a category's exercises that aren't in one of its subcategories. */
+export const OTHER_SUBCATEGORY = 'Other';
+
+export type ExerciseGroup = { title: string | null; exercises: Exercise[] };
+
+/** Splits a category's exercises for display. Without subcategories there is one untitled group. */
+export function groupBySubcategory(category: Category): ExerciseGroup[] {
+  if (!category.subcategories.length) return [{ title: null, exercises: category.exercises }];
+  const groups = category.subcategories.map((title) => ({
+    title,
+    exercises: category.exercises.filter((e) => e.subcategory === title),
+  }));
+  const other = category.exercises.filter((e) => !category.subcategories.includes(e.subcategory ?? ''));
+  return [...groups, { title: OTHER_SUBCATEGORY, exercises: other }].filter((g) => g.exercises.length);
+}
+
 type Row = {
   id: number; category_id: number; name: string; is_custom: number; subcategory: string | null;
   category_name: string; category_kind: CategoryKind;
