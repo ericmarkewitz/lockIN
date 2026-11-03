@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 
 import { setWeightUnit } from '@/data/settings';
 import { setPlanDay } from '@/data/plan';
-import { getWorkout, updateSet, ensureWorkout } from '@/data/workouts';
+import { getWorkout, setRestDay, updateSet, ensureWorkout } from '@/data/workouts';
 import { findByName } from '@/test/helpers';
 import { renderWithDb } from '@/test/render';
 import { createTestDb } from '@/test/testDb';
@@ -110,6 +110,30 @@ describe('WorkoutView', () => {
     await fireEvent(await screen.findByLabelText('Rest day'), 'valueChange', true);
     expect(await screen.findByText(/Rest and recover/)).toBeTruthy();
     expect(screen.queryByText('Bench Press')).toBeNull();
+  });
+
+  it('keeps logged exercises visible on a rest day and hides the rest', async () => {
+    const db = await setup();
+    const w = await ensureWorkout(db, MON);
+    await updateSet(db, w.exercises[0].sets[0].id, { weight: 135, reps: 10 });
+    await renderWithDb(<WorkoutView date={MON} />, db);
+    await fireEvent(await screen.findByLabelText('Rest day'), 'valueChange', true);
+    expect(await screen.findByText(/Logged sets stay in your history/)).toBeTruthy();
+    expect(screen.queryByText(/Rest and recover/)).toBeNull();
+    expect(screen.getByText('Bench Press')).toBeTruthy();
+    expect(screen.queryByText('Squat')).toBeNull();
+    expect(screen.queryByText('+ Add exercise')).toBeNull();
+  });
+
+  it('brings every exercise back when the rest day is turned off', async () => {
+    const db = await setup();
+    const w = await ensureWorkout(db, MON);
+    await updateSet(db, w.exercises[0].sets[0].id, { weight: 135, reps: 10 });
+    await setRestDay(db, MON, true);
+    await renderWithDb(<WorkoutView date={MON} />, db);
+    await fireEvent(await screen.findByLabelText('Rest day'), 'valueChange', false);
+    expect(await screen.findByText('Squat')).toBeTruthy();
+    expect(screen.getByText('Bench Press')).toBeTruthy();
   });
 
   it('adds an exercise from the picker', async () => {

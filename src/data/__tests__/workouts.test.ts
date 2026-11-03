@@ -151,6 +151,15 @@ describe('logging', () => {
     await setRestDay(db, MON, false);
     expect((await getWorkout(db, MON))!.isRest).toBe(false);
   });
+
+  it('flags which exercises have logged sets', async () => {
+    const db = await planned();
+    const w = await ensureWorkout(db, MON);
+    await addExerciseToWorkout(db, w.id, await findByName(db, 'Squat'));
+    await updateSet(db, w.exercises[0].sets[0].id, { reps: 5 });
+    const { exercises } = (await getWorkout(db, MON))!;
+    expect(exercises.map((e) => [e.exerciseName, e.hasLoggedSets])).toEqual([['Bench Press', true], ['Squat', false]]);
+  });
 });
 
 describe('history helpers', () => {
@@ -245,6 +254,26 @@ describe('getRangeSummary', () => {
     const db = await planned();
     const s = await getRangeSummary(db, '2026-11-04', '2026-11-04', TODAY);
     expect(s[0]).toMatchObject({ exerciseCount: 1, kinds: ['cardio'] });
+  });
+
+  describe('on a day marked as rest', () => {
+    it('shows rest when nothing is logged', async () => {
+      const db = await planned();
+      await ensureWorkout(db, MON);
+      await setRestDay(db, MON, true);
+      const [day] = await getRangeSummary(db, MON, MON, TODAY);
+      expect(day).toMatchObject({ status: 'rest', exerciseCount: 0, kinds: [] });
+    });
+
+    it('reports logged sets, counting only the exercises that have them', async () => {
+      const db = await planned();
+      const w = await ensureWorkout(db, MON);
+      await addExerciseToWorkout(db, w.id, await findByName(db, 'Running'));
+      for (const s of w.exercises[0].sets) await updateSet(db, s.id, { weight: 100, reps: 5 });
+      await setRestDay(db, MON, true);
+      const [day] = await getRangeSummary(db, MON, MON, TODAY);
+      expect(day).toMatchObject({ status: 'completed', exerciseCount: 1, kinds: ['strength'] });
+    });
   });
 
   it('returns one entry per date in order', async () => {

@@ -43,7 +43,8 @@ export function WorkoutView({ date }: { date: string }) {
 
   if (!data) return null;
   const { workout, unit, last } = data;
-  const exercises = workout.exercises;
+  // A rest day hides what was only planned, but never what was logged.
+  const exercises = workout.isRest ? workout.exercises.filter((e) => e.hasLoggedSets) : workout.exercises;
   const idx = Math.min(focusIdx, Math.max(exercises.length - 1, 0));
   const shown = mode === 'focus' && exercises.length ? [exercises[idx]] : exercises;
 
@@ -59,9 +60,12 @@ export function WorkoutView({ date }: { date: string }) {
         <Switch accessibilityLabel="Rest day" value={workout.isRest} onValueChange={(v) => act(() => setRestDay(db, date, v))} />
       </Card>
 
-      {workout.isRest ? (
-        <Text style={{ color: t.muted, textAlign: 'center', padding: 16 }}>Rest and recover. 😴</Text>
-      ) : (
+      {workout.isRest && (
+        <Text style={{ color: t.muted, textAlign: 'center', padding: 16 }}>
+          {exercises.length ? 'Marked as a rest day. Logged sets stay in your history.' : 'Rest and recover. 😴'}
+        </Text>
+      )}
+      {(!workout.isRest || exercises.length > 0) && (
         <>
           {exercises.length > 1 && (
             <Segmented<Mode>
@@ -105,7 +109,7 @@ export function WorkoutView({ date }: { date: string }) {
               <Button title="Next ›" variant="secondary" disabled={idx >= exercises.length - 1} onPress={() => setFocusIdx(idx + 1)} style={{ flex: 1 }} />
             </View>
           )}
-          <Button title="+ Add exercise" variant="secondary" onPress={() => setPicking(true)} />
+          {!workout.isRest && <Button title="+ Add exercise" variant="secondary" onPress={() => setPicking(true)} />}
           <TextInput
             accessibilityLabel="Workout notes"
             defaultValue={workout.notes ?? ''}

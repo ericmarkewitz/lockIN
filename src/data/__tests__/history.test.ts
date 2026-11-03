@@ -23,6 +23,32 @@ async function seeded() {
   return { db, bench, run };
 }
 
+describe('a logged day later marked as rest', () => {
+  const MON = '2026-11-02';
+
+  async function loggedThenRested() {
+    const { db, bench } = await seeded();
+    await log(db, MON, [{ weight: 135, reps: 10 }]);
+    await setRestDay(db, MON, true);
+    return { db, bench };
+  }
+
+  it('stays in the workout list, counting only its logged sets', async () => {
+    const { db } = await loggedThenRested();
+    expect(await listLoggedWorkouts(db)).toEqual([{ date: MON, exerciseNames: ['Bench Press'], setCount: 1 }]);
+  });
+
+  it('stays in the exercise list', async () => {
+    const { db, bench } = await loggedThenRested();
+    expect(await listLoggedExercises(db)).toMatchObject([{ id: bench, sessions: 1, lastDate: MON }]);
+  });
+
+  it('stays in the exercise history', async () => {
+    const { db, bench } = await loggedThenRested();
+    expect(await getExerciseHistory(db, bench)).toMatchObject([{ date: MON, setCount: 1 }]);
+  });
+});
+
 describe('listLoggedWorkouts', () => {
   it('lists workouts with logged sets, newest first', async () => {
     const { db } = await seeded();
