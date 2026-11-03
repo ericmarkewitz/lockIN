@@ -70,4 +70,5 @@ Docs: https://docs.expo.dev/eas/index.md
 - Add selectable CSV columns in `EXPORT_FIELDS` (`src/data/export.ts`) and cover them in `export.test.ts`.
 - Exercise categories have a `kind` (`strength`, `cardio`, `mindbody`) that decides which inputs are shown (weight/reps vs duration/distance).
 - `example/` is leftover Expo template code; it is gitignored and excluded from `tsconfig.json`. Don't import from it.
+- Open PRs as GitHub stacked PRs with the `gh stack` CLI extension (`github/gh-stack`, needs Git 2.36+), to make review as easy as possible. Split work into small, independently reviewable layers, one branch and PR per layer. A change that is really one reviewable unit can stay a single PR.
 - When filing an issue, set its Priority field (P0, P1 or P2) on the lockIN! project (`gh project item-edit`, project 2). New issues are added to the project automatically, but Priority isn't set from labels. It's the field the Priority board groups by.
