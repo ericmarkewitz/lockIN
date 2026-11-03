@@ -9,7 +9,7 @@ import type {
 type WeRow = {
   id: number; exercise_id: number; position: number; target_sets: number | null; target_reps: number | null;
   target_duration_min: number | null; target_distance: number | null;
-  exercise_name: string; category_name: string; category_kind: CategoryKind; has_logged_sets: number;
+  exercise_name: string; category_name: string; category_kind: CategoryKind; subcategory: string | null; has_logged_sets: number;
 };
 type SetRow = {
   id: number; workout_exercise_id: number; set_number: number; target_reps: number | null; reps: number | null;
@@ -34,7 +34,7 @@ export async function getWorkout(db: Db, date: string): Promise<Workout | null> 
   );
   if (!w) return null;
   const wes = await db.getAllAsync<WeRow>(
-    `SELECT we.*, e.name AS exercise_name, c.name AS category_name, c.kind AS category_kind,
+    `SELECT we.*, e.name AS exercise_name, e.subcategory, c.name AS category_name, c.kind AS category_kind,
        EXISTS (SELECT 1 FROM sets s WHERE s.workout_exercise_id = we.id AND ${LOGGED_SET}) AS has_logged_sets
      FROM workout_exercises we JOIN exercises e ON e.id = we.exercise_id JOIN categories c ON c.id = e.category_id
      WHERE we.workout_id = ? ORDER BY we.position, we.id`,
@@ -51,6 +51,7 @@ export async function getWorkout(db: Db, date: string): Promise<Workout | null> 
     exerciseName: we.exercise_name,
     categoryName: we.category_name,
     categoryKind: we.category_kind,
+    subcategory: we.subcategory,
     position: we.position,
     targetSets: we.target_sets,
     targetReps: we.target_reps,

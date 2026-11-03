@@ -81,6 +81,7 @@ export function WorkoutView({ date }: { date: string }) {
                   <Text style={[styles.exName, { color: t.text }]}>{ex.exerciseName}</Text>
                   <Text style={{ color: t.muted, fontSize: 12 }}>
                     {ex.categoryName}
+                    {ex.subcategory ? ` · ${ex.subcategory}` : ''}
                     {ex.categoryKind === 'strength' && ex.targetSets ? ` · ${ex.targetSets}×${ex.targetReps ?? '?'}` : ''}
                     {ex.targetDurationMin ? ` · ${ex.targetDurationMin} min` : ''}
                     {ex.targetDistance ? ` · ${ex.targetDistance} dist` : ''}

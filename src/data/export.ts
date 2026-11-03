@@ -6,7 +6,7 @@ import { toDisplayWeight } from '@/lib/units';
 import { toCsv, type CsvColumn } from './csv';
 
 export type ExportFieldKey =
-  | 'date' | 'weekday' | 'category' | 'exercise' | 'set' | 'reps' | 'weight'
+  | 'date' | 'weekday' | 'category' | 'subcategory' | 'exercise' | 'set' | 'reps' | 'weight'
   | 'duration_min' | 'distance' | 'completed' | 'notes';
 
 /** Canonical column order. The weight header gets the user's unit appended. */
@@ -14,6 +14,7 @@ export const EXPORT_FIELDS: { key: ExportFieldKey; header: string; label: string
   { key: 'date', header: 'Date', label: 'Date' },
   { key: 'weekday', header: 'Weekday', label: 'Weekday' },
   { key: 'category', header: 'Category', label: 'Category' },
+  { key: 'subcategory', header: 'Subcategory', label: 'Subcategory' },
   { key: 'exercise', header: 'Exercise', label: 'Exercise' },
   { key: 'set', header: 'Set', label: 'Set number' },
   { key: 'reps', header: 'Reps', label: 'Reps' },
@@ -36,7 +37,7 @@ export type ExportOptions = {
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 type Row = {
-  date: string; category: string; exercise: string; set_number: number; reps: number | null;
+  date: string; category: string; subcategory: string | null; exercise: string; set_number: number; reps: number | null;
   weight: number | null; duration_min: number | null; distance: number | null; completed: number; notes: string | null;
 };
 
@@ -61,7 +62,7 @@ export async function buildExport(
   }
 
   const data = await db.getAllAsync<Row>(
-    `SELECT w.date, c.name AS category, e.name AS exercise, s.set_number, s.reps, s.weight,
+    `SELECT w.date, c.name AS category, e.subcategory, e.name AS exercise, s.set_number, s.reps, s.weight,
             s.duration_min, s.distance, s.completed, w.notes
      FROM sets s
      JOIN workout_exercises we ON we.id = s.workout_exercise_id
@@ -78,6 +79,7 @@ export async function buildExport(
     date: r.date,
     weekday: WEEKDAYS[parseDateKey(r.date).getDay()],
     category: r.category,
+    subcategory: r.subcategory,
     exercise: r.exercise,
     set: r.set_number,
     reps: r.reps,

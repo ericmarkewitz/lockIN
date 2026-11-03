@@ -56,6 +56,12 @@ describe('ensureWorkout / getWorkout', () => {
     expect(w.exercises[0]).toMatchObject({ targetDurationMin: 30, targetDistance: 3 });
   });
 
+  it('includes the subcategory of each exercise', async () => {
+    const db = await planned();
+    expect((await ensureWorkout(db, '2026-11-02')).exercises[0].subcategory).toBe('Chest'); // Monday: Bench Press
+    expect((await ensureWorkout(db, '2026-11-04')).exercises[0].subcategory).toBeNull(); // Wednesday: cardio
+  });
+
   it('copies rest days from the plan', async () => {
     const db = await planned();
     expect((await ensureWorkout(db, '2026-11-03')).isRest).toBe(true);

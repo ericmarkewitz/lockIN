@@ -55,6 +55,7 @@ export type WorkoutExercise = {
   exerciseName: string;
   categoryName: string;
   categoryKind: CategoryKind;
+  subcategory: string | null;
   position: number;
   targetSets: number | null;
   targetReps: number | null;
