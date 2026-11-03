@@ -242,10 +242,11 @@ export async function getRangeSummary(db: Db, from: string, to: string, today: s
     const logged = byDate.get(date);
     const unfinished = (): DayStatus => (date < today ? 'missed' : 'planned');
     if (logged) {
-      if (logged[0].is_rest) return { date, status: 'rest', exerciseCount: 0, kinds: [] };
-      const ex = logged.filter((r) => r.we_id !== null);
+      const isRest = !!logged[0].is_rest;
+      // A rest day only counts the exercises the user actually logged.
+      const ex = logged.filter((r) => r.we_id !== null && (!isRest || r.done));
       const kinds = [...new Set(ex.map((r) => r.kind!))];
-      if (!ex.length) return { date, status: 'none', exerciseCount: 0, kinds: [] };
+      if (!ex.length) return { date, status: isRest ? 'rest' : 'none', exerciseCount: 0, kinds: [] };
       const done = ex.reduce((n, r) => n + (r.done ?? 0), 0);
       const total = ex.reduce((n, r) => n + (r.total ?? 0), 0);
       const status: DayStatus = done === 0 ? unfinished() : done >= total ? 'completed' : 'partial';

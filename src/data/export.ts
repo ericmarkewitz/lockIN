@@ -46,7 +46,8 @@ export async function buildExport(
 ): Promise<{ csv: string; rows: Record<string, unknown>[] }> {
   if (!opts.fields.length) throw new Error('Select at least one field to export');
 
-  const where: string[] = ['w.is_rest = 0'];
+  // Logged sets are always exported; a rest day's unlogged sets never are.
+  const where: string[] = [opts.includeUnlogged ? `(w.is_rest = 0 OR ${LOGGED_SET})` : LOGGED_SET];
   const params: unknown[] = [];
   if (opts.dates) {
     if (!opts.dates.length) where.push('0');
@@ -57,9 +58,6 @@ export async function buildExport(
   } else {
     if (opts.from) { where.push('w.date >= ?'); params.push(opts.from); }
     if (opts.to) { where.push('w.date <= ?'); params.push(opts.to); }
-  }
-  if (!opts.includeUnlogged) {
-    where.push(LOGGED_SET);
   }
 
   const data = await db.getAllAsync<Row>(

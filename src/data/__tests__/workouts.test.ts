@@ -247,6 +247,26 @@ describe('getRangeSummary', () => {
     expect(s[0]).toMatchObject({ exerciseCount: 1, kinds: ['cardio'] });
   });
 
+  describe('on a day marked as rest', () => {
+    it('shows rest when nothing is logged', async () => {
+      const db = await planned();
+      await ensureWorkout(db, MON);
+      await setRestDay(db, MON, true);
+      const [day] = await getRangeSummary(db, MON, MON, TODAY);
+      expect(day).toMatchObject({ status: 'rest', exerciseCount: 0, kinds: [] });
+    });
+
+    it('reports logged sets, counting only the exercises that have them', async () => {
+      const db = await planned();
+      const w = await ensureWorkout(db, MON);
+      await addExerciseToWorkout(db, w.id, await findByName(db, 'Running'));
+      for (const s of w.exercises[0].sets) await updateSet(db, s.id, { weight: 100, reps: 5 });
+      await setRestDay(db, MON, true);
+      const [day] = await getRangeSummary(db, MON, MON, TODAY);
+      expect(day).toMatchObject({ status: 'completed', exerciseCount: 1, kinds: ['strength'] });
+    });
+  });
+
   it('returns one entry per date in order', async () => {
     const db = await planned();
     const s = await getRangeSummary(db, '2026-11-01', '2026-11-30', TODAY);

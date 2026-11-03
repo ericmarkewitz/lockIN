@@ -90,6 +90,23 @@ describe('buildExport', () => {
     expect(rows.some((r) => r.date === '2026-10-30')).toBe(false);
   });
 
+  it('keeps logged sets on a day later marked as rest', async () => {
+    const db = await seeded();
+    await setRestDay(db, '2026-10-26', true);
+    const { rows } = await buildExport(db, { fields: allFields });
+    expect(rows.filter((r) => r.date === '2026-10-26')).toHaveLength(2);
+  });
+
+  it('leaves out unlogged sets on a rest day even when including unlogged sets', async () => {
+    const db = await seeded();
+    const mon = await ensureWorkout(db, '2026-11-02');
+    await updateSet(db, mon.exercises[0].sets[0].id, { weight: 100, reps: 5 });
+    await setRestDay(db, '2026-11-02', true);
+    const { rows } = await buildExport(db, { fields: allFields, includeUnlogged: true, dates: ['2026-11-02'] });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ set: 1, weight: 100 });
+  });
+
   it('returns a header-only CSV when nothing matches', async () => {
     const db = await seeded();
     const { csv, rows } = await buildExport(db, { fields: ['date', 'exercise'], from: '2020-01-01', to: '2020-01-02' });
