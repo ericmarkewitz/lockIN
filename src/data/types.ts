@@ -7,12 +7,15 @@ export type Exercise = {
   isCustom: boolean;
   categoryName: string;
   categoryKind: CategoryKind;
+  subcategory: string | null;
 };
 
 export type Category = {
   id: number;
   name: string;
   kind: CategoryKind;
+  /** Display order of the subcategories this category offers; empty if it has none. */
+  subcategories: readonly string[];
   exercises: Exercise[];
 };
 
@@ -52,6 +55,7 @@ export type WorkoutExercise = {
   exerciseName: string;
   categoryName: string;
   categoryKind: CategoryKind;
+  subcategory: string | null;
   position: number;
   targetSets: number | null;
   targetReps: number | null;

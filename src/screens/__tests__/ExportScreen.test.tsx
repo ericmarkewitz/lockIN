@@ -39,7 +39,7 @@ describe('ExportScreen', () => {
   it('writes a CSV with only the selected fields and shares it', async () => {
     const db = await setup();
     await renderWithDb(<ExportScreen today="2026-11-04" />, db);
-    for (const label of ['Weekday', 'Category', 'Set number', 'Duration', 'Distance', 'Completed', 'Workout notes', 'Reps']) {
+    for (const label of ['Weekday', 'Category', 'Subcategory', 'Set number', 'Duration', 'Distance', 'Completed', 'Workout notes', 'Reps']) {
       await fireEvent(screen.getByLabelText(`Include ${label}`), 'valueChange', false);
     }
     await fireEvent.press(screen.getByText('Export CSV'));
@@ -97,7 +97,7 @@ describe('ExportScreen', () => {
   it('refuses to export with no fields selected', async () => {
     const db = await setup();
     await renderWithDb(<ExportScreen today="2026-11-04" />, db);
-    for (const label of ['Date','Weekday','Category','Exercise','Set number','Reps','Weight','Duration','Distance','Completed','Workout notes']) {
+    for (const label of ['Date','Weekday','Category','Subcategory','Exercise','Set number','Reps','Weight','Duration','Distance','Completed','Workout notes']) {
       await fireEvent(screen.getByLabelText(`Include ${label}`), 'valueChange', false);
     }
     await fireEvent.press(screen.getByText('Export CSV'));

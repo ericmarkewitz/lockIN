@@ -32,6 +32,20 @@ describe('buildExport', () => {
     expect(rows[2]).toMatchObject({ date: '2026-10-28', category: 'Cardio', exercise: 'Running', duration_min: 31, distance: 3.2 });
   });
 
+  it('exports the subcategory as a selectable column, blank when there is none', async () => {
+    const db = await seeded();
+    const { csv, rows } = await buildExport(db, { fields: ['category', 'subcategory', 'exercise'] });
+    expect(rows[0]).toMatchObject({ subcategory: 'Chest' });
+    expect(csv.split('\r\n')).toEqual([
+      'Category,Subcategory,Exercise',
+      'Lifts,Chest,Bench Press',
+      'Lifts,Chest,Bench Press',
+      'Cardio,,Running',
+      '',
+    ]);
+    expect((await buildExport(db, { fields: ['exercise'] })).csv).not.toContain('Subcategory');
+  });
+
   it('can include unlogged sets', async () => {
     const db = await seeded();
     const { rows } = await buildExport(db, { fields: allFields, includeUnlogged: true });

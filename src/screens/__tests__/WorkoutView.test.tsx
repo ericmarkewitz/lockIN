@@ -65,6 +65,20 @@ describe('WorkoutView', () => {
     expect(screen.getByLabelText('Weight for set 2')).toBeTruthy();
   });
 
+  it('shows the muscle group of a lift next to its category', async () => {
+    const db = await setup();
+    await renderWithDb(<WorkoutView date={MON} />, db);
+    expect(await screen.findByText('Lifts · Chest · 2×10')).toBeTruthy();
+    expect(screen.getByText('Lifts · Legs · 1×5')).toBeTruthy();
+  });
+
+  it('leaves the muscle group out for exercises without one', async () => {
+    const db = await createTestDb();
+    await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: await findByName(db, 'Running'), targetDurationMin: 30 }] });
+    await renderWithDb(<WorkoutView date={MON} />, db);
+    expect(await screen.findByText('Cardio · 30 min')).toBeTruthy();
+  });
+
   it('persists a logged weight and completion', async () => {
     const db = await setup();
     await renderWithDb(<WorkoutView date={MON} />, db);
