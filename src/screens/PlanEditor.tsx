@@ -5,6 +5,7 @@ import { ScrollView } from 'react-native-gesture-handler';
 import { Button, Card } from '@/components/ui';
 import { DragHandle } from '@/components/DragHandle';
 import { ExercisePicker } from '@/components/ExercisePicker';
+import { DurationButton } from '@/components/DurationButton';
 import { WheelButton } from '@/components/WheelSheet';
 import { getPlan, markPlanComplete, setPlanDay } from '@/data/plan';
 import type { CategoryKind, Exercise } from '@/data/types';
@@ -14,7 +15,7 @@ import { DAY_NAMES } from '@/lib/calendar';
 import { todayKey } from '@/lib/dates';
 import { parseNumber } from '@/lib/numbers';
 import { dropIndex, moveItem } from '@/lib/reorder';
-import { MAX_REPS, MAX_SETS, durationOptions, wheelOptions } from '@/lib/wheel';
+import { MAX_REPS, MAX_SETS, wheelOptions } from '@/lib/wheel';
 import { useTheme } from '@/theme';
 
 type Draft = {
@@ -189,7 +190,13 @@ export function PlanEditor({ onSaved }: { onSaved: () => void }) {
                       </>
                     ) : (
                       <>
-                        <MinutesField label={`${d.weekday} ${it.name} minutes`} title={it.name} minutes={it.duration} onChange={(duration) => patchItem(d.weekday, idx, { duration })} />
+                        <DurationButton
+                          label={`${d.weekday} ${it.name} minutes`}
+                          title={it.name}
+                          value={parseNumber(it.duration)}
+                          onChange={(minutes) => patchItem(d.weekday, idx, { duration: txt(minutes) })}
+                          style={styles.duration}
+                        />
                         {it.kind === 'cardio' && (
                           <Num label={`${d.weekday} ${it.name} distance`} v={it.distance} suffix="dist" onChange={(distance) => patchItem(d.weekday, idx, { distance })} />
                         )}
@@ -239,27 +246,6 @@ function TargetsField({
   );
 }
 
-function MinutesField({
-  label, title, minutes, onChange,
-}: { label: string; title: string; minutes: string; onChange: (minutes: string) => void }) {
-  const t = useTheme();
-  const count = parseNumber(minutes);
-  return (
-    <View style={styles.num}>
-      <WheelButton
-        label={label}
-        valueText={minutes ? `${minutes} minutes` : 'No duration'}
-        text={minutes || '–'}
-        title={title}
-        columns={[{ label: 'Minutes', options: durationOptions(count), value: count }]}
-        onDone={([next]) => onChange(txt(next))}
-        style={styles.minutes}
-      />
-      <Text style={{ color: t.muted, fontSize: 12 }}>min</Text>
-    </View>
-  );
-}
-
 function Num({ label, v, suffix, onChange }:{ label: string; v: string; suffix: string; onChange: (s: string) => void }) {
   const t = useTheme();
   return (
@@ -287,5 +273,5 @@ const styles = StyleSheet.create({
   num: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   numInput: { width: 46, borderWidth: 1, borderRadius: 8, paddingVertical: 6, textAlign: 'center' },
   targets: { minWidth: 72 },
-  minutes: { minWidth: 46 },
+  duration: { minWidth: 46 },
 });

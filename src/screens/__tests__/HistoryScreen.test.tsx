@@ -58,6 +58,17 @@ describe('HistoryScreen', () => {
     expect(screen.getByText('Best 130 lb × 10 · Est. 1RM 173.3 lb')).toBeTruthy();
   });
 
+  it('formats a session duration that includes seconds', async () => {
+    const db = await createTestDb();
+    await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: await findByName(db, 'Running'), targetDurationMin: 30 }] });
+    const w = await ensureWorkout(db, '2026-11-02');
+    await updateSet(db, w.exercises[0].sets[0].id, { durationMin: 1 + 20 / 60, completed: true });
+    await renderWithDb(<HistoryScreen />, db);
+    await fireEvent.press(await screen.findByLabelText('Exercises'));
+    await fireEvent.press(await screen.findByLabelText('Running history'));
+    expect(await screen.findByText('1m 20s')).toBeTruthy();
+  });
+
   it('uses the selected weight unit', async () => {
     const db = await setup();
     await setWeightUnit(db, 'kg');

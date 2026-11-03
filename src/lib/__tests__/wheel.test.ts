@@ -1,4 +1,4 @@
-import { wheelIndexAt, wheelOptions } from '../wheel';
+import { wheelIndexAt, wheelOptions, wheelRange } from '../wheel';
 
 describe('wheelOptions', () => {
   it('starts with a blank option followed by the range', () => {
@@ -17,13 +17,15 @@ describe('wheelOptions', () => {
   it('does not duplicate a value already in the range', () => {
     expect(wheelOptions(1, 3, 2)).toEqual([null, 1, 2, 3]);
   });
+});
 
-  it('counts by a step', () => {
-    expect(wheelOptions(5, 20, null, 5)).toEqual([null, 5, 10, 15, 20]);
+describe('wheelRange', () => {
+  it('has no blank row', () => {
+    expect(wheelRange(0, 2, 1)).toEqual([0, 1, 2]);
   });
 
-  it('keeps a saved value that falls between steps, in order', () => {
-    expect(wheelOptions(5, 20, 12, 5)).toEqual([null, 5, 10, 12, 15, 20]);
+  it('keeps a saved value that is outside the range', () => {
+    expect(wheelRange(0, 2, 25)).toEqual([0, 1, 2, 25]);
   });
 });
 

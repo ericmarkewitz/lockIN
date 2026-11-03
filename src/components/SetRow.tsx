@@ -6,8 +6,9 @@ import type { CategoryKind, WorkoutSet } from '@/data/types';
 import type { SetPatch } from '@/data/workouts';
 import { parseNumber } from '@/lib/numbers';
 import { fromDisplayWeight, toDisplayWeight } from '@/lib/units';
-import { MAX_REPS, durationOptions, wheelOptions } from '@/lib/wheel';
+import { MAX_REPS, wheelOptions } from '@/lib/wheel';
 import { useTheme } from '@/theme';
+import { DurationButton } from './DurationButton';
 import { WheelButton } from './WheelSheet';
 
 type Props = {
@@ -51,36 +52,30 @@ function NumField({
   );
 }
 
-/** Opens on the logged value, or the target so a planned set takes one tap to log. */
-function WheelField({
-  label, wheelLabel, title, suffix, value, target, optionsFor, onCommit,
-}: {
-  label: string; wheelLabel: string; title: string; suffix: string; value: number | null; target: number | null;
-  optionsFor: (start: number | null) => (number | null)[]; onCommit: (n: number | null) => void;
-}) {
+/** Reps open on the logged value, or the target so a planned set takes one tap to log. */
+function RepsField({ set, onCommit }: { set: WorkoutSet; onCommit: (reps: number | null) => void }) {
   const t = useTheme();
-  const start = value ?? target;
-  const unlogged = target === null ? 'Not logged' : `Not logged, target ${target}`;
+  const { reps, targetReps } = set;
+  const start = reps ?? targetReps;
+  const unlogged = targetReps === null ? 'Not logged' : `Not logged, target ${targetReps}`;
   return (
     <View style={styles.field}>
       <WheelButton
-        label={label}
-        valueText={value === null ? unlogged : String(value)}
+        label={`Reps for set ${set.setNumber}`}
+        valueText={reps === null ? unlogged : String(reps)}
         text={show(start)}
-        muted={value === null}
-        title={title}
-        columns={[{ label: wheelLabel, options: optionsFor(start), value: start }]}
+        muted={reps === null}
+        title={`Set ${set.setNumber}`}
+        columns={[{ label: 'Reps', options: wheelOptions(0, MAX_REPS, start), value: start }]}
         onDone={([next]) => {
-          if (next !== value) onCommit(next);
+          if (next !== reps) onCommit(next);
         }}
         style={styles.wheelButton}
       />
-      <Text style={[styles.suffix, { color: t.muted }]}>{suffix}</Text>
+      <Text style={[styles.suffix, { color: t.muted }]}>reps</Text>
     </View>
   );
 }
-
-const repOptions = (start: number | null) => wheelOptions(0, MAX_REPS, start);
 
 export function SetRow({ kind, set, targetDurationMin = null, unit, onChange, onRemove }: Props) {
   const t = useTheme();
@@ -92,18 +87,17 @@ export function SetRow({ kind, set, targetDurationMin = null, unit, onChange, on
         <>
           <NumField label={`Weight for set ${n}`} value={toDisplayWeight(set.weight, unit)} suffix={unit}
             onCommit={(weight) => onChange({ weight: fromDisplayWeight(weight, unit) })} />
-          <WheelField
-            label={`Reps for set ${n}`} wheelLabel="Reps" title={`Set ${n}`} suffix="reps"
-            value={set.reps} target={set.targetReps} optionsFor={repOptions}
-            onCommit={(reps) => onChange({ reps })}
-          />
+          <RepsField set={set} onCommit={(reps) => onChange({ reps })} />
         </>
       ) : (
         <>
-          <WheelField
-            label={`Duration for set ${n}`} wheelLabel="Minutes" title={`Set ${n}`} suffix="min"
-            value={set.durationMin} target={targetDurationMin} optionsFor={durationOptions}
-            onCommit={(durationMin) => onChange({ durationMin })}
+          <DurationButton
+            label={`Duration for set ${n}`}
+            title={`Set ${n}`}
+            value={set.durationMin}
+            target={targetDurationMin}
+            onChange={(durationMin) => onChange({ durationMin })}
+            style={styles.wheelButton}
           />
           <NumField label={`Distance for set ${n}`} value={set.distance} suffix="dist" onCommit={(distance) => onChange({ distance })} />
         </>

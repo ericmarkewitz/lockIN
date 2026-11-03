@@ -119,30 +119,70 @@ describe('SetRow (strength)', () => {
 });
 
 describe('SetRow (cardio)', () => {
+  const pick = async (wheel: string, value: string) =>
+    fireEvent.press(within(screen.getByLabelText(wheel)).getByText(value));
+
   it('records duration and distance instead of weight/reps', async () => {
     const onChange = jest.fn();
     await render(<SetRow kind="cardio" set={set} unit="lb" onChange={onChange} onRemove={jest.fn()} />);
     expect(screen.queryByLabelText('Weight for set 2')).toBeNull();
     await fireEvent.press(screen.getByLabelText('Duration for set 2'));
-    await fireEvent.press(within(screen.getByLabelText('Minutes')).getByText('30'));
+    await pick('Minutes', '30');
     await fireEvent.press(screen.getByLabelText('Done'));
     expect(onChange).toHaveBeenCalledWith({ durationMin: 30 });
   });
 
-  it('offers duration in 5 minute steps', async () => {
-    await render(<SetRow kind="cardio" set={set} unit="lb" onChange={jest.fn()} onRemove={jest.fn()} />);
+  it('picks hours, minutes and seconds, storing minutes', async () => {
+    const onChange = jest.fn();
+    await render(<SetRow kind="cardio" set={set} unit="lb" onChange={onChange} onRemove={jest.fn()} />);
     await fireEvent.press(screen.getByLabelText('Duration for set 2'));
-    const wheel = within(screen.getByLabelText('Minutes'));
-    expect(wheel.getByText('5')).toBeTruthy();
-    expect(wheel.getByText('10')).toBeTruthy();
-    expect(wheel.queryByText('7')).toBeNull();
+    await pick('Hours', '1');
+    await pick('Minutes', '5');
+    await pick('Seconds', '30');
+    await fireEvent.press(screen.getByLabelText('Done'));
+    expect(onChange).toHaveBeenCalledWith({ durationMin: 65.5 });
   });
 
-  it('keeps a logged duration that falls between steps', async () => {
-    const onChange = jest.fn();
-    await render(<SetRow kind="cardio" set={{ ...set, durationMin: 32 }} unit="lb" onChange={onChange} onRemove={jest.fn()} />);
+  it('shows a logged duration and opens the wheels on it', async () => {
+    await render(<SetRow kind="cardio" set={{ ...set, durationMin: 65.5 }} unit="lb" onChange={jest.fn()} onRemove={jest.fn()} />);
+    expect(within(screen.getByLabelText('Duration for set 2')).getByText('1h 5m 30s')).toBeTruthy();
     await fireEvent.press(screen.getByLabelText('Duration for set 2'));
-    expect(screen.getByLabelText('Minutes').props.accessibilityValue).toEqual({ text: '32' });
+    expect(screen.getByLabelText('Hours').props.accessibilityValue).toEqual({ text: '1' });
+    expect(screen.getByLabelText('Minutes').props.accessibilityValue).toEqual({ text: '5' });
+    expect(screen.getByLabelText('Seconds').props.accessibilityValue).toEqual({ text: '30' });
+  });
+
+  it('counts every minute and second, with no blank row', async () => {
+    await render(<SetRow kind="cardio" set={set} unit="lb" onChange={jest.fn()} onRemove={jest.fn()} />);
+    await fireEvent.press(screen.getByLabelText('Duration for set 2'));
+    const seconds = within(screen.getByLabelText('Seconds'));
+    expect(seconds.getByText('0')).toBeTruthy();
+    expect(seconds.getByText('7')).toBeTruthy();
+    expect(seconds.getByText('59')).toBeTruthy();
+    expect(seconds.queryByText('–')).toBeNull();
+  });
+
+  it('clears a logged duration when the wheels are set to zero', async () => {
+    const onChange = jest.fn();
+    await render(<SetRow kind="cardio" set={{ ...set, durationMin: 30 }} unit="lb" onChange={onChange} onRemove={jest.fn()} />);
+    await fireEvent.press(screen.getByLabelText('Duration for set 2'));
+    await pick('Minutes', '0');
+    await fireEvent.press(screen.getByLabelText('Done'));
+    expect(onChange).toHaveBeenCalledWith({ durationMin: null });
+  });
+
+  it('does not save when nothing changed, even for a value more precise than a second', async () => {
+    const onChange = jest.fn();
+    await render(<SetRow kind="cardio" set={{ ...set, durationMin: 1.2345 }} unit="lb" onChange={onChange} onRemove={jest.fn()} />);
+    await fireEvent.press(screen.getByLabelText('Duration for set 2'));
+    await fireEvent.press(screen.getByLabelText('Done'));
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('does not log an empty wheel accepted as it opened', async () => {
+    const onChange = jest.fn();
+    await render(<SetRow kind="cardio" set={set} unit="lb" onChange={onChange} onRemove={jest.fn()} />);
+    await fireEvent.press(screen.getByLabelText('Duration for set 2'));
     await fireEvent.press(screen.getByLabelText('Done'));
     expect(onChange).not.toHaveBeenCalled();
   });
@@ -150,8 +190,10 @@ describe('SetRow (cardio)', () => {
   it('opens duration on the target, which Done then logs', async () => {
     const onChange = jest.fn();
     await render(<SetRow kind="cardio" set={set} targetDurationMin={45} unit="lb" onChange={onChange} onRemove={jest.fn()} />);
-    expect(within(screen.getByLabelText('Duration for set 2')).getByText('45')).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText('Duration for set 2'));
+    const field = screen.getByLabelText('Duration for set 2');
+    expect(within(field).getByText('45 min')).toBeTruthy();
+    expect(field.props.accessibilityValue).toEqual({ text: 'Not logged, target 45 min' });
+    await fireEvent.press(field);
     await fireEvent.press(screen.getByLabelText('Done'));
     expect(onChange).toHaveBeenCalledWith({ durationMin: 45 });
   });

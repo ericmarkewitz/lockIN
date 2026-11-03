@@ -12,6 +12,7 @@ import { useLoad } from '@/hooks/useLoad';
 import { DAY_NAMES } from '@/lib/calendar';
 import { parseDateKey } from '@/lib/dates';
 import { toDisplayWeight } from '@/lib/units';
+import { formatDuration } from '@/lib/duration';
 import { useTheme } from '@/theme';
 
 type Tab = 'workouts' | 'exercises';
@@ -22,7 +23,7 @@ function sessionSummary(s: ExerciseSession, unit: WeightUnit): string {
   const parts: string[] = [];
   if (s.best) parts.push(`Best ${toDisplayWeight(s.best.weight, unit)} ${unit} × ${s.best.reps}`);
   if (s.estimatedOneRepMax !== null) parts.push(`Est. 1RM ${toDisplayWeight(s.estimatedOneRepMax, unit)} ${unit}`);
-  if (s.durationMin !== null) parts.push(`${s.durationMin} min`);
+  if (s.durationMin !== null) parts.push(formatDuration(s.durationMin));
   if (s.distance !== null) parts.push(`${s.distance} distance`);
   return parts.length ? parts.join(' · ') : `${s.setCount} set${s.setCount === 1 ? '' : 's'}`;
 }

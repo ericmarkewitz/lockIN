@@ -2,6 +2,7 @@ import type { Db } from '@/db/types';
 import { parseDateKey } from '@/lib/dates';
 import { LOGGED_SET } from './logged';
 import { getWeightUnit } from './settings';
+import { roundMinutes } from '@/lib/duration';
 import { toDisplayWeight } from '@/lib/units';
 import { toCsv, type CsvColumn } from './csv';
 
@@ -84,7 +85,7 @@ export async function buildExport(
     set: r.set_number,
     reps: r.reps,
     weight: toDisplayWeight(r.weight, unit),
-    duration_min: r.duration_min,
+    duration_min: r.duration_min === null ? null : roundMinutes(r.duration_min),
     distance: r.distance,
     completed: !!r.completed,
     notes: r.notes,

@@ -27,6 +27,25 @@ describe('PlanEditor', () => {
     expect(within(screen.getByLabelText('1 Squat sets and reps')).getByText('3 × 10')).toBeTruthy();
   });
 
+  it('sets a target duration in hours, minutes and seconds', async () => {
+    const db = await createTestDb();
+    const onSaved = jest.fn();
+    await renderWithDb(<PlanEditor onSaved={onSaved} />, db);
+    await fireEvent.press(await screen.findByLabelText('Add exercise to Monday'));
+    await fireEvent.press(await screen.findByLabelText('Category Cardio'));
+    await fireEvent.press(await screen.findByLabelText('Add Running'));
+    await fireEvent.press(await screen.findByLabelText('1 Running minutes'));
+    await fireEvent.press(within(screen.getByLabelText('Hours')).getByText('1'));
+    await fireEvent.press(within(screen.getByLabelText('Seconds')).getByText('20'));
+    await fireEvent.press(screen.getByLabelText('Done'));
+    expect(within(screen.getByLabelText('1 Running minutes')).getByText('1h 20s')).toBeTruthy();
+    await fireEvent.press(screen.getByText('Save plan'));
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    const item = (await getPlan(db)).find((d) => d.weekday === 1)!.items[0];
+    expect(item.targetDurationMin).toBeCloseTo(60 + 20 / 60, 10);
+  });
+
   it('can leave sets and reps blank with the blank row', async () => {
     const db = await createTestDb();
     const onSaved = jest.fn();

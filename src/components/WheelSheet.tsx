@@ -161,7 +161,7 @@ export function WheelButton({
         onPress={() => setOpen(true)}
         style={[styles.button, { borderColor: t.border, backgroundColor: t.bg }, style]}
       >
-        <Text style={[styles.buttonText, { color: muted ? t.muted : t.text }]}>{text}</Text>
+        <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.buttonText, { color: muted ? t.muted : t.text }]}>{text}</Text>
       </Pressable>
       <WheelSheet
         visible={open}
