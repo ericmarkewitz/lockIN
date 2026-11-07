@@ -167,9 +167,10 @@ export function ExercisePicker({
           {preview && (
             <ExerciseDetail exercise={preview}>
               <View style={styles.previewActions}>
-                <Button title="Close" variant="secondary" onPress={() => setPreview(null)} style={{ flex: 1 }} />
+                <Button title="Cancel" label="Cancel preview" variant="secondary" onPress={() => setPreview(null)} style={{ flex: 1 }} />
                 <Button
-                  title={`Add ${preview.name}`}
+                  title="Add"
+                  label={`Add ${preview.name}`}
                   onPress={() => { setPreview(null); onPick(preview); }}
                   style={{ flex: 1 }}
                 />

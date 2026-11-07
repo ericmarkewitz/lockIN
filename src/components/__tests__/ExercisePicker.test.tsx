@@ -105,7 +105,8 @@ describe('ExercisePicker', () => {
     expect(screen.getByRole('header', { name: 'Bench Press' })).toBeTruthy();
     expect(onPick).not.toHaveBeenCalled();
 
-    await fireEvent.press(screen.getByText('Close'));
+    expect(screen.getByLabelText('Cancel preview')).toHaveTextContent('Cancel');
+    await fireEvent.press(screen.getByLabelText('Cancel preview'));
     expect(screen.queryByRole('header', { name: 'Bench Press' })).toBeNull();
     expect(onPick).not.toHaveBeenCalled();
   });
@@ -124,7 +125,7 @@ describe('ExercisePicker', () => {
   it('adds the previewed exercise from the preview', async () => {
     const { onPick } = await open();
     await fireEvent.press(await screen.findByLabelText('Show how to do Squat'));
-    await fireEvent.press(screen.getByText('Add Squat'));
+    await fireEvent.press(screen.getByText('Add'));
     expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ name: 'Squat' }));
   });
 
