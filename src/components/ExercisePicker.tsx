@@ -6,6 +6,7 @@ import type { Exercise } from '@/data/types';
 import { useDb } from '@/db/DbContext';
 import { useLoad } from '@/hooks/useLoad';
 import { useTheme } from '@/theme';
+import { keyboardAvoidance } from './KeyboardAvoider';
 import { Button } from './ui';
 
 function Chip({ title, label, selected, onPress }: { title: string; label: string; selected: boolean; onPress: () => void }) {
@@ -61,7 +62,8 @@ export function ExercisePicker({
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <KeyboardAvoidingView
         testID="picker-keyboard-avoider"
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        // The modal fills the window, so no header offset; the custom input sits outside the list.
+        {...keyboardAvoidance({ os: Platform.OS, headerHeight: 0, scrolls: false })}
         style={{ flex: 1, backgroundColor: t.bg }}
       >
         <View style={styles.wrap}>

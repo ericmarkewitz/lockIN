@@ -35,6 +35,16 @@ async function setup() {
 beforeEach(() => mockPush.mockClear());
 
 describe('CalendarScreen', () => {
+  it('keeps the day view inputs above the keyboard', async () => {
+    const db = await setup();
+    await renderWithDb(<CalendarScreen today={TODAY} />, db);
+    expect(await screen.findByTestId('keyboard-avoider')).toBeTruthy();
+    expect(screen.getByTestId('calendar-scroll').props).toMatchObject({
+      automaticallyAdjustKeyboardInsets: true,
+      keyboardShouldPersistTaps: 'handled',
+    });
+  });
+
   it('opens settings', async () => {
     const db = await setup();
     await renderWithDb(<CalendarScreen today={TODAY} />, db);
