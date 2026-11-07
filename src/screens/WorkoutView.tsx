@@ -1,8 +1,11 @@
+import { useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { ExercisePicker } from '@/components/ExercisePicker';
+import { ExerciseMotionFor } from '@/components/motion/ExerciseMotion';
+import { motionFor } from '@/components/motion/motions';
 import { SetRow } from '@/components/SetRow';
 import { Button, Card, Segmented } from '@/components/ui';
 import type { Exercise, WorkoutExercise, WorkoutSet } from '@/data/types';
@@ -35,6 +38,7 @@ const fmtLast = (l: { date: string; sets: WorkoutSet[] }, kind: WorkoutExercise[
 
 export function WorkoutView({ date }: { date: string }) {
   const db = useDb();
+  const router = useRouter();
   const t = useTheme();
   const { data, reload } = useLoad(() => loadDay(db, date), [db, date]);
   const [mode, setMode] = useState<Mode>('plan');
@@ -90,6 +94,16 @@ export function WorkoutView({ date }: { date: string }) {
                     {ex.targetDistance ? ` · ${ex.targetDistance} dist` : ''}
                   </Text>
                 </View>
+                {motionFor({ name: ex.exerciseName, isCustom: ex.isCustom }) && (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Show how to do ${ex.exerciseName}`}
+                    hitSlop={6}
+                    onPress={() => router.push({ pathname: '/exercise/[id]', params: { id: String(ex.exerciseId) } })}
+                  >
+                    <ExerciseMotionFor name={ex.exerciseName} isCustom={ex.isCustom} size={48} />
+                  </Pressable>
+                )}
                 <Button title="Remove" variant="danger" label={`Remove ${ex.exerciseName}`} onPress={() => {
                   const remove = () => removeExerciseFromWorkout(db, ex.id);
                   if (ex.hasLoggedSets) setRemoval({ title: `Remove ${ex.exerciseName}?`, message: "Its logged sets will be deleted. This can't be undone.", remove });

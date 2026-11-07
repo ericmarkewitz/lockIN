@@ -63,6 +63,7 @@
     "setupFiles": [
       "react-native-gesture-handler/jestSetup"
     ],
+    "resolver": "<rootDir>/src/test/jestResolver.js",
     "testTimeout": 20000,
     "testMatch": [
       "**/__tests__/**/*.test.ts?(x)"
