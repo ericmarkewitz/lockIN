@@ -9,6 +9,7 @@ import { useDb } from '@/db/DbContext';
 import { useLoad } from '@/hooks/useLoad';
 import { periodLabel, periodRange, shiftAnchor, type ViewMode, DAY_NAMES } from '@/lib/calendar';
 import { monthGrid, parseDateKey, todayKey, weekDates } from '@/lib/dates';
+import { KeyboardAvoider, keyboardScrollProps } from '@/components/KeyboardAvoider';
 import { useTheme, type Theme } from '@/theme';
 import { WorkoutView } from './WorkoutView';
 
@@ -43,7 +44,8 @@ export function CalendarScreen({ today = todayKey() }: { today?: string }) {
   const pick = (date: string) => { setAnchor(date); setMode('day'); };
 
   return (
-    <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: t.bg }} contentContainerStyle={styles.wrap}>
+    <KeyboardAvoider>
+    <ScrollView testID="calendar-scroll" {...keyboardScrollProps} contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: t.bg }} contentContainerStyle={styles.wrap}>
       <View style={styles.topRow}>
         <Text style={[styles.h1, { color: t.text }]}>lockIN</Text>
         <View style={styles.topBtns}>
@@ -132,6 +134,7 @@ export function CalendarScreen({ today = todayKey() }: { today?: string }) {
         </View>
       )}
     </ScrollView>
+    </KeyboardAvoider>
   );
 }
 

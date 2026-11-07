@@ -13,6 +13,15 @@ const pickTargets = async (field: string, sets: number, reps: number) => {
 };
 
 describe('PlanEditor', () => {
+  it('keeps plan inputs above the keyboard', async () => {
+    await renderWithDb(<PlanEditor onSaved={jest.fn()} />, await createTestDb());
+    expect(await screen.findByTestId('keyboard-avoider')).toBeTruthy();
+    expect(screen.getByTestId('plan-scroll').props).toMatchObject({
+      automaticallyAdjustKeyboardInsets: true,
+      keyboardShouldPersistTaps: 'handled',
+    });
+  });
+
   it('shows sets and reps together, and keeps them when the wheels are cancelled', async () => {
     const db = await createTestDb();
     await renderWithDb(<PlanEditor onSaved={jest.fn()} />, db);

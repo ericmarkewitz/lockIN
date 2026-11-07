@@ -5,6 +5,7 @@ import { ScrollView } from 'react-native-gesture-handler';
 import { Button, Card } from '@/components/ui';
 import { DragHandle } from '@/components/DragHandle';
 import { ExercisePicker } from '@/components/ExercisePicker';
+import { KeyboardAvoider, keyboardScrollProps } from '@/components/KeyboardAvoider';
 import { DurationButton } from '@/components/DurationButton';
 import { WheelButton } from '@/components/WheelSheet';
 import { getPlan, markPlanComplete, setPlanDay } from '@/data/plan';
@@ -140,8 +141,8 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
   };
 
   return (
-    <>
-      <ScrollView scrollEnabled={!drag} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.wrap} style={{ backgroundColor: t.bg }}>
+    <KeyboardAvoider>
+      <ScrollView testID="plan-scroll" {...keyboardScrollProps} scrollEnabled={!drag} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.wrap} style={{ backgroundColor: t.bg }}>
         <Text style={{ color: t.muted }}>Pick the exercises for each day, or mark it as a rest day.</Text>
         {days.map((d) => (
           <Card key={d.weekday} style={{ gap: 8 }}>
@@ -225,7 +226,7 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
         onClose={() => setPickerFor(null)}
         onPick={(e) => pickerFor !== null && addExercise(pickerFor, e)}
       />
-    </>
+    </KeyboardAvoider>
   );
 }
 
