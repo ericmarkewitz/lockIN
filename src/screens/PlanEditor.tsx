@@ -28,7 +28,8 @@ const ORDER = [1, 2, 3, 4, 5, 6, 0]; // Monday first
 const ROW_GAP = 8; // Card gap between rows; part of the drag pitch
 const txt = (n: number | null | undefined) => (n === null || n === undefined ? '' : String(n));
 
-export function PlanEditor({ onSaved }: { onSaved: () => void }) {
+/** `onCancel` shows a Cancel button; omit it when there is nowhere to go back to (first run). */
+export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCancel?: () => void }) {
   const db = useDb();
   const t = useTheme();
   const [days, setDays] = useState<DayDraft[] | null>(null);
@@ -214,7 +215,10 @@ export function PlanEditor({ onSaved }: { onSaved: () => void }) {
             )}
           </Card>
         ))}
-        <Button title="Save plan" onPress={save} disabled={saving} />
+        <View style={styles.actions}>
+          {onCancel && <Button title="Cancel" variant="secondary" onPress={onCancel} disabled={saving} style={styles.action} />}
+          <Button title="Save plan" onPress={save} disabled={saving} style={styles.action} />
+        </View>
       </ScrollView>
       <ExercisePicker
         visible={pickerFor !== null}
@@ -264,6 +268,8 @@ function Num({ label, v, suffix, onChange }:{ label: string; v: string; suffix: 
 
 const styles = StyleSheet.create({
   wrap: { padding: 16, gap: 12 },
+  actions: { flexDirection: 'row', gap: 12 },
+  action: { flex: 1 },
   dayHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   dayName: { fontSize: 18, fontWeight: '700' },
   restRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
