@@ -13,8 +13,11 @@ type WeRow = {
 };
 type SetRow = {
   id: number; workout_exercise_id: number; set_number: number; target_reps: number | null; reps: number | null;
-  weight: number | null; duration_min: number | null; distance: number | null; completed: number;
+  weight: number | null; duration_min: number | null; distance: number | null; completed: number; is_logged: number;
 };
+
+/** Selects a `SetRow`. The query must alias the `sets` table as `s`. */
+const SET_FIELDS = `s.*, ${LOGGED_SET} AS is_logged`;
 
 const toSet = (s: SetRow): WorkoutSet => ({
   id: s.id,
@@ -25,6 +28,7 @@ const toSet = (s: SetRow): WorkoutSet => ({
   durationMin: s.duration_min,
   distance: s.distance,
   completed: !!s.completed,
+  isLogged: !!s.is_logged,
 });
 
 export async function getWorkout(db: Db, date: string): Promise<Workout | null> {
@@ -41,7 +45,7 @@ export async function getWorkout(db: Db, date: string): Promise<Workout | null> 
     [w.id],
   );
   const sets = await db.getAllAsync<SetRow>(
-    `SELECT s.* FROM sets s JOIN workout_exercises we ON we.id = s.workout_exercise_id
+    `SELECT ${SET_FIELDS} FROM sets s JOIN workout_exercises we ON we.id = s.workout_exercise_id
      WHERE we.workout_id = ? ORDER BY s.set_number`,
     [w.id],
   );
@@ -216,7 +220,7 @@ export async function getLastPerformance(
   );
   if (!row) return null;
   const sets = await db.getAllAsync<SetRow>(
-    `SELECT * FROM sets s WHERE s.workout_exercise_id = ? AND ${LOGGED_SET} ORDER BY s.set_number`, [row.we_id],
+    `SELECT ${SET_FIELDS} FROM sets s WHERE s.workout_exercise_id = ? AND ${LOGGED_SET} ORDER BY s.set_number`, [row.we_id],
   );
   return { date: row.date, sets: sets.map(toSet) };
 }

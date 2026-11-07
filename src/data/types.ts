@@ -47,6 +47,8 @@ export type WorkoutSet = {
   durationMin: number | null;
   distance: number | null;
   completed: boolean;
+  /** Ticked off or holding any value, per the shared LOGGED_SET rule. */
+  isLogged: boolean;
 };
 
 export type WorkoutExercise = {

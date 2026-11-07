@@ -129,6 +129,93 @@ describe('WorkoutView', () => {
     await waitFor(() => expect(screen.queryByText('Squat')).toBeNull());
   });
 
+  describe('removing', () => {
+    const benchSets = async (db: Awaited<ReturnType<typeof setup>>) => (await getWorkout(db, MON))!.exercises[0].sets;
+
+    it('removes an empty set in one tap', async () => {
+      const db = await setup();
+      await renderWithDb(<WorkoutView date={MON} />, db);
+      await fireEvent.press((await screen.findAllByLabelText('Remove set 2'))[0]);
+      expect(screen.queryByText('Remove set 2?')).toBeNull();
+      await waitFor(async () => expect(await benchSets(db)).toHaveLength(1));
+    });
+
+    it('keeps a logged set until the removal is confirmed', async () => {
+      const db = await setup();
+      const w = await ensureWorkout(db, MON);
+      await updateSet(db, w.exercises[0].sets[0].id, { weight: 135, reps: 10 });
+      await renderWithDb(<WorkoutView date={MON} />, db);
+      await fireEvent.press((await screen.findAllByLabelText('Remove set 1'))[0]);
+      expect(screen.getByText('Remove set 1?')).toBeTruthy();
+      expect(await benchSets(db)).toHaveLength(2);
+      await fireEvent.press(screen.getByLabelText('Remove'));
+      await waitFor(async () => expect(await benchSets(db)).toHaveLength(1));
+      expect(screen.queryByText('Remove set 1?')).toBeNull();
+      expect((await benchSets(db))[0].weight).toBeNull();
+    });
+
+    it('keeps a logged set when the removal is cancelled', async () => {
+      const db = await setup();
+      const w = await ensureWorkout(db, MON);
+      await updateSet(db, w.exercises[0].sets[0].id, { weight: 135 });
+      await renderWithDb(<WorkoutView date={MON} />, db);
+      await fireEvent.press((await screen.findAllByLabelText('Remove set 1'))[0]);
+      await fireEvent.press(screen.getByLabelText('Cancel'));
+      expect(screen.queryByText('Remove set 1?')).toBeNull();
+      expect(await benchSets(db)).toHaveLength(2);
+    });
+
+    it('asks before removing a set that was only ticked off', async () => {
+      const db = await setup();
+      const w = await ensureWorkout(db, MON);
+      await updateSet(db, w.exercises[0].sets[0].id, { completed: true });
+      await renderWithDb(<WorkoutView date={MON} />, db);
+      await fireEvent.press((await screen.findAllByLabelText('Remove set 1'))[0]);
+      expect(screen.getByText('Remove set 1?')).toBeTruthy();
+    });
+
+    it('asks once a set is logged during the session', async () => {
+      const db = await setup();
+      await renderWithDb(<WorkoutView date={MON} />, db);
+      await fireEvent.press((await screen.findAllByLabelText('Mark set 1 done'))[0]);
+      await waitFor(async () => expect((await benchSets(db))[0].completed).toBe(true));
+      await screen.findAllByLabelText('Mark set 1 not done');
+      await fireEvent.press(screen.getAllByLabelText('Remove set 1')[0]);
+      expect(screen.getByText('Remove set 1?')).toBeTruthy();
+    });
+
+    it('removes an exercise with nothing logged in one tap', async () => {
+      const db = await setup();
+      await renderWithDb(<WorkoutView date={MON} />, db);
+      await fireEvent.press(await screen.findByLabelText('Remove Squat'));
+      expect(screen.queryByText('Remove Squat?')).toBeNull();
+      await waitFor(() => expect(screen.queryByText('Squat')).toBeNull());
+    });
+
+    it('keeps an exercise with logged sets until the removal is confirmed', async () => {
+      const db = await setup();
+      const w = await ensureWorkout(db, MON);
+      await updateSet(db, w.exercises[0].sets[1].id, { reps: 8 });
+      await renderWithDb(<WorkoutView date={MON} />, db);
+      await fireEvent.press(await screen.findByLabelText('Remove Bench Press'));
+      expect(screen.getByText('Remove Bench Press?')).toBeTruthy();
+      expect((await getWorkout(db, MON))!.exercises).toHaveLength(2);
+      await fireEvent.press(screen.getByLabelText('Remove'));
+      await waitFor(async () => expect((await getWorkout(db, MON))!.exercises.map((e) => e.exerciseName)).toEqual(['Squat']));
+    });
+
+    it('keeps an exercise with logged sets when the removal is cancelled', async () => {
+      const db = await setup();
+      const w = await ensureWorkout(db, MON);
+      await updateSet(db, w.exercises[0].sets[0].id, { reps: 8 });
+      await renderWithDb(<WorkoutView date={MON} />, db);
+      await fireEvent.press(await screen.findByLabelText('Remove Bench Press'));
+      await fireEvent.press(screen.getByLabelText('Cancel'));
+      expect(screen.queryByText('Remove Bench Press?')).toBeNull();
+      expect((await getWorkout(db, MON))!.exercises).toHaveLength(2);
+    });
+  });
+
   it('hints at the previous performance', async () => {
     const db = await setup();
     const prev = await ensureWorkout(db, '2026-10-26');

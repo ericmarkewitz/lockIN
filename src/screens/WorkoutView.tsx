@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { ExercisePicker } from '@/components/ExercisePicker';
 import { SetRow } from '@/components/SetRow';
 import { Button, Card, Segmented } from '@/components/ui';
@@ -39,6 +40,7 @@ export function WorkoutView({ date }: { date: string }) {
   const [mode, setMode] = useState<Mode>('plan');
   const [focusIdx, setFocusIdx] = useState(0);
   const [picking, setPicking] = useState(false);
+  const [removal, setRemoval] = useState<{ title: string; message: string; remove: () => Promise<void> } | null>(null);
 
   const act = useCallback(async (fn: () => Promise<unknown>) => { await fn(); await reload(); }, [reload]);
 
@@ -88,7 +90,11 @@ export function WorkoutView({ date }: { date: string }) {
                     {ex.targetDistance ? ` · ${ex.targetDistance} dist` : ''}
                   </Text>
                 </View>
-                <Button title="Remove" variant="danger" label={`Remove ${ex.exerciseName}`} onPress={() => act(() => removeExerciseFromWorkout(db, ex.id))} style={styles.small} />
+                <Button title="Remove" variant="danger" label={`Remove ${ex.exerciseName}`} onPress={() => {
+                  const remove = () => removeExerciseFromWorkout(db, ex.id);
+                  if (ex.hasLoggedSets) setRemoval({ title: `Remove ${ex.exerciseName}?`, message: "Its logged sets will be deleted. This can't be undone.", remove });
+                  else act(remove);
+                }} style={styles.small} />
               </View>
               {last[ex.exerciseId] && <Text style={{ color: t.muted, fontSize: 12 }}>{fmtLast(last[ex.exerciseId]!, ex.categoryKind, unit)}</Text>}
               {ex.sets.map((s) => (
@@ -99,7 +105,11 @@ export function WorkoutView({ date }: { date: string }) {
                   targetDurationMin={ex.targetDurationMin}
                   unit={unit}
                   onChange={(patch: SetPatch) => act(() => updateSet(db, s.id, patch))}
-                  onRemove={() => act(() => removeSet(db, s.id))}
+                  onRemove={() => {
+                    const remove = () => removeSet(db, s.id);
+                    if (s.isLogged) setRemoval({ title: `Remove set ${s.setNumber}?`, message: `This deletes what you logged for ${ex.exerciseName}. This can't be undone.`, remove });
+                    else act(remove);
+                  }}
                 />
               ))}
               <Button title="+ Add set" variant="secondary" label={`Add set to ${ex.exerciseName}`} onPress={() => act(() => addSet(db, ex.id))} />
@@ -125,6 +135,18 @@ export function WorkoutView({ date }: { date: string }) {
         </>
       )}
       <ExercisePicker visible={picking} onClose={() => setPicking(false)} onPick={addEx} />
+      {removal && (
+        <ConfirmDialog
+          title={removal.title}
+          message={removal.message}
+          confirmLabel="Remove"
+          onCancel={() => setRemoval(null)}
+          onConfirm={() => {
+            setRemoval(null);
+            act(removal.remove);
+          }}
+        />
+      )}
     </View>
   );
 }
