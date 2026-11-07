@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react-native';
 
 import { addExercise, findExercise, listCategoriesWithExercises } from '@/data/exercises';
 import type { Db } from '@/db/types';
@@ -87,6 +87,52 @@ describe('ExercisePicker', () => {
     const created = onPick.mock.calls[0][0];
     expect(created).toMatchObject({ name: 'Cable Fly', subcategory: 'Chest' });
     expect((await findExercise(db, created.id))?.subcategory).toBe('Chest');
+  });
+
+  it('shows an animation on built-in exercise cards but not on custom ones', async () => {
+    const db = await createTestDb();
+    const lifts = (await listCategoriesWithExercises(db)).find((c) => c.name === 'Lifts')!;
+    await addExercise(db, lifts.id, 'Farmer Carry');
+    await open(db);
+    expect(await screen.findByTestId('motion-Bench Press', { includeHiddenElements: true })).toBeTruthy();
+    expect(screen.getByLabelText('Add Farmer Carry')).toBeTruthy();
+    expect(screen.queryByTestId('motion-Farmer Carry', { includeHiddenElements: true })).toBeNull();
+  });
+
+  it('previews an exercise in motion when its stick figure is tapped, without adding it', async () => {
+    const { onPick } = await open();
+    await fireEvent.press(await screen.findByLabelText('Show how to do Bench Press'));
+    expect(screen.getByRole('header', { name: 'Bench Press' })).toBeTruthy();
+    expect(onPick).not.toHaveBeenCalled();
+
+    await fireEvent.press(screen.getByText('Close'));
+    expect(screen.queryByRole('header', { name: 'Bench Press' })).toBeNull();
+    expect(onPick).not.toHaveBeenCalled();
+  });
+
+  it('puts a small info button on built-in cards, separate from the card', async () => {
+    const db = await createTestDb();
+    const lifts = (await listCategoriesWithExercises(db)).find((c) => c.name === 'Lifts')!;
+    await addExercise(db, lifts.id, 'Farmer Carry');
+    await open(db);
+    const info = await screen.findByLabelText('Show how to do Bench Press');
+    expect(within(info).getByText('i')).toBeTruthy();
+    expect(within(info).queryByTestId('motion-Bench Press', { includeHiddenElements: true })).toBeNull();
+    expect(screen.queryByLabelText('Show how to do Farmer Carry')).toBeNull();
+  });
+
+  it('adds the previewed exercise from the preview', async () => {
+    const { onPick } = await open();
+    await fireEvent.press(await screen.findByLabelText('Show how to do Squat'));
+    await fireEvent.press(screen.getByText('Add Squat'));
+    expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ name: 'Squat' }));
+  });
+
+  it('lays exercises out as cards in two columns', async () => {
+    await open();
+    const grid = (await screen.findAllByTestId('exercise-grid'))[0];
+    expect(grid).toHaveStyle({ flexDirection: 'row', flexWrap: 'wrap' });
+    expect(screen.getByLabelText('Add Bench Press')).toHaveStyle({ width: '48%' });
   });
 
   it.each(['Show all exercises', 'Subcategory Other'])('leaves a custom lift uncategorized when created from %s', async (chip) => {

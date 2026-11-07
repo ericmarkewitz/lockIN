@@ -64,6 +64,8 @@ export type WorkoutExercise = {
   targetDurationMin: number | null;
   targetDistance: number | null;
   hasLoggedSets: boolean;
+  /** Added by the user rather than seeded with the app. */
+  isCustom: boolean;
   sets: WorkoutSet[];
 };
 

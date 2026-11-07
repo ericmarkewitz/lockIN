@@ -35,6 +35,7 @@ export default function RootLayout() {
             <Stack.Screen name="index" options={{ headerShown: false }} />
             <Stack.Screen name="setup" options={{ title: 'Weekly plan' }} />
             <Stack.Screen name="day/[date]" options={{ title: 'Workout' }} />
+            <Stack.Screen name="exercise/[id]" options={{ title: 'Exercise' }} />
             <Stack.Screen name="export" options={{ title: 'Export' }} />
             <Stack.Screen name="history" options={{ title: 'History' }} />
             <Stack.Screen name="settings" options={{ title: 'Settings' }} />

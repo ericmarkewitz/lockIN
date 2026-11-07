@@ -1,3 +1,4 @@
+import { addExercise, listCategoriesWithExercises } from '../exercises';
 import { setPlanDay } from '../plan';
 import type { Workout } from '../types';
 import {
@@ -60,6 +61,16 @@ describe('ensureWorkout / getWorkout', () => {
     const db = await planned();
     expect((await ensureWorkout(db, '2026-11-02')).exercises[0].subcategory).toBe('Chest'); // Monday: Bench Press
     expect((await ensureWorkout(db, '2026-11-04')).exercises[0].subcategory).toBeNull(); // Wednesday: cardio
+  });
+
+  it('says whether each exercise is a custom one', async () => {
+    const db = await planned();
+    const w = await ensureWorkout(db, '2026-11-02');
+    expect(w.exercises[0].isCustom).toBe(false);
+    const lifts = (await listCategoriesWithExercises(db)).find((c) => c.name === 'Lifts')!;
+    const sled = await addExercise(db, lifts.id, 'Sled Push');
+    await addExerciseToWorkout(db, w.id, sled.id);
+    expect((await getWorkout(db, '2026-11-02'))!.exercises.at(-1)).toMatchObject({ exerciseName: 'Sled Push', isCustom: true });
   });
 
   it('copies rest days from the plan', async () => {
