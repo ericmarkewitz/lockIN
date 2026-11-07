@@ -101,7 +101,14 @@ export function ExercisePicker({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onShow={() => setPreview(null)}
+      onRequestClose={() => (preview ? setPreview(null) : onClose())}
+    >
+      <View testID="picker-sheet" style={{ flex: 1 }}>
       <KeyboardAvoidingView
         testID="picker-keyboard-avoider"
         // The modal fills the window, so no header offset; the custom input sits outside the list.
@@ -161,10 +168,12 @@ export function ExercisePicker({
           <Button title="Cancel" variant="secondary" onPress={onClose} />
         </View>
       </KeyboardAvoidingView>
-      {/* A second sheet over the picker: a pushed route would open underneath this modal. */}
-      <Modal visible={!!preview} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setPreview(null)}>
-        <View style={{ flex: 1, backgroundColor: t.bg }}>
-          {preview && (
+        {/*
+          Drawn over the list inside the picker's own sheet. A second Modal stacked on this one
+          crashed iOS when Add dismissed both at once, and a pushed route would open underneath.
+        */}
+        {preview && (
+          <View testID="exercise-preview" accessibilityViewIsModal style={[StyleSheet.absoluteFill, { backgroundColor: t.bg }]}>
             <ExerciseDetail exercise={preview}>
               <View style={styles.previewActions}>
                 <Button title="Cancel" label="Cancel preview" variant="secondary" onPress={() => setPreview(null)} style={{ flex: 1 }} />
@@ -176,9 +185,9 @@ export function ExercisePicker({
                 />
               </View>
             </ExerciseDetail>
-          )}
-        </View>
-      </Modal>
+          </View>
+        )}
+      </View>
     </Modal>
   );
 }

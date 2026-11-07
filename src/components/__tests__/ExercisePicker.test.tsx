@@ -122,6 +122,25 @@ describe('ExercisePicker', () => {
     expect(screen.queryByLabelText('Show how to do Farmer Carry')).toBeNull();
   });
 
+  // Stacking a second Modal on the picker crashed iOS when Add dismissed both at once.
+  it('shows the preview inside the picker sheet rather than as a second modal', async () => {
+    await open();
+    await fireEvent.press(await screen.findByLabelText('Show how to do Bench Press'));
+    const sheet = screen.getByTestId('picker-sheet');
+    expect(within(sheet).getByTestId('exercise-preview')).toBeTruthy();
+    expect(within(sheet).getByRole('header', { name: 'Bench Press' })).toBeTruthy();
+  });
+
+  it('closes the preview, not the picker, on the Android back button', async () => {
+    const onClose = jest.fn();
+    const db = await createTestDb();
+    await renderWithDb(<ExercisePicker visible onPick={jest.fn()} onClose={onClose} />, db);
+    await fireEvent.press(await screen.findByLabelText('Show how to do Bench Press'));
+    await fireEvent(screen.getByTestId('picker-sheet').parent!, 'requestClose');
+    expect(screen.queryByTestId('exercise-preview')).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it('adds the previewed exercise from the preview', async () => {
     const { onPick } = await open();
     await fireEvent.press(await screen.findByLabelText('Show how to do Squat'));
