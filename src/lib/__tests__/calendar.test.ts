@@ -1,4 +1,5 @@
-import { periodLabel, periodRange, shiftAnchor } from '../calendar';
+import type { DaySummary, DayStatus } from '@/data/types';
+import { inPeriod, periodLabel, periodRange, shiftAnchor, weekProgress } from '../calendar';
 import { parseNumber } from '../numbers';
 
 describe('shiftAnchor', () => {
@@ -45,5 +46,27 @@ describe('parseNumber', () => {
     expect(parseNumber('')).toBeNull();
     expect(parseNumber('abc')).toBeNull();
     expect(parseNumber('-3')).toBeNull();
+  });
+});
+
+describe('weekProgress', () => {
+  const day = (status: DayStatus): DaySummary => ({ date: '2026-11-02', status, exerciseCount: 1, kinds: [] });
+  it('counts training days and finished ones, ignoring rest and empty days', () => {
+    const p = weekProgress(['completed', 'partial', 'missed', 'planned', 'rest', 'none', 'completed'].map((s) => day(s as DayStatus)));
+    expect(p).toEqual({ done: 2, total: 5 });
+  });
+  it('is zero for a week with nothing to train', () => {
+    expect(weekProgress([day('rest'), day('none')])).toEqual({ done: 0, total: 0 });
+  });
+});
+
+describe('inPeriod', () => {
+  it('tells whether a date is in the shown day, week or month', () => {
+    expect(inPeriod('2026-11-04', '2026-11-04', 'day')).toBe(true);
+    expect(inPeriod('2026-11-05', '2026-11-04', 'day')).toBe(false);
+    expect(inPeriod('2026-11-08', '2026-11-04', 'week')).toBe(true);
+    expect(inPeriod('2026-11-09', '2026-11-04', 'week')).toBe(false);
+    expect(inPeriod('2026-11-30', '2026-11-04', 'month')).toBe(true);
+    expect(inPeriod('2026-12-01', '2026-11-04', 'month')).toBe(false);
   });
 });

@@ -1,3 +1,4 @@
+import type { DaySummary, DayStatus } from '@/data/types';
 import { addDays, parseDateKey, startOfWeek, toDateKey, type DateKey } from './dates';
 
 export type ViewMode = 'day' | 'week' | 'month';
@@ -35,6 +36,19 @@ export function periodLabel(anchor: DateKey, mode: ViewMode): string {
   if (mode === 'day') return `${DAYS[d.getDay()]}, ${short(anchor)}`;
   const { from, to } = periodRange(anchor, 'week');
   return `${short(from)} – ${short(to)}`;
+}
+
+export function inPeriod(date: DateKey, anchor: DateKey, mode: ViewMode): boolean {
+  const { from, to } = periodRange(anchor, mode);
+  return date >= from && date <= to;
+}
+
+const TRAINING: DayStatus[] = ['planned', 'partial', 'completed', 'missed'];
+
+/** Training days in the summaries, and how many of them are finished. */
+export function weekProgress(days: DaySummary[]): { done: number; total: number } {
+  const training = days.filter((d) => TRAINING.includes(d.status));
+  return { done: training.filter((d) => d.status === 'completed').length, total: training.length };
 }
 
 export const DAY_NAMES = DAYS;
