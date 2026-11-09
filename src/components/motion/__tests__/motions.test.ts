@@ -87,6 +87,61 @@ describe('Overhead Press', () => {
   });
 });
 
+describe('Biking', () => {
+  const m = MOTIONS.Biking;
+  const j = skeleton(m.pose);
+  const discs = m.scene!.filter((p): p is Extract<Prop, { kind: 'disc' }> => p.kind === 'disc' && Array.isArray(p.at));
+  const wheels = discs.filter((d) => d.r >= 8);
+  const ring = discs.find((d) => d.r < 8)!;
+
+  it('has two wheels resting on the floor', () => {
+    expect(wheels).toHaveLength(2);
+    for (const w of wheels) expect((w.at as number[])[1] + w.r).toBeCloseTo(FLOOR_Y, 0);
+  });
+
+  it('has both feet on opposite pedals, cranking around the chainring', () => {
+    const [cx, cy] = ring.at as number[];
+    const crank = (f: number[]) => Math.hypot(f[0] - cx, f[1] - cy);
+    expect(crank(j.foot1)).toBeGreaterThan(3);
+    expect(crank(j.foot1)).toBeCloseTo(crank(j.foot2), 0);
+    expect((j.foot1[0] + j.foot2[0]) / 2).toBeCloseTo(cx, 0);
+    expect((j.foot1[1] + j.foot2[1]) / 2).toBeCloseTo(cy, 0);
+  });
+
+  it('keeps the head behind the front wheel axle, not slumped over the bars', () => {
+    const front = Math.max(...wheels.map((w) => (w.at as number[])[0]));
+    expect(j.head[0]).toBeLessThan(front);
+    expect(j.head[1]).toBeLessThan(j.hand1[1]);
+  });
+});
+
+describe('squat bars', () => {
+  // Seen from the side, the bar's near end is closer than the body, so it is drawn in front (gear).
+  const bar = (name: string) => {
+    const m = MOTIONS[name];
+    const j = skeleton(m.pose);
+    expect(m.scene ?? []).toHaveLength(0);
+    const plate = m.gear?.find((p) => p.kind === 'disc');
+    if (!plate || Array.isArray(plate.at)) throw new Error('expected a plate on a joint');
+    const at = [j[plate.at.joint][0] + (plate.at.dx ?? 0), j[plate.at.joint][1] + (plate.at.dy ?? 0)];
+    return { j, at, r: plate.r };
+  };
+
+  it('racks the back squat bar on the upper back, behind the face', () => {
+    const { j, at, r } = bar('Squat');
+    expect(at[0]).toBeLessThan(j.neck[0]); // behind the neck
+    expect(at[0] + r).toBeLessThan(j.head[0]); // leaves the front half of the head (the face) clear
+    expect(Math.abs(at[1] - j.neck[1])).toBeLessThan(4); // at shoulder height
+  });
+
+  it('racks the front squat bar across the front of the shoulders, below the chin', () => {
+    const { j, at, r } = bar('Front Squat');
+    expect(at[0]).toBeGreaterThan(j.neck[0]);
+    expect(at[1] - r).toBeGreaterThan(j.head[1] + 2); // under the chin, not over the face
+    expect(Math.abs(at[1] - j.neck[1])).toBeLessThan(4);
+  });
+});
+
 describe('skeleton', () => {
   it('stacks a standing figure with the head above the hip and the feet below', () => {
     const s = skeleton({ hip: [32, 34], torso: 180, arm1: [0, 0], arm2: [0, 0], leg1: [0, 0], leg2: [0, 0] });
