@@ -46,7 +46,7 @@ export const MOTIONS: Record<string, Motion> = {
   },
   'Incline Bench Press': {
     pose: pose({ hip: [22, 46], torso: 125, arm1: [165, 170], leg1: [-80, 0], leg2: [-75, 5] }),
-    scene: [line([14, 51], [31, 39], 3), line([10, 50], [26, 50], 3), line([18, 50], [18, FLOOR_Y])],
+    scene: [line([21, 50], [40, 36.7], 3), line([10, 50], [21, 50], 3), line([16, 50], [16, FLOOR_Y]), line([32, 42.3], [32, FLOOR_Y])],
     gear: [disc(at('hand1'), 4)],
   },
   Squat: {
@@ -65,9 +65,10 @@ export const MOTIONS: Record<string, Motion> = {
     pose: pose({ hip: [28, 35], torso: 100, arm1: [0, 0], leg1: [10, 0], leg2: [6, -2] }),
     gear: plate,
   },
+  // Seen from the front, so both arms show pressing the bar overhead.
   'Overhead Press': {
-    pose: pose({ ...STAND, hip: [32, 35], arm1: [178, 180], arm2: [176, 178] }),
-    gear: [disc(at('hand1'), 4)],
+    pose: pose({ hip: [32, 35.5], torso: 180, arm1: [125, 155], arm2: [-125, -155], leg1: [10, 3], leg2: [-10, -3] }),
+    gear: [line(at('hand2', -7), at('hand1', 7), 2), disc(at('hand2', -7), 3), disc(at('hand1', 7), 3)],
   },
   'Barbell Row': {
     pose: pose({ hip: [26, 36], torso: 110, arm1: [-60, 20], leg1: [20, -5], leg2: [16, -8] }),
@@ -136,10 +137,46 @@ export const MOTIONS: Record<string, Motion> = {
     scene: [line([4, 57], [60, 57], 2), disc([56, 46], 6, true), line([56, 46], at('hand1'), 1), line([46, 46], [48, 56], 2)],
     gear: [line(at('hip', -5, 3), at('hip', 5, 3), 3)],
   },
-  Skiing: {
-    pose: pose({ hip: [30, 40], torso: 145, arm1: [40, 70], arm2: [35, 65], leg1: [60, -20], leg2: [55, -22] }),
+  // Racing down a slope in a tuck: the whole body is tilted 20 degrees to stand square to the hill.
+  'Downhill Skiing': {
+    pose: pose({ hip: [26, 32], torso: 125, arm1: [20, 50], arm2: [15, 45], leg1: [40, -40], leg2: [35, -42] }),
     floor: false,
-    gear: [line(at('foot1', -14, 1.5), at('foot1', 12, 1.5), 2), line(at('hand1'), at('hand1', -12, 14), 1.5)],
+    scene: [line([0, 43], [58, 64], 1)],
+    gear: [line(at('foot1', -13, -3.2), at('foot1', 12, 5.9), 2), line(at('hand1'), at('hand1', -16, 9), 1.5)],
+  },
+  // Skinning uphill with a pack: skis flat along the slope, poles planted.
+  'Ski Touring': {
+    pose: pose({ hip: [30, 33], torso: 165, arm1: [50, 20], arm2: [-30, -10], leg1: [55, 0], leg2: [-15, -15] }),
+    floor: false,
+    scene: [line([0, 64], [64, 43], 1)],
+    gear: [
+      disc(at('neck', -5, 5), 4),
+      line(at('foot1', -9, 4.5), at('foot1', 9, -1.5), 2), line(at('foot2', -9, 4.5), at('foot2', 9, -1.5), 2),
+      line(at('hand1'), at('hand1', -2, 17), 1.5),
+    ],
+  },
+  // Classic stride: legs and arms swinging opposite, long skis, poles pushing behind.
+  'Cross-Country Skiing': {
+    pose: pose({ hip: [30, 36], torso: 165, arm1: [55, 20], arm2: [-50, -30], leg1: [25, 5], leg2: [-25, -15] }),
+    gear: [
+      line(at('foot1', -12, 1.5), at('foot1', 12, 1.5), 2), line(at('foot2', -12, 1.5), at('foot2', 12, 1.5), 2),
+      line(at('hand1'), at('hand1', -6, 24), 1.5), line(at('hand2'), at('hand2', -10, 24), 1.5),
+    ],
+  },
+  // A high step over deep snow on wide snowshoes, poles in hand.
+  Snowshoeing: {
+    pose: pose({ hip: [30, 35.5], torso: 170, arm1: [30, 60], arm2: [-30, -10], leg1: [60, -5], leg2: [-10, -10] }),
+    gear: [
+      line(at('foot1', -5, 1.5), at('foot1', 6, 1.5), 3.5), line(at('foot2', -5, 1.5), at('foot2', 6, 1.5), 3.5),
+      line(at('hand1'), at('hand1', 3, 14), 1.5), line(at('hand2'), at('hand2', -3, 14), 1.5),
+    ],
+  },
+  // On a wall, reaching for the next hold.
+  Climbing: {
+    pose: pose({ hip: [36, 37], torso: 160, arm1: [150, 165], arm2: [40, 170], leg1: [80, 10], leg2: [30, 30] }),
+    floor: false,
+    scene: [line([50.5, 0], [50.5, CANVAS], 2)],
+    gear: [disc(at('hand1', 1, 0), 1.8), disc(at('hand2', 1, 0), 1.8), disc(at('foot1', 1, 1), 1.8), disc(at('foot2', 1, 1), 1.8)],
   },
 
   // Yoga
@@ -161,9 +198,9 @@ export const MOTIONS: Record<string, Motion> = {
   },
 
   // Mobility
-  // Seen from the front: an overhead side bend.
+  // Standing quad stretch: near foot held up behind the hip, far arm reaching forward for balance.
   Stretching: {
-    pose: pose({ hip: [32, 35], torso: 160, arm1: [140, 135], arm2: [150, 140], leg1: [10, 3], leg2: [-10, -3] }),
+    pose: pose({ hip: [32, 35], torso: 180, arm1: [-35, -20], arm2: [115, 110], leg1: [-20, -165], leg2: [2, 0] }),
   },
   // Calves on a roller, hands planted behind, rocking the hips forward and back.
   'Foam Rolling': {

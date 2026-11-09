@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 
-import { LATEST_VERSION, migrate } from '../migrations';
+import { LATEST_VERSION, SEED, migrate } from '../migrations';
 import type { Db } from '../types';
 import { LIFT_SUBCATEGORIES } from '@/data/exercises';
 import { createTestDb, wrap } from '@/test/testDb';
@@ -37,8 +37,18 @@ describe('migrations', () => {
     );
     const by = (c: string) => rows.filter((r) => r.cat === c).map((r) => r.name);
     expect(by('Lifts')).toEqual(expect.arrayContaining(['Bench Press', 'Squat', 'Deadlift']));
-    expect(by('Cardio')).toEqual(expect.arrayContaining(['Running', 'Biking', 'Hiking', 'Skiing']));
+    expect(by('Cardio')).toEqual(expect.arrayContaining(['Running', 'Biking', 'Hiking', 'Downhill Skiing']));
     expect(by('Yoga').length).toBeGreaterThan(0);
+  });
+
+  it('seeds exactly the built-in exercises listed in SEED', async () => {
+    const db = await createTestDb();
+    const rows = await db.getAllAsync<{ cat: string; name: string }>(
+      'SELECT c.name AS cat, e.name FROM exercises e JOIN categories c ON c.id = e.category_id WHERE e.is_custom = 0 ORDER BY e.id',
+    );
+    for (const cat of SEED) {
+      expect(rows.filter((r) => r.cat === cat.name).map((r) => r.name).sort()).toEqual([...cat.exercises].sort());
+    }
   });
 
   it('seeds all 7 plan days as non-rest and enforces foreign keys', async () => {
@@ -141,6 +151,69 @@ describe('migrations', () => {
          JOIN workout_exercises we ON we.id = s.workout_exercise_id JOIN exercises e ON e.id = we.exercise_id`,
       );
       expect(row).toEqual({ name: 'Squat', reps: 5, weight: 225 });
+    });
+  });
+
+  describe('v4 splits skiing and adds snow and climbing cardio', () => {
+    async function upgradeFromV3(prepare: (db: Db) => Promise<void>) {
+      const raw = new DatabaseSync(':memory:');
+      const db = wrap(raw);
+      await migrate(db);
+      // Put the catalog back the way v3 left it.
+      raw.exec(`DELETE FROM exercises WHERE name IN ('Ski Touring', 'Cross-Country Skiing', 'Snowshoeing', 'Climbing');
+        UPDATE exercises SET name = 'Skiing' WHERE name = 'Downhill Skiing';
+        PRAGMA user_version = 3`);
+      await prepare(db);
+      await migrate(db);
+      return db;
+    }
+
+    const cardio = async (db: Db) =>
+      (await db.getAllAsync<{ name: string; is_custom: number }>(
+        `SELECT e.name, e.is_custom FROM exercises e JOIN categories c ON c.id = e.category_id
+         WHERE c.name = 'Cardio' ORDER BY e.id`,
+      ));
+
+    it('renames Skiing to Downhill Skiing and adds the new built-ins', async () => {
+      const db = await upgradeFromV3(async () => {});
+      const names = (await cardio(db)).map((r) => r.name);
+      expect(names).not.toContain('Skiing');
+      expect(names).toEqual(expect.arrayContaining([
+        'Downhill Skiing', 'Ski Touring', 'Cross-Country Skiing', 'Snowshoeing', 'Climbing',
+      ]));
+      expect((await cardio(db)).every((r) => r.is_custom === 0)).toBe(true);
+    });
+
+    it('keeps logged skiing sets on the renamed exercise', async () => {
+      const db = await upgradeFromV3(async (d) => {
+        const { lastInsertRowId: workoutId } = await d.runAsync("INSERT INTO workouts (date) VALUES ('2026-01-10')");
+        const { lastInsertRowId: weId } = await d.runAsync(
+          "INSERT INTO workout_exercises (workout_id, exercise_id, position) VALUES (?, (SELECT id FROM exercises WHERE name = 'Skiing'), 0)",
+          [workoutId],
+        );
+        await d.runAsync('INSERT INTO sets (workout_exercise_id, set_number, duration_min) VALUES (?, 1, 120)', [weId]);
+      });
+      const row = await db.getFirstAsync(
+        `SELECT e.name, s.duration_min FROM sets s
+         JOIN workout_exercises we ON we.id = s.workout_exercise_id JOIN exercises e ON e.id = we.exercise_id`,
+      );
+      expect(row).toEqual({ name: 'Downhill Skiing', duration_min: 120 });
+    });
+
+    it("leaves a user's custom exercise with a new name alone", async () => {
+      const db = await upgradeFromV3(async (d) => {
+        await d.runAsync(
+          `INSERT INTO exercises (category_id, name, is_custom)
+           VALUES ((SELECT id FROM categories WHERE name = 'Cardio'), 'Climbing', 1),
+                  ((SELECT id FROM categories WHERE name = 'Cardio'), 'Downhill Skiing', 1)`,
+        );
+      });
+      const rows = await cardio(db);
+      expect(rows.filter((r) => r.name === 'Climbing')).toEqual([{ name: 'Climbing', is_custom: 1 }]);
+      // The built-in can't take a name the user already has, so it stays as it was.
+      expect(rows.filter((r) => r.name === 'Downhill Skiing')).toEqual([{ name: 'Downhill Skiing', is_custom: 1 }]);
+      expect(rows.map((r) => r.name)).toContain('Skiing');
+      expect(rows.map((r) => r.name)).toContain('Snowshoeing');
     });
   });
 });

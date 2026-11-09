@@ -62,7 +62,10 @@ INSERT INTO plan_days (weekday, is_rest) VALUES (0,0),(1,0),(2,0),(3,0),(4,0),(5
 INSERT INTO settings (key, value) VALUES ('weight_unit', 'lb'), ('plan_complete', '0');
 `;
 
-export const SEED: { name: string; kind: 'strength' | 'cardio' | 'mindbody'; exercises: string[] }[] = [
+type SeedCategory = { name: string; kind: 'strength' | 'cardio' | 'mindbody'; exercises: string[] };
+
+/** The catalog migration 1 seeded. Frozen: later catalog changes are migrations of their own. */
+const SEED_V1: SeedCategory[] = [
   {
     name: 'Lifts',
     kind: 'strength',
@@ -77,8 +80,21 @@ export const SEED: { name: string; kind: 'strength' | 'cardio' | 'mindbody'; exe
   { name: 'Mobility', kind: 'mindbody', exercises: ['Stretching', 'Foam Rolling'] },
 ];
 
+/** The built-in catalog a fresh install ends up with, after every migration. */
+export const SEED: SeedCategory[] = SEED_V1.map((cat) =>
+  cat.name === 'Cardio'
+    ? {
+        ...cat,
+        exercises: [
+          ...cat.exercises.map((e) => (e === 'Skiing' ? 'Downhill Skiing' : e)),
+          'Ski Touring', 'Cross-Country Skiing', 'Snowshoeing', 'Climbing',
+        ],
+      }
+    : cat,
+);
+
 async function seed(db: Db) {
-  for (const cat of SEED) {
+  for (const cat of SEED_V1) {
     const { lastInsertRowId } = await db.runAsync('INSERT INTO categories (name, kind) VALUES (?, ?)', [cat.name, cat.kind]);
     for (const ex of cat.exercises) {
       await db.runAsync('INSERT INTO exercises (category_id, name) VALUES (?, ?)', [lastInsertRowId, ex]);
@@ -113,6 +129,19 @@ const MIGRATIONS: ((db: Db) => Promise<void>)[] = [
            AND name IN (${names.map(() => '?').join(',')})`,
         [subcategory, ...names],
       );
+    }
+  },
+  // Splits Skiing into three kinds and adds snowshoeing and climbing. Renaming keeps logged
+  // skiing on the same row. A name the user already has as a custom exercise is left to them.
+  async (db) => {
+    const cardio = "(SELECT id FROM categories WHERE name = 'Cardio')";
+    await db.runAsync(
+      `UPDATE exercises SET name = 'Downhill Skiing'
+       WHERE is_custom = 0 AND name = 'Skiing' AND category_id = ${cardio}
+         AND NOT EXISTS (SELECT 1 FROM exercises WHERE name = 'Downhill Skiing' AND category_id = ${cardio})`,
+    );
+    for (const name of ['Ski Touring', 'Cross-Country Skiing', 'Snowshoeing', 'Climbing']) {
+      await db.runAsync(`INSERT OR IGNORE INTO exercises (category_id, name) VALUES (${cardio}, ?)`, [name]);
     }
   },
 ];
