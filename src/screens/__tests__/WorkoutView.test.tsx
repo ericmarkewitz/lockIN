@@ -57,23 +57,45 @@ describe('WorkoutView', () => {
     });
   });
 
-  it('summarises how many sets are done, for the day and for each exercise', async () => {
+  it('summarises the day by exercises done, counting one only once all its sets are', async () => {
     const db = await setup();
     await renderWithDb(<WorkoutView date={MON} />, db);
-    expect(await screen.findByLabelText('0 of 3 done')).toBeTruthy();
+    expect(await screen.findByLabelText('0 of 2 exercises done')).toBeTruthy();
+    expect(screen.getByText('exercises done')).toBeTruthy();
     expect(within(screen.getByTestId('exercise-Bench Press')).getByText('0/2')).toBeTruthy();
+    // One of Bench Press's two sets: the set count moves, the exercise count doesn't.
     await fireEvent.press(screen.getAllByLabelText('Mark set 1 done')[0]);
-    expect(await screen.findByLabelText('1 of 3 done')).toBeTruthy();
-    expect(within(screen.getByTestId('exercise-Bench Press')).getByText('1/2')).toBeTruthy();
+    expect(await within(screen.getByTestId('exercise-Bench Press')).findByText('1/2')).toBeTruthy();
+    expect(screen.getByLabelText('0 of 2 exercises done')).toBeTruthy();
+    // Squat's only set finishes Squat.
+    await fireEvent.press(within(screen.getByTestId('exercise-Squat')).getByLabelText('Mark set 1 done'));
+    expect(await screen.findByLabelText('1 of 2 exercises done')).toBeTruthy();
   });
 
-  it('calls the workout done once every set is', async () => {
+  it('calls the workout done once every exercise is', async () => {
     const db = await setup();
     const w = await ensureWorkout(db, MON);
     for (const e of w.exercises) for (const s of e.sets) await updateSet(db, s.id, { completed: true });
     await renderWithDb(<WorkoutView date={MON} />, db);
-    expect(await screen.findByLabelText('3 of 3 done')).toBeTruthy();
+    expect(await screen.findByLabelText('2 of 2 exercises done')).toBeTruthy();
     expect(screen.getByText('Workout complete')).toBeTruthy();
+  });
+
+  it('summarises the current lift by its sets in focus mode', async () => {
+    const db = await setup();
+    const w = await ensureWorkout(db, MON);
+    await updateSet(db, w.exercises[0].sets[0].id, { completed: true });
+    await renderWithDb(<WorkoutView date={MON} />, db);
+    await fireEvent.press(await screen.findByLabelText('Current lift'));
+    expect(screen.getByLabelText('1 of 2 sets done')).toBeTruthy();
+    expect(screen.getByText('sets done')).toBeTruthy();
+    await fireEvent.press(within(screen.getByTestId('exercise-Bench Press')).getByLabelText('Mark set 2 done'));
+    expect(await screen.findByLabelText('2 of 2 sets done')).toBeTruthy();
+    expect(screen.getByText('Exercise complete')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Next ›'));
+    expect(screen.getByLabelText('0 of 1 sets done')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Full plan'));
+    expect(screen.getByLabelText('1 of 2 exercises done')).toBeTruthy();
   });
 
   it('shows the full plan with a row per set', async () => {
@@ -178,11 +200,21 @@ describe('WorkoutView', () => {
       expect(screen.queryByLabelText('Vinyasa distance')).toBeNull();
     });
 
-    it('count each entry once in the day progress', async () => {
+    it('count as one exercise in the day progress', async () => {
       await mixed();
-      expect(screen.getByLabelText('0 of 4 done')).toBeTruthy();
+      expect(screen.getByLabelText('0 of 3 exercises done')).toBeTruthy();
       await fireEvent.press(screen.getByLabelText('Mark Running done'));
-      expect(await screen.findByLabelText('1 of 4 done')).toBeTruthy();
+      expect(await screen.findByLabelText('1 of 3 exercises done')).toBeTruthy();
+    });
+
+    it('do not count sets when focused', async () => {
+      await mixed();
+      await fireEvent.press(screen.getByLabelText('Current lift'));
+      await fireEvent.press(screen.getByLabelText('Next ›'));
+      expect(screen.getByLabelText('0 of 1 exercises done')).toBeTruthy();
+      await fireEvent.press(screen.getByLabelText('Mark Running done'));
+      expect(await screen.findByText('Exercise complete')).toBeTruthy();
+      expect(screen.queryByText(/sets done/)).toBeNull();
     });
 
     it('do not talk about sets when removing the exercise', async () => {

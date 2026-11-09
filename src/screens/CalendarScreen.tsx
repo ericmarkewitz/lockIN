@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { MonthView } from '@/components/calendar/MonthView';
 import { WeekView } from '@/components/calendar/WeekView';
+import { Icon, sym } from '@/components/Icon';
 import { KeyboardAvoider, keyboardScrollProps } from '@/components/KeyboardAvoider';
 import { IconButton, Segmented } from '@/components/ui';
 import { getRangeSummary } from '@/data/workouts';
@@ -74,7 +75,8 @@ export function CalendarScreen({ today = todayKey() }: { today?: string }) {
               hitSlop={8}
               style={[styles.chip, { backgroundColor: tint(t.primary, 0.12) }]}
             >
-              <Text style={{ color: t.primary, fontSize: 12, fontWeight: '700' }}>Today</Text>
+              <Icon name={sym('arrow.uturn.backward', 'undo')} size={11} color={t.primary} fallback="‹" />
+              <Text style={{ color: t.primary, fontSize: 12, fontWeight: '700' }}>Back to today</Text>
             </Pressable>
           )}
         </View>
@@ -100,5 +102,5 @@ const styles = StyleSheet.create({
   navRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   periodCol: { alignItems: 'center', gap: 4 },
   period: { fontSize: 17, fontWeight: '700' },
-  chip: { paddingVertical: 3, paddingHorizontal: 10, borderRadius: 999 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 3, paddingHorizontal: 10, borderRadius: 999 },
 });

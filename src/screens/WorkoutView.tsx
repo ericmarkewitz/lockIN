@@ -38,6 +38,9 @@ const fmtLast = (l: { date: string; sets: WorkoutSet[] }, kind: WorkoutExercise[
       : `${formatDuration(s.durationMin) || '–'}${s.distance ? ` ${formatDistance(s.distance, units.distance)}` : ''}`))
     .join(', ');
 
+/** An exercise is finished once it has sets and every one is marked done. */
+const isFinished = (e: WorkoutExercise) => e.sets.length > 0 && e.sets.every((x) => x.completed);
+
 export function WorkoutView({ date }: { date: string }) {
   const db = useDb();
   const t = useTheme();
@@ -61,9 +64,15 @@ export function WorkoutView({ date }: { date: string }) {
     await act(() => addExerciseToWorkout(db, workout.id, e.id, e.categoryKind === 'strength' ? { targetSets: 3, targetReps: 10 } : {}));
   };
 
-  const allSets = exercises.flatMap((e) => e.sets);
-  const doneSets = allSets.filter((x) => x.completed).length;
-  const complete = allSets.length > 0 && doneSets === allSets.length;
+  // The full plan counts finished exercises; focus mode counts the current lift's sets.
+  const focused = mode === 'focus' && exercises.length > 0 ? exercises[idx] : null;
+  // Cardio, yoga and mobility have no sets, so a focused one counts as a single exercise.
+  const progress = focused?.categoryKind === 'strength'
+    ? { done: focused.sets.filter((x) => x.completed).length, total: focused.sets.length, unit: 'sets', finished: 'Exercise complete', empty: 'No sets yet' }
+    : focused
+    ? { done: isFinished(focused) ? 1 : 0, total: 1, unit: 'exercises', finished: 'Exercise complete', empty: 'No exercises yet' }
+    : { done: exercises.filter(isFinished).length, total: exercises.length, unit: 'exercises', finished: 'Workout complete', empty: 'No exercises yet' };
+  const complete = progress.total > 0 && progress.done === progress.total;
 
   const confirmRemoveExercise = (ex: WorkoutExercise) => {
     const remove = () => removeExerciseFromWorkout(db, ex.id);
@@ -76,17 +85,17 @@ export function WorkoutView({ date }: { date: string }) {
     <View style={{ gap: 14 }}>
       <View style={[styles.summary, { backgroundColor: t.card, borderColor: t.border }]}>
         {!workout.isRest && (
-          <View accessible accessibilityLabel={`${doneSets} of ${allSets.length} done`} style={styles.progress}>
+          <View accessible accessibilityLabel={`${progress.done} of ${progress.total} ${progress.unit} done`} style={styles.progress}>
             <View style={styles.progressTop}>
               <Text style={[styles.big, { color: t.text }]}>
-                {doneSets}<Text style={{ color: t.muted }}>/{allSets.length}</Text>
+                {progress.done}<Text style={{ color: t.muted }}>/{progress.total}</Text>
               </Text>
               <Text style={[styles.progressLabel, { color: complete ? t.success : t.muted }]}>
-                {complete ? 'Workout complete' : allSets.length ? 'done' : 'No exercises yet'}
+                {complete ? progress.finished : progress.total ? `${progress.unit} done` : progress.empty}
               </Text>
             </View>
             <View style={[styles.track, { backgroundColor: t.surface }]}>
-              <View style={[styles.fill, { backgroundColor: t.success, width: `${allSets.length ? (doneSets / allSets.length) * 100 : 0}%` }]} />
+              <View style={[styles.fill, { backgroundColor: t.success, width: `${progress.total ? (progress.done / progress.total) * 100 : 0}%` }]} />
             </View>
           </View>
         )}
@@ -116,7 +125,7 @@ export function WorkoutView({ date }: { date: string }) {
           )}
           {shown.map((ex) => {
             const exDone = ex.sets.filter((x) => x.completed).length;
-            const finished = ex.sets.length > 0 && exDone === ex.sets.length;
+            const finished = isFinished(ex);
             const isStrength = ex.categoryKind === 'strength';
             return (
               <View key={ex.id} testID={`exercise-${ex.exerciseName}`} style={[styles.exCard, { backgroundColor: t.card, borderColor: t.border }]}>
@@ -179,7 +188,7 @@ export function WorkoutView({ date }: { date: string }) {
                   />
                 ))}
                 {isStrength && (
-                  <AddButton compact title="Add set" label={`Add set to ${ex.exerciseName}`} onPress={() => act(() => addSet(db, ex.id))} />
+                  <AddButton quiet title="Add set" label={`Add set to ${ex.exerciseName}`} onPress={() => act(() => addSet(db, ex.id))} />
                 )}
               </View>
             );

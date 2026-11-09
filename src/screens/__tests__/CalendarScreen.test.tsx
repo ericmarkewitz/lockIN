@@ -110,6 +110,9 @@ describe('CalendarScreen', () => {
     expect(screen.queryByLabelText('Go to today')).toBeNull();
     await fireEvent.press(screen.getByLabelText('Next'));
     expect(await screen.findByText('Nov 9 – Nov 15')).toBeTruthy();
+    // Worded as an action so it can't be misread as a label saying the shown day is today.
+    expect(screen.getByText('Back to today')).toBeTruthy();
+    expect(screen.queryByText('Today')).toBeNull();
     await fireEvent.press(screen.getByLabelText('Go to today'));
     expect(await screen.findByText('Nov 2 – Nov 8')).toBeTruthy();
   });
