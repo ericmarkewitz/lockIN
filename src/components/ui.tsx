@@ -91,21 +91,28 @@ export function IconButton({
 }
 
 /** A dashed, accent-tinted button for adding something to the list above it. */
-export function AddButton({ title, label, onPress, compact }: { title: string; label?: string; onPress: () => void; compact?: boolean }) {
+/** A dashed "+ title" button; `quiet` shrinks it to a small text link for actions that are rarely needed. */
+export function AddButton({ title, label, onPress, compact, quiet }: { title: string; label?: string; onPress: () => void; compact?: boolean; quiet?: boolean }) {
   const t = useTheme();
+  const small = compact || quiet;
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label ?? title}
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.add,
-        compact && styles.addCompact,
-        { borderColor: tint(t.primary, 0.45), backgroundColor: tint(t.primary, pressed ? 0.14 : 0.06) },
-      ]}
+      hitSlop={quiet ? 10 : undefined}
+      style={({ pressed }) =>
+        quiet
+          ? [styles.addQuiet, { backgroundColor: 'transparent', opacity: pressed ? 0.5 : 1 }]
+          : [
+              styles.add,
+              compact && styles.addCompact,
+              { borderColor: tint(t.primary, 0.45), backgroundColor: tint(t.primary, pressed ? 0.14 : 0.06) },
+            ]
+      }
     >
-      <Icon name={sym('plus', 'add')} size={compact ? 13 : 15} color={t.primary} fallback="+" />
-      <Text style={{ color: t.primary, fontWeight: '700', fontSize: compact ? 14 : 15 }}>{title}</Text>
+      <Icon name={sym('plus', 'add')} size={quiet ? 12 : small ? 13 : 15} color={t.primary} fallback="+" />
+      <Text style={{ color: t.primary, fontWeight: '700', fontSize: quiet ? 13 : small ? 14 : 15 }}>{title}</Text>
     </Pressable>
   );
 }
@@ -118,5 +125,6 @@ const styles = StyleSheet.create({
   segOn: { shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
   add: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 13, borderRadius: 14, borderWidth: 1.5, borderStyle: 'dashed' },
   addCompact: { paddingVertical: 9, borderRadius: 12, borderWidth: 1 },
+  addQuiet: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 4, paddingVertical: 4, paddingHorizontal: 2 },
   icon: { alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth },
 });
