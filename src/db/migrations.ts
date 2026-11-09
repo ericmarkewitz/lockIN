@@ -1,3 +1,4 @@
+import { syncCatalog } from './catalog';
 import type { Db } from './types';
 
 const SCHEMA_V1 = `
@@ -64,7 +65,10 @@ INSERT INTO settings (key, value) VALUES ('weight_unit', 'lb'), ('plan_complete'
 
 type SeedCategory = { name: string; kind: 'strength' | 'cardio' | 'mindbody'; exercises: string[] };
 
-/** The catalog migration 1 seeded. Frozen: later catalog changes are migrations of their own. */
+/**
+ * The catalog migration 1 seeded. Frozen: the current one is `CATALOG` (`src/data/catalog.ts`),
+ * which `syncCatalog` brings every install up to after the migrations run.
+ */
 const SEED_V1: SeedCategory[] = [
   {
     name: 'Lifts',
@@ -79,19 +83,6 @@ const SEED_V1: SeedCategory[] = [
   { name: 'Yoga', kind: 'mindbody', exercises: ['Vinyasa', 'Hatha', 'Yin', 'Power Yoga'] },
   { name: 'Mobility', kind: 'mindbody', exercises: ['Stretching', 'Foam Rolling'] },
 ];
-
-/** The built-in catalog a fresh install ends up with, after every migration. */
-export const SEED: SeedCategory[] = SEED_V1.map((cat) =>
-  cat.name === 'Cardio'
-    ? {
-        ...cat,
-        exercises: [
-          ...cat.exercises.map((e) => (e === 'Skiing' ? 'Downhill Skiing' : e)),
-          'Ski Touring', 'Cross-Country Skiing', 'Snowshoeing', 'Climbing',
-        ],
-      }
-    : cat,
-);
 
 async function seed(db: Db) {
   for (const cat of SEED_V1) {
@@ -187,4 +178,6 @@ async function migrateOnce(db: Db): Promise<void> {
     });
     version = next;
   }
+
+  await syncCatalog(db);
 }

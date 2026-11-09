@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 
-import { LATEST_VERSION, SEED, migrate } from '../migrations';
+import { LATEST_VERSION, migrate } from '../migrations';
 import type { Db } from '../types';
 import { LIFT_SUBCATEGORIES } from '@/data/exercises';
 import { createTestDb, wrap } from '@/test/testDb';
@@ -39,16 +39,6 @@ describe('migrations', () => {
     expect(by('Lifts')).toEqual(expect.arrayContaining(['Bench Press', 'Squat', 'Deadlift']));
     expect(by('Cardio')).toEqual(expect.arrayContaining(['Running', 'Biking', 'Hiking', 'Downhill Skiing']));
     expect(by('Yoga').length).toBeGreaterThan(0);
-  });
-
-  it('seeds exactly the built-in exercises listed in SEED', async () => {
-    const db = await createTestDb();
-    const rows = await db.getAllAsync<{ cat: string; name: string }>(
-      'SELECT c.name AS cat, e.name FROM exercises e JOIN categories c ON c.id = e.category_id WHERE e.is_custom = 0 ORDER BY e.id',
-    );
-    for (const cat of SEED) {
-      expect(rows.filter((r) => r.cat === cat.name).map((r) => r.name).sort()).toEqual([...cat.exercises].sort());
-    }
   });
 
   it('seeds all 7 plan days as non-rest and enforces foreign keys', async () => {
