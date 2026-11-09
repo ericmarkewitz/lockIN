@@ -135,6 +135,15 @@ const MIGRATIONS: ((db: Db) => Promise<void>)[] = [
       await db.runAsync(`INSERT OR IGNORE INTO exercises (category_id, name) VALUES (${cardio}, ?)`, [name]);
     }
   },
+  // Records the unit a set was entered in (weight is still stored in lb, distance in mi), so a
+  // set logged in kg reopens in kg. NULL means "the user's setting". Distances logged before this
+  // had no unit at all; they are kept as they are and read as miles.
+  async (db) => {
+    await db.execAsync(`
+      ALTER TABLE sets ADD COLUMN weight_unit TEXT CHECK (weight_unit IN ('lb','kg'));
+      ALTER TABLE sets ADD COLUMN distance_unit TEXT CHECK (distance_unit IN ('mi','km'));
+    `);
+  },
 ];
 
 export const LATEST_VERSION = MIGRATIONS.length;

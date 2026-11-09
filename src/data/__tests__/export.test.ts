@@ -89,6 +89,29 @@ describe('buildExport', () => {
     expect(csv.split('\r\n')[0]).toBe('Weight (kg)');
   });
 
+  it('labels the distance header with the configured unit', async () => {
+    const db = await seeded();
+    expect((await buildExport(db, { fields: ['distance'] })).csv.split('\r\n')[0]).toBe('Distance (mi)');
+    await db.runAsync("INSERT INTO settings (key, value) VALUES ('distance_unit', 'km')");
+    expect((await buildExport(db, { fields: ['distance'] })).csv.split('\r\n')[0]).toBe('Distance (km)');
+  });
+
+  it('converts stored miles to the configured distance unit', async () => {
+    const db = await seeded(); // 3.2 mi run
+    await db.runAsync("INSERT INTO settings (key, value) VALUES ('distance_unit', 'km')");
+    const { csv, rows } = await buildExport(db, { fields: ['exercise', 'distance'] });
+    expect(csv).toContain('\r\nRunning,5.15\r\n');
+    expect(rows.find((r) => r.exercise === 'Running')!.distance).toBe(5.15);
+  });
+
+  it('exports a set entered in the other unit in the configured unit', async () => {
+    const db = await seeded();
+    const mon = await ensureWorkout(db, '2026-10-26');
+    await updateSet(db, mon.exercises[0].sets[0].id, { weight: fromDisplayWeight(60, 'kg'), weightUnit: 'kg' });
+    const { rows } = await buildExport(db, { fields: ['weight'] });
+    expect(rows[0].weight).toBe(132.28);
+  });
+
   it('converts stored pounds to the configured unit', async () => {
     const db = await seeded(); // 135 lb bench
     await db.runAsync("UPDATE settings SET value = 'kg' WHERE key = 'weight_unit'");

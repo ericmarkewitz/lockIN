@@ -12,27 +12,30 @@ import {
   addExerciseToWorkout, addSet, ensureWorkout, getLastPerformance, removeExerciseFromWorkout, removeSet,
   setRestDay, setWorkoutNotes, updateSet, type SetPatch,
 } from '@/data/workouts';
-import { getWeightUnit, type WeightUnit } from '@/data/settings';
+import { getUnits, type Units } from '@/data/settings';
 import { useDb } from '@/db/DbContext';
 import { useLoad } from '@/hooks/useLoad';
 import { formatDuration } from '@/lib/duration';
-import { toDisplayWeight } from '@/lib/units';
+import { formatDistance, toDisplayWeight } from '@/lib/units';
 import { tint, useTheme } from '@/theme';
 
 type Mode = 'plan' | 'focus';
 
 async function loadDay(db: ReturnType<typeof useDb>, date: string) {
   const workout = await ensureWorkout(db, date);
-  const unit = await getWeightUnit(db);
+  const units = await getUnits(db);
   const last: Record<number, { date: string; sets: WorkoutSet[] } | null> = {};
   for (const e of workout.exercises) last[e.exerciseId] = await getLastPerformance(db, e.exerciseId, date);
-  return { workout, unit, last };
+  return { workout, units, last };
 }
 
-const fmtLast = (l: { date: string; sets: WorkoutSet[] }, kind: WorkoutExercise['categoryKind'], unit: WeightUnit) =>
+/** Always in the user's units, even for sets that were entered in the other one. */
+const fmtLast = (l: { date: string; sets: WorkoutSet[] }, kind: WorkoutExercise['categoryKind'], units: Units) =>
   `Last (${l.date}): ` +
   l.sets
-    .map((s) => (kind === 'strength' ? `${toDisplayWeight(s.weight, unit) ?? '–'}×${s.reps ?? '–'}` : `${formatDuration(s.durationMin) || '–'}${s.distance ? ` ${s.distance}` : ''}`))
+    .map((s) => (kind === 'strength'
+      ? `${toDisplayWeight(s.weight, units.weight) ?? '–'}×${s.reps ?? '–'}`
+      : `${formatDuration(s.durationMin) || '–'}${s.distance ? ` ${formatDistance(s.distance, units.distance)}` : ''}`))
     .join(', ');
 
 export function WorkoutView({ date }: { date: string }) {
@@ -47,7 +50,7 @@ export function WorkoutView({ date }: { date: string }) {
   const act = useCallback(async (fn: () => Promise<unknown>) => { await fn(); await reload(); }, [reload]);
 
   if (!data) return null;
-  const { workout, unit, last } = data;
+  const { workout, units, last } = data;
   // A rest day hides what was only planned, but never what was logged.
   const exercises = workout.isRest ? workout.exercises.filter((e) => e.hasLoggedSets) : workout.exercises;
   const idx = Math.min(focusIdx, Math.max(exercises.length - 1, 0));
@@ -64,7 +67,8 @@ export function WorkoutView({ date }: { date: string }) {
 
   const confirmRemoveExercise = (ex: WorkoutExercise) => {
     const remove = () => removeExerciseFromWorkout(db, ex.id);
-    if (ex.hasLoggedSets) setRemoval({ title: `Remove ${ex.exerciseName}?`, message: "Its logged sets will be deleted. This can't be undone.", remove });
+    const message = ex.categoryKind === 'strength' ? "Its logged sets will be deleted. This can't be undone." : "What you logged will be deleted. This can't be undone.";
+    if (ex.hasLoggedSets) setRemoval({ title: `Remove ${ex.exerciseName}?`, message, remove });
     else act(remove);
   };
 
@@ -72,13 +76,13 @@ export function WorkoutView({ date }: { date: string }) {
     <View style={{ gap: 14 }}>
       <View style={[styles.summary, { backgroundColor: t.card, borderColor: t.border }]}>
         {!workout.isRest && (
-          <View accessible accessibilityLabel={`${doneSets} of ${allSets.length} sets done`} style={styles.progress}>
+          <View accessible accessibilityLabel={`${doneSets} of ${allSets.length} done`} style={styles.progress}>
             <View style={styles.progressTop}>
               <Text style={[styles.big, { color: t.text }]}>
                 {doneSets}<Text style={{ color: t.muted }}>/{allSets.length}</Text>
               </Text>
               <Text style={[styles.progressLabel, { color: complete ? t.success : t.muted }]}>
-                {complete ? 'Workout complete' : allSets.length ? 'sets done' : 'No exercises yet'}
+                {complete ? 'Workout complete' : allSets.length ? 'done' : 'No exercises yet'}
               </Text>
             </View>
             <View style={[styles.track, { backgroundColor: t.surface }]}>
@@ -113,6 +117,7 @@ export function WorkoutView({ date }: { date: string }) {
           {shown.map((ex) => {
             const exDone = ex.sets.filter((x) => x.completed).length;
             const finished = ex.sets.length > 0 && exDone === ex.sets.length;
+            const isStrength = ex.categoryKind === 'strength';
             return (
               <View key={ex.id} testID={`exercise-${ex.exerciseName}`} style={[styles.exCard, { backgroundColor: t.card, borderColor: t.border }]}>
                 <View style={styles.exHead}>
@@ -130,12 +135,14 @@ export function WorkoutView({ date }: { date: string }) {
                       {ex.subcategory ? ` · ${ex.subcategory}` : ''}
                       {ex.categoryKind === 'strength' && ex.targetSets ? ` · ${ex.targetSets}×${ex.targetReps ?? '?'}` : ''}
                       {ex.targetDurationMin ? ` · ${formatDuration(ex.targetDurationMin)}` : ''}
-                      {ex.targetDistance ? ` · ${ex.targetDistance} dist` : ''}
+                      {ex.targetDistance ? ` · ${formatDistance(ex.targetDistance, units.distance)}` : ''}
                     </Text>
                   </View>
-                  <View style={[styles.count, { backgroundColor: finished ? tint(t.success, 0.15) : t.surface }]}>
-                    <Text style={[styles.countText, { color: finished ? t.success : t.muted }]}>{exDone}/{ex.sets.length}</Text>
-                  </View>
+                  {isStrength && (
+                    <View style={[styles.count, { backgroundColor: finished ? tint(t.success, 0.15) : t.surface }]}>
+                      <Text style={[styles.countText, { color: finished ? t.success : t.muted }]}>{exDone}/{ex.sets.length}</Text>
+                    </View>
+                  )}
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={`Remove ${ex.exerciseName}`}
@@ -149,26 +156,31 @@ export function WorkoutView({ date }: { date: string }) {
                 {last[ex.exerciseId] && (
                   <View style={[styles.last, { backgroundColor: t.surface }]}>
                     <Icon name={sym('clock.arrow.circlepath', 'history')} size={12} color={t.muted} fallback="↺" />
-                    <Text style={{ color: t.muted, fontSize: 12, flexShrink: 1 }}>{fmtLast(last[ex.exerciseId]!, ex.categoryKind, unit)}</Text>
+                    <Text style={{ color: t.muted, fontSize: 12, flexShrink: 1 }}>{fmtLast(last[ex.exerciseId]!, ex.categoryKind, units)}</Text>
                   </View>
                 )}
-                {ex.sets.length > 0 && <SetHeader kind={ex.categoryKind} />}
+                {isStrength && ex.sets.length > 0 && <SetHeader />}
                 {ex.sets.map((x) => (
                   <SetRow
                     key={x.id}
                     kind={ex.categoryKind}
                     set={x}
                     targetDurationMin={ex.targetDurationMin}
-                    unit={unit}
+                    unit={units.weight}
+                    distanceUnit={units.distance}
                     onChange={(patch: SetPatch) => act(() => updateSet(db, x.id, patch))}
-                    onRemove={() => {
+                    exerciseName={ex.exerciseName}
+                    // A cardio, yoga or mobility entry goes with its exercise; only extras from before can go alone.
+                    onRemove={!isStrength && x.setNumber === 1 ? undefined : () => {
                       const remove = () => removeSet(db, x.id);
-                      if (x.isLogged) setRemoval({ title: `Remove set ${x.setNumber}?`, message: `This deletes what you logged for ${ex.exerciseName}. This can't be undone.`, remove });
+                      if (x.isLogged) setRemoval({ title: isStrength ? `Remove set ${x.setNumber}?` : `Remove ${ex.exerciseName} ${x.setNumber}?`, message: `This deletes what you logged for ${ex.exerciseName}. This can't be undone.`, remove });
                       else act(remove);
                     }}
                   />
                 ))}
-                <AddButton compact title="Add set" label={`Add set to ${ex.exerciseName}`} onPress={() => act(() => addSet(db, ex.id))} />
+                {isStrength && (
+                  <AddButton compact title="Add set" label={`Add set to ${ex.exerciseName}`} onPress={() => act(() => addSet(db, ex.id))} />
+                )}
               </View>
             );
           })}

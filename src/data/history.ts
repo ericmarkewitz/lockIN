@@ -3,6 +3,7 @@ import { estimateOneRepMax } from '@/lib/strength';
 import { LOGGED_SET } from './logged';
 import type { CategoryKind } from './types';
 
+/** `setCount` counts strength sets only; cardio, yoga and mobility log entries, not sets. */
 export type LoggedWorkout = { date: string; exerciseNames: string[]; setCount: number };
 
 /** Workouts with at least one logged set, newest first. `before` is an exclusive date cursor for paging. */
@@ -13,11 +14,12 @@ export async function listLoggedWorkouts(
   const params: unknown[] = [];
   if (opts.before) { where.push('w.date < ?'); params.push(opts.before); }
   const rows = await db.getAllAsync<{ date: string; name: string; sets: number }>(
-    `SELECT w.date, e.name, COUNT(s.id) AS sets
+    `SELECT w.date, e.name, SUM(c.kind = 'strength') AS sets
      FROM sets s
      JOIN workout_exercises we ON we.id = s.workout_exercise_id
      JOIN workouts w ON w.id = we.workout_id
      JOIN exercises e ON e.id = we.exercise_id
+     JOIN categories c ON c.id = e.category_id
      WHERE ${where.join(' AND ')}
      GROUP BY w.date, we.id
      ORDER BY w.date DESC, we.position, we.id`,

@@ -1,4 +1,6 @@
-import { fromDisplayWeight, toDisplayWeight } from '../units';
+import {
+  formatDistance, fromDisplayDistance, fromDisplayWeight, otherDistanceUnit, otherWeightUnit, toDisplayDistance, toDisplayWeight,
+} from '../units';
 
 describe('weight units', () => {
   it('leaves pounds untouched', () => {
@@ -28,5 +30,48 @@ describe('weight units', () => {
   it('passes null through', () => {
     expect(toDisplayWeight(null, 'kg')).toBeNull();
     expect(fromDisplayWeight(null, 'kg')).toBeNull();
+  });
+});
+
+describe('distance units', () => {
+  it('leaves miles untouched', () => {
+    expect(toDisplayDistance(3.1, 'mi')).toBe(3.1);
+    expect(fromDisplayDistance(3.1, 'mi')).toBe(3.1);
+  });
+
+  it('converts stored miles to kilometres, rounded to 2 decimals', () => {
+    expect(toDisplayDistance(1, 'km')).toBe(1.61);
+    expect(toDisplayDistance(26.2188, 'km')).toBe(42.2);
+    expect(toDisplayDistance(3.2, 'km')).toBe(5.15);
+  });
+
+  it('converts entered kilometres to miles at full precision', () => {
+    expect(fromDisplayDistance(1.609344, 'km')).toBeCloseTo(1, 9);
+  });
+
+  it('round-trips a km entry back to the same displayed value', () => {
+    for (const km of [5, 10, 21.1, 42.2, 0.4, 3.75]) {
+      expect(toDisplayDistance(fromDisplayDistance(km, 'km'), 'km')).toBe(km);
+    }
+  });
+
+  it('passes null through', () => {
+    expect(toDisplayDistance(null, 'km')).toBeNull();
+    expect(fromDisplayDistance(null, 'km')).toBeNull();
+  });
+
+  it('formats a distance with its unit label', () => {
+    expect(formatDistance(3.1, 'mi')).toBe('3.1 mi');
+    expect(formatDistance(3.10686, 'km')).toBe('5 km');
+    expect(formatDistance(null, 'mi')).toBe('');
+  });
+});
+
+describe('otherUnit', () => {
+  it('flips between the two units of a kind', () => {
+    expect(otherWeightUnit('lb')).toBe('kg');
+    expect(otherWeightUnit('kg')).toBe('lb');
+    expect(otherDistanceUnit('mi')).toBe('km');
+    expect(otherDistanceUnit('km')).toBe('mi');
   });
 });

@@ -1,15 +1,18 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import type { WeightUnit } from '@/data/settings';
+import type { DistanceUnit, WeightUnit } from '@/data/settings';
 import type { CategoryKind, WorkoutSet } from '@/data/types';
 import type { SetPatch } from '@/data/workouts';
 import { parseNumber } from '@/lib/numbers';
-import { fromDisplayWeight, toDisplayWeight } from '@/lib/units';
+import {
+  fromDisplayDistance, fromDisplayWeight, otherDistanceUnit, otherWeightUnit, toDisplayDistance, toDisplayWeight,
+} from '@/lib/units';
 import { MAX_REPS, wheelOptions } from '@/lib/wheel';
 import { tint, useTheme } from '@/theme';
 import { DurationButton } from './DurationButton';
 import { Icon, sym } from './Icon';
+import { UnitPill } from './UnitPill';
 import { WheelButton } from './WheelSheet';
 
 type Props = {
@@ -17,16 +20,28 @@ type Props = {
   set: WorkoutSet;
   /** Sets don't store a duration target; it comes from the workout exercise. */
   targetDurationMin?: number | null;
+  /** The user's settings; a set entered in the other unit keeps showing in that unit. */
   unit: WeightUnit;
+  distanceUnit?: DistanceUnit;
+  /** Names a cardio, yoga or mobility entry, which has no set number. */
+  exerciseName?: string;
   onChange: (patch: SetPatch) => void;
-  onRemove: () => void;
+  /** Omit for a row that can't be removed on its own (an exercise's only entry). */
+  onRemove?: () => void;
 };
 
 const show = (n: number | null) => (n === null ? '' : String(n));
 
+/**
+ * A typed number. With `onSuffixPress` the suffix is a button (a unit to switch); it gets the
+ * number on screen, including unsaved typing, which it takes over instead of `onCommit`.
+ */
 function NumField({
-  label, value, suffix, onCommit,
-}: { label: string; value: number | null; suffix: string; onCommit: (n: number | null) => void }) {
+  label, value, suffix, suffixLabel, onSuffixPress, onCommit,
+}: {
+  label: string; value: number | null; suffix: string; suffixLabel?: string;
+  onSuffixPress?: (current: number | null) => void; onCommit: (n: number | null) => void;
+}) {
   const t = useTheme();
   // `draft` holds in-progress typing; null means "show the stored value".
   const [draft, setDraft] = useState<string | null>(null);
@@ -50,7 +65,19 @@ function NumField({
         placeholderTextColor={t.muted}
         style={[styles.input, { color: t.text }]}
       />
-      <Text style={[styles.suffix, { color: t.muted }]}>{suffix}</Text>
+      {onSuffixPress ? (
+        <UnitPill
+          label={suffixLabel ?? `${label} unit`}
+          unit={suffix}
+          onPress={() => {
+            const current = draft === null ? value : parseNumber(draft);
+            setDraft(null);
+            onSuffixPress(current);
+          }}
+        />
+      ) : (
+        <Text style={[styles.suffix, { color: t.muted }]}>{suffix}</Text>
+      )}
     </View>
   );
 }
@@ -80,10 +107,10 @@ function RepsField({ set, onCommit }: { set: WorkoutSet; onCommit: (reps: number
   );
 }
 
-/** Column headings that line up with the fields of the SetRows below them. */
-export function SetHeader({ kind }: { kind: CategoryKind }) {
+/** Column headings that line up with the fields of strength SetRows below them. */
+export function SetHeader() {
   const t = useTheme();
-  const [a, b] = kind === 'strength' ? ['Weight', 'Reps'] : ['Time', 'Distance'];
+  const [a, b] = ['Weight', 'Reps'];
   const head = [styles.headText, { color: t.muted }];
   return (
     <View style={styles.header} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
@@ -95,39 +122,78 @@ export function SetHeader({ kind }: { kind: CategoryKind }) {
   );
 }
 
-export function SetRow({ kind, set, targetDurationMin = null, unit, onChange, onRemove }: Props) {
+/**
+ * One logged row. Strength exercises have numbered sets of weight × reps. Cardio, yoga and
+ * mobility log a single entry (time, plus distance for cardio) named after the exercise; an
+ * extra entry from before is numbered so it stays distinct.
+ */
+export function SetRow({
+  kind, set, targetDurationMin = null, unit, distanceUnit = 'mi', exerciseName = 'Exercise', onChange, onRemove,
+}: Props) {
   const t = useTheme();
   const n = set.setNumber;
+  const weightUnit = set.weightUnit ?? unit;
+  const distUnit = set.distanceUnit ?? distanceUnit;
   const done = set.completed;
+  const isSet = kind === 'strength';
+  const entry = n === 1 ? exerciseName : `${exerciseName} ${n}`;
+  // "Weight for set 2" for a set; "Running duration" for an entry.
+  const fieldLabel = (field: string) => (isSet ? `${field} for set ${n}` : `${entry} ${field.toLowerCase()}`);
+  const subject = isSet ? `set ${n}` : entry;
   return (
     <View style={[styles.row, done && { backgroundColor: tint(t.success, 0.1) }]}>
-      <View style={[styles.num, styles.badge, { backgroundColor: done ? t.success : t.surface }]}>
-        <Text style={[styles.numText, { color: done ? t.bg : t.muted }]}>{n}</Text>
-      </View>
-      {kind === 'strength' ? (
+      {isSet && (
+        <View style={[styles.num, styles.badge, { backgroundColor: done ? t.success : t.surface }]}>
+          <Text style={[styles.numText, { color: done ? t.bg : t.muted }]}>{n}</Text>
+        </View>
+      )}
+      {isSet ? (
         <>
-          <NumField label={`Weight for set ${n}`} value={toDisplayWeight(set.weight, unit)} suffix={unit}
-            onCommit={(weight) => onChange({ weight: fromDisplayWeight(weight, unit) })} />
+          <NumField
+            label={fieldLabel('Weight')}
+            value={toDisplayWeight(set.weight, weightUnit)}
+            suffix={weightUnit}
+            suffixLabel={fieldLabel('Weight unit')}
+            // The number stays as typed and now means the other unit: 20 lb becomes 20 kg.
+            onSuffixPress={(current) => {
+              const next = otherWeightUnit(weightUnit);
+              onChange({ weightUnit: next, weight: fromDisplayWeight(current, next) });
+            }}
+            onCommit={(weight) => onChange({ weight: fromDisplayWeight(weight, weightUnit) })}
+          />
           <RepsField set={set} onCommit={(reps) => onChange({ reps })} />
         </>
       ) : (
         <>
           <View style={[styles.field, styles.fieldBare, { backgroundColor: t.surface }]}>
             <DurationButton
-              label={`Duration for set ${n}`}
-              title={`Set ${n}`}
+              label={fieldLabel('Duration')}
+              title={entry}
               value={set.durationMin}
               target={targetDurationMin}
               onChange={(durationMin) => onChange({ durationMin })}
               style={styles.wheelButton}
             />
           </View>
-          <NumField label={`Distance for set ${n}`} value={set.distance} suffix="dist" onCommit={(distance) => onChange({ distance })} />
+          {kind === 'cardio' && (
+            <NumField
+              label={fieldLabel('Distance')}
+              value={toDisplayDistance(set.distance, distUnit)}
+              suffix={distUnit}
+              suffixLabel={fieldLabel('Distance unit')}
+              // As with weight: the typed number stays and now means the other unit.
+              onSuffixPress={(current) => {
+                const next = otherDistanceUnit(distUnit);
+                onChange({ distanceUnit: next, distance: fromDisplayDistance(current, next) });
+              }}
+              onCommit={(distance) => onChange({ distance: fromDisplayDistance(distance, distUnit) })}
+            />
+          )}
         </>
       )}
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`Mark set ${n} ${set.completed ? 'not done' : 'done'}`}
+        accessibilityLabel={`Mark ${subject} ${set.completed ? 'not done' : 'done'}`}
         onPress={() => onChange({ completed: !set.completed })}
         style={({ pressed }) => [
           styles.check,
@@ -136,9 +202,13 @@ export function SetRow({ kind, set, targetDurationMin = null, unit, onChange, on
       >
         <Icon name={sym('checkmark', 'check')} size={15} color={done ? t.bg : t.muted} fallback="✓" />
       </Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel={`Remove set ${n}`} onPress={onRemove} hitSlop={10} style={styles.remove}>
-        <Icon name={sym('xmark', 'close')} size={11} color={t.muted} fallback="×" />
-      </Pressable>
+      {onRemove ? (
+        <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${subject}`} onPress={onRemove} hitSlop={10} style={styles.remove}>
+          <Icon name={sym('xmark', 'close')} size={11} color={t.muted} fallback="×" />
+        </Pressable>
+      ) : (
+        <View style={styles.remove} />
+      )}
     </View>
   );
 }

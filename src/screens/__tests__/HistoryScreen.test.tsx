@@ -1,7 +1,7 @@
 import { fireEvent, screen } from '@testing-library/react-native';
 
 import { setPlanDay } from '@/data/plan';
-import { setWeightUnit } from '@/data/settings';
+import { setDistanceUnit, setWeightUnit } from '@/data/settings';
 import { ensureWorkout, updateSet } from '@/data/workouts';
 import { findByName } from '@/test/helpers';
 import { renderWithDb } from '@/test/render';
@@ -67,6 +67,31 @@ describe('HistoryScreen', () => {
     await fireEvent.press(await screen.findByLabelText('Exercises'));
     await fireEvent.press(await screen.findByLabelText('Running history'));
     expect(await screen.findByText('1m 20s')).toBeTruthy();
+  });
+
+  it('shows session distance with the selected unit', async () => {
+    const db = await createTestDb();
+    await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: await findByName(db, 'Running'), targetDurationMin: 30 }] });
+    const w = await ensureWorkout(db, '2026-11-02');
+    await updateSet(db, w.exercises[0].sets[0].id, { durationMin: 30, distance: 3.2, completed: true });
+    await setDistanceUnit(db, 'km');
+    await renderWithDb(<HistoryScreen />, db);
+    await fireEvent.press(await screen.findByLabelText('Exercises'));
+    await fireEvent.press(await screen.findByLabelText('Running history'));
+    expect(await screen.findByText('30 min · 5.15 km')).toBeTruthy();
+  });
+
+  it('does not talk about sets for cardio', async () => {
+    const db = await createTestDb();
+    await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: await findByName(db, 'Running'), targetDurationMin: 30 }] });
+    const w = await ensureWorkout(db, '2026-11-02');
+    await updateSet(db, w.exercises[0].sets[0].id, { completed: true });
+    await renderWithDb(<HistoryScreen />, db);
+    expect(await screen.findByText('Running')).toBeTruthy();
+    expect(screen.queryByText(/set/)).toBeNull();
+    await fireEvent.press(screen.getByLabelText('Exercises'));
+    await fireEvent.press(await screen.findByLabelText('Running history'));
+    expect(await screen.findByText('Done')).toBeTruthy();
   });
 
   it('uses the selected weight unit', async () => {

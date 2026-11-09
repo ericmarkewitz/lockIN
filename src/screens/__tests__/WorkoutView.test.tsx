@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react-native';
 
-import { setWeightUnit } from '@/data/settings';
+import { setDistanceUnit, setWeightUnit } from '@/data/settings';
 import { setPlanDay } from '@/data/plan';
 import { getWorkout, setRestDay, updateSet, ensureWorkout } from '@/data/workouts';
 import { findByName } from '@/test/helpers';
@@ -60,10 +60,10 @@ describe('WorkoutView', () => {
   it('summarises how many sets are done, for the day and for each exercise', async () => {
     const db = await setup();
     await renderWithDb(<WorkoutView date={MON} />, db);
-    expect(await screen.findByLabelText('0 of 3 sets done')).toBeTruthy();
+    expect(await screen.findByLabelText('0 of 3 done')).toBeTruthy();
     expect(within(screen.getByTestId('exercise-Bench Press')).getByText('0/2')).toBeTruthy();
     await fireEvent.press(screen.getAllByLabelText('Mark set 1 done')[0]);
-    expect(await screen.findByLabelText('1 of 3 sets done')).toBeTruthy();
+    expect(await screen.findByLabelText('1 of 3 done')).toBeTruthy();
     expect(within(screen.getByTestId('exercise-Bench Press')).getByText('1/2')).toBeTruthy();
   });
 
@@ -72,7 +72,7 @@ describe('WorkoutView', () => {
     const w = await ensureWorkout(db, MON);
     for (const e of w.exercises) for (const s of e.sets) await updateSet(db, s.id, { completed: true });
     await renderWithDb(<WorkoutView date={MON} />, db);
-    expect(await screen.findByLabelText('3 of 3 sets done')).toBeTruthy();
+    expect(await screen.findByLabelText('3 of 3 done')).toBeTruthy();
     expect(screen.getByText('Workout complete')).toBeTruthy();
   });
 
@@ -112,14 +112,94 @@ describe('WorkoutView', () => {
     await updateSet(db, prev.exercises[0].sets[0].id, { durationMin: 65.5, distance: 3 });
     await renderWithDb(<WorkoutView date={MON} />, db);
     expect(await screen.findByText('Cardio · 1m 20s')).toBeTruthy();
-    expect(screen.getByText('Last (2026-10-26): 1h 5m 30s 3')).toBeTruthy();
+    expect(screen.getByText('Last (2026-10-26): 1h 5m 30s 3 mi')).toBeTruthy();
+  });
+
+  it('shows target and last distances in the selected unit', async () => {
+    const db = await createTestDb();
+    await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: await findByName(db, 'Running'), targetDurationMin: 30, targetDistance: 3.1 }] });
+    const prev = await ensureWorkout(db, '2026-10-26');
+    await updateSet(db, prev.exercises[0].sets[0].id, { durationMin: 30, distance: 3.2 });
+    await setDistanceUnit(db, 'km');
+    await renderWithDb(<WorkoutView date={MON} />, db);
+    expect(await screen.findByText('Cardio · 30 min · 4.99 km')).toBeTruthy();
+    expect(screen.getByText('Last (2026-10-26): 30 min 5.15 km')).toBeTruthy();
+    expect(screen.getByLabelText('Running distance unit').props.accessibilityValue).toEqual({ text: 'km' });
+  });
+
+  it('logs a set in kg while the setting is lb', async () => {
+    const db = await setup();
+    await renderWithDb(<WorkoutView date={MON} />, db);
+    await fireEvent.press((await screen.findAllByLabelText('Weight unit for set 1'))[0]);
+    await waitFor(() => expect(screen.getAllByLabelText('Weight unit for set 1')[0].props.accessibilityValue).toEqual({ text: 'kg' }));
+    const input = screen.getAllByLabelText('Weight for set 1')[0];
+    await fireEvent.changeText(input, '20');
+    await fireEvent(input, 'blur');
+    await waitFor(async () => {
+      const [first, second] = (await getWorkout(db, MON))!.exercises[0].sets;
+      expect(first.weightUnit).toBe('kg');
+      expect(first.weight).toBeCloseTo(44.0925, 4);
+      expect(second.weightUnit).toBeNull();
+    });
+  });
+
+  it('shows a set logged in kg in the selected unit in last performance', async () => {
+    const db = await setup();
+    const prev = await ensureWorkout(db, '2026-10-26');
+    await updateSet(db, prev.exercises[0].sets[0].id, { weight: 20 * 2.20462262185, weightUnit: 'kg', reps: 10, completed: true });
+    await renderWithDb(<WorkoutView date={MON} />, db);
+    expect(await screen.findByText('Last (2026-10-26): 44.09×10')).toBeTruthy();
+  });
+
+  describe('cardio, yoga and mobility', () => {
+    async function mixed() {
+      const db = await createTestDb();
+      await setPlanDay(db, 1, {
+        isRest: false,
+        items: [
+          { exerciseId: await findByName(db, 'Bench Press'), targetSets: 2, targetReps: 10 },
+          { exerciseId: await findByName(db, 'Running'), targetDurationMin: 30 },
+          { exerciseId: await findByName(db, 'Vinyasa'), targetDurationMin: 45 },
+        ],
+      });
+      await renderWithDb(<WorkoutView date={MON} />, db);
+      await screen.findByLabelText('Running duration');
+      return db;
+    }
+
+    it('log one entry with no sets to add, count or number', async () => {
+      await mixed();
+      expect(screen.getByLabelText('Add set to Bench Press')).toBeTruthy();
+      expect(screen.queryByLabelText('Add set to Running')).toBeNull();
+      expect(screen.queryByLabelText('Add set to Vinyasa')).toBeNull();
+      expect(within(screen.getByTestId('exercise-Bench Press')).getByText('0/2')).toBeTruthy();
+      expect(within(screen.getByTestId('exercise-Running')).queryByText('0/1')).toBeNull();
+      expect(within(screen.getByTestId('exercise-Running')).queryByText('Set')).toBeNull();
+      expect(screen.queryByLabelText('Vinyasa distance')).toBeNull();
+    });
+
+    it('count each entry once in the day progress', async () => {
+      await mixed();
+      expect(screen.getByLabelText('0 of 4 done')).toBeTruthy();
+      await fireEvent.press(screen.getByLabelText('Mark Running done'));
+      expect(await screen.findByLabelText('1 of 4 done')).toBeTruthy();
+    });
+
+    it('do not talk about sets when removing the exercise', async () => {
+      const db = await mixed();
+      const w = (await getWorkout(db, MON))!;
+      await updateSet(db, w.exercises[1].sets[0].id, { durationMin: 30 });
+      await fireEvent.press(screen.getByLabelText('Mark Vinyasa done'));
+      await fireEvent.press(await screen.findByLabelText('Remove Vinyasa'));
+      expect(screen.getByText("What you logged will be deleted. This can't be undone.")).toBeTruthy();
+    });
   });
 
   it('logs the planned duration from the wheel', async () => {
     const db = await createTestDb();
     await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: await findByName(db, 'Running'), targetDurationMin: 30 }] });
     await renderWithDb(<WorkoutView date={MON} />, db);
-    await fireEvent.press(await screen.findByLabelText('Duration for set 1'));
+    await fireEvent.press(await screen.findByLabelText('Running duration'));
     await fireEvent.press(screen.getByLabelText('Done'));
     await waitFor(async () => expect((await getWorkout(db, MON))!.exercises[0].sets[0].durationMin).toBe(30));
   });

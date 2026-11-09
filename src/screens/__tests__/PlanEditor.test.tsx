@@ -1,6 +1,7 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react-native';
 
 import { getPlan, isPlanComplete, setPlanDay } from '@/data/plan';
+import { setDistanceUnit } from '@/data/settings';
 import { findByName } from '@/test/helpers';
 import { renderWithDb } from '@/test/render';
 import { createTestDb } from '@/test/testDb';
@@ -182,5 +183,45 @@ describe('PlanEditor', () => {
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
     const items = (await getPlan(db)).find((d) => d.weekday === 1)!.items;
     expect(items.map((i) => i.exerciseName)).toEqual(['Squat', 'Lunge']);
+  });
+
+  describe('target distance units', () => {
+    async function setup(targetDistance: number) {
+      const db = await createTestDb();
+      await setDistanceUnit(db, 'km');
+      await setPlanDay(db, 3, { isRest: false, items: [{ exerciseId: await findByName(db, 'Running'), targetDistance }] });
+      const onSaved = jest.fn();
+      await renderWithDb(<PlanEditor onSaved={onSaved} />, db);
+      const save = async () => {
+        await fireEvent.press(screen.getByText('Save plan'));
+        await waitFor(() => expect(onSaved).toHaveBeenCalled());
+        return (await getPlan(db)).find((d) => d.weekday === 3)!.items[0].targetDistance;
+      };
+      return save;
+    }
+
+    it('shows the target in the selected unit and stores a typed km target as miles', async () => {
+      const save = await setup(3.1);
+      const field = await screen.findByLabelText('3 Running distance');
+      expect(field.props.value).toBe('4.99');
+      expect(screen.getByLabelText('3 Running distance unit').props.accessibilityValue).toEqual({ text: 'km' });
+      await fireEvent.changeText(field, '10');
+      expect(await save()).toBeCloseTo(10 / 1.609344, 6);
+    });
+
+    it('keeps an untouched target exactly, despite rounding for display', async () => {
+      const save = await setup(3.1);
+      await screen.findByLabelText('3 Running distance');
+      expect(await save()).toBe(3.1);
+    });
+
+    it('can enter a target in the other unit', async () => {
+      const save = await setup(3.1);
+      await fireEvent.changeText(await screen.findByLabelText('3 Running distance'), '3');
+      await fireEvent.press(screen.getByLabelText('3 Running distance unit'));
+      expect(screen.getByLabelText('3 Running distance unit').props.accessibilityValue).toEqual({ text: 'mi' });
+      expect(screen.getByLabelText('3 Running distance').props.value).toBe('3');
+      expect(await save()).toBe(3);
+    });
   });
 });
