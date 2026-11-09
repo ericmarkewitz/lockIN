@@ -1,4 +1,4 @@
-import { SEED } from '@/db/migrations';
+import { CATALOG } from '@/data/catalog';
 import type { Exercise } from '@/data/types';
 import { CANVAS, FLOOR_Y, MOTIONS, motionFor, type Anchor, type Prop } from '../motions';
 import { skeleton } from '../skeleton';
@@ -8,8 +8,14 @@ const exercise = (name: string, isCustom = false): Exercise => ({
 });
 
 describe('motions', () => {
-  it.each(SEED.flatMap((c) => c.exercises))('has a stick figure for the built-in %s', (name) => {
+  const builtIns = CATALOG.flatMap((c) => c.exercises.map((e) => e.name));
+
+  it.each(builtIns)('has a stick figure for the built-in %s', (name) => {
     expect(motionFor(exercise(name))).not.toBeNull();
+  });
+
+  it.each(Object.keys(MOTIONS))('draws %s for an exercise in the catalog', (name) => {
+    expect(builtIns).toContain(name);
   });
 
   it('has none for custom exercises, even when the name matches a built-in', () => {
