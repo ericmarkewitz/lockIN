@@ -31,8 +31,6 @@ const line = (from: Anchor, to: Anchor, width?: number): Prop => ({ kind: 'line'
 const disc = (where: Anchor, r: number, hollow?: boolean): Prop => ({ kind: 'disc', at: where, r, hollow });
 
 const plate = [disc(at('hand1'), 5)];
-/** A bar racked on the shoulders, drawn behind the head so the face stays visible. */
-const rackedBar = [disc(at('hand1'), 4)];
 const dumbbells = [disc(at('hand1'), 3), disc(at('hand2'), 3)];
 const handleBar = line(at('hand1', -6), at('hand1', 6), 2);
 
@@ -51,11 +49,13 @@ export const MOTIONS: Record<string, Motion> = {
   },
   Squat: {
     pose: pose({ hip: [26, 46], torso: 150, arm1: [-70, 130], leg1: [80, -20], leg2: [76, -24] }),
-    scene: rackedBar,
+    // The near plate covers the shoulders from the side; set back on the traps so the face shows.
+    gear: [disc(at('neck', -3, -1.5), 4)],
   },
   'Front Squat': {
-    pose: pose({ hip: [27, 46], torso: 165, arm1: [75, -145], leg1: [80, -20], leg2: [76, -24] }),
-    scene: rackedBar,
+    pose: pose({ hip: [27, 46], torso: 165, arm1: [75, -120], leg1: [80, -20], leg2: [76, -24] }),
+    // Across the front of the shoulders, below the chin, elbows up.
+    gear: [disc(at('neck', 4, 1), 3.5)],
   },
   Deadlift: {
     pose: pose({ hip: [24, 38], torso: 115, arm1: [0, 0], leg1: [40, -5], leg2: [36, -8] }),
@@ -119,12 +119,16 @@ export const MOTIONS: Record<string, Motion> = {
     pose: pose({ hip: [30, 34], torso: 163, arm1: [25, 40], arm2: [-20, -10], leg1: [-18, -15], leg2: [22, 5] }),
     gear: [disc(at('neck', -5, 5), 4), line(at('hand1'), at('hand1', 3, 14), 1.5)],
   },
+  // Road bike sized to the rider: wheels on the floor, saddle a leg's length above the cranks,
+  // near knee coming up over the top of the stroke, far leg pushing down, hands on the bars.
   Biking: {
-    pose: pose({ hip: [27, 32], torso: 110, arm1: [83, 20], arm2: [80, 22], leg1: [20, 10], leg2: [60, -10] }),
+    pose: pose({ hip: [21, 31], torso: 110, arm1: [58, 62], leg1: [63.5, -9.3], leg2: [24.6, -8.6] }),
     scene: [
-      disc([14, 50], 9, true), disc([50, 50], 9, true),
-      line([14, 50], [31, 50]), line([31, 50], [26, 34]), line([26, 34], [53, 36]), line([31, 50], [53, 36]),
-      line([53, 36], [50, 50]), line([23, 33], [29, 33], 2.5), disc([31, 50], 5, true),
+      disc([15, 48.5], 10.5, true), disc([50, 48.5], 10.5, true),
+      line([27, 51], [15, 48.5]), line([15, 48.5], [22.5, 35]), // chainstay, seatstay
+      line([21.5, 32], [27, 51]), line([22.5, 35], [47.5, 35.5]), line([27, 51], [47, 38]), // seat, top, down tubes
+      line([48, 33], [50, 48.5]), line([48, 33], [52, 33.5], 2), line([18, 32], [24.5, 32], 2.5), // fork, bars, saddle
+      disc([27, 51], 3, true), line([24.2, 53.8], [29.8, 48.2], 1.5), // chainring, cranks
     ],
   },
   Swimming: {
