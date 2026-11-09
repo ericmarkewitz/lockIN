@@ -1,3 +1,4 @@
+import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 
@@ -39,26 +40,60 @@ export function Segmented<T extends string>({
 }: { options: { value: T; label: string }[]; value: T; onChange: (v: T) => void }) {
   const t = useTheme();
   return (
-    <View style={[styles.seg, { borderColor: t.border, backgroundColor: t.card }]}>
-      {options.map((o) => (
-        <Pressable
-          key={o.value}
-          accessibilityRole="button"
-          accessibilityState={{ selected: o.value === value }}
-          accessibilityLabel={o.label}
-          onPress={() => onChange(o.value)}
-          style={[styles.segItem, o.value === value && { backgroundColor: t.primary }]}
-        >
-          <Text style={{ color: o.value === value ? t.onPrimary : t.text, fontWeight: '600' }}>{o.label}</Text>
-        </Pressable>
-      ))}
+    <View style={[styles.seg, { backgroundColor: t.surface }]}>
+      {options.map((o) => {
+        const on = o.value === value;
+        return (
+          <Pressable
+            key={o.value}
+            accessibilityRole="button"
+            accessibilityState={{ selected: on }}
+            accessibilityLabel={o.label}
+            onPress={() => onChange(o.value)}
+            style={[styles.segItem, on && [styles.segOn, { backgroundColor: t.card }]]}
+          >
+            <Text style={{ color: on ? t.text : t.muted, fontWeight: on ? '700' : '600' }}>{o.label}</Text>
+          </Pressable>
+        );
+      })}
     </View>
+  );
+}
+
+type SymbolName = Extract<SymbolViewProps['name'], object>;
+
+/** A round icon-only button. `fallback` is shown where the platform has no matching symbol. */
+export function IconButton({
+  icon, fallback, label, onPress, size = 40,
+}: { icon: SymbolName; fallback: string; label: string; onPress: () => void; size?: number }) {
+  const t = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      hitSlop={4}
+      style={({ pressed }) => [
+        styles.icon,
+        { width: size, height: size, borderRadius: size / 2, backgroundColor: t.card, borderColor: t.border, opacity: pressed ? 0.6 : 1 },
+      ]}
+    >
+      <SymbolView
+        name={icon}
+        size={size * 0.45}
+        tintColor={t.text}
+        weight="semibold"
+        fallback={<Text style={{ color: t.text, fontSize: size * 0.4, fontWeight: '700' }}>{fallback}</Text>}
+      />
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   btn: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, alignItems: 'center' },
   card: { borderRadius: 14, borderWidth: 1, padding: 14 },
-  seg: { flexDirection: 'row', borderRadius: 10, borderWidth: 1, overflow: 'hidden' },
-  segItem: { flex: 1, paddingVertical: 8, alignItems: 'center' },
+  seg: { flexDirection: 'row', borderRadius: 12, padding: 3 },
+  segItem: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 9 },
+  segOn: { shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
+  icon: { alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth },
 });

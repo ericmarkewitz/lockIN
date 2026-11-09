@@ -46,7 +46,7 @@ describe('setup route', () => {
     const r = await renderApp(db);
 
     for (let i = 0; i < 3; i++) {
-      await fireEvent.press(await screen.findByText('Plan'));
+      await fireEvent.press(await screen.findByLabelText('Plan'));
       await fireEvent.press(await screen.findByText('Save plan'));
       await waitFor(() => expect(r.getPathname()).toBe('/'));
     }
@@ -59,7 +59,7 @@ describe('setup route', () => {
     const before = await getPlan(db);
     const r = await renderApp(db);
 
-    await fireEvent.press(await screen.findByText('Plan'));
+    await fireEvent.press(await screen.findByLabelText('Plan'));
     await fireEvent.press(await screen.findByLabelText('Add exercise to Monday'));
     await fireEvent.press(await screen.findByLabelText('Add Squat'));
     await fireEvent.press(screen.getByText('Cancel'));
