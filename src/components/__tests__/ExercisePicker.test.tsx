@@ -14,9 +14,9 @@ async function open(db?: Db, onPick = jest.fn()) {
 }
 
 describe('ExercisePicker', () => {
-  it('keeps the custom exercise input inside a keyboard-avoiding container', async () => {
+  it('keeps the search field inside a keyboard-avoiding container', async () => {
     await open();
-    expect(await screen.findByLabelText('New exercise name')).toBeTruthy();
+    expect(await screen.findByLabelText('Search exercises')).toBeTruthy();
     expect(screen.getByTestId('picker-keyboard-avoider')).toBeTruthy();
   });
 
@@ -80,9 +80,9 @@ describe('ExercisePicker', () => {
   it('adds a custom lift to the selected muscle group', async () => {
     const { db, onPick } = await open();
     await fireEvent.press(await screen.findByLabelText('Subcategory Chest'));
-    expect(screen.getByPlaceholderText('New Chest exercise')).toBeTruthy();
-    await fireEvent.changeText(screen.getByLabelText('New exercise name'), 'Cable Fly');
-    await fireEvent.press(screen.getByText('Create'));
+    await fireEvent.changeText(screen.getByLabelText('Search exercises'), 'Cable Fly');
+    expect(screen.getByText('in Lifts · Chest')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Create Cable Fly'));
     await waitFor(() => expect(onPick).toHaveBeenCalled());
     const created = onPick.mock.calls[0][0];
     expect(created).toMatchObject({ name: 'Cable Fly', subcategory: 'Chest' });
@@ -118,9 +118,56 @@ describe('ExercisePicker', () => {
     await addExercise(db, lifts.id, 'Farmer Carry');
     const { onPick } = await open(db);
     await fireEvent.press(await screen.findByLabelText(chip));
-    await fireEvent.changeText(screen.getByLabelText('New exercise name'), 'Sled Push');
-    await fireEvent.press(screen.getByText('Create'));
+    await fireEvent.changeText(screen.getByLabelText('Search exercises'), 'Sled Push');
+    expect(screen.getByText('in Lifts')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Create Sled Push'));
     await waitFor(() => expect(onPick).toHaveBeenCalled());
     expect(onPick.mock.calls[0][0]).toMatchObject({ name: 'Sled Push', subcategory: null });
+  });
+
+  describe('search', () => {
+    it('filters the current category as you type', async () => {
+      await open();
+      await fireEvent.changeText(await screen.findByLabelText('Search exercises'), 'press');
+      expect(screen.getByLabelText('Add Bench Press')).toBeTruthy();
+      expect(screen.getByLabelText('Add Leg Press')).toBeTruthy();
+      expect(screen.queryByLabelText('Add Squat')).toBeNull();
+    });
+
+    it('hides the muscle-group tabs while searching and brings them back when cleared', async () => {
+      await open();
+      await fireEvent.changeText(await screen.findByLabelText('Search exercises'), 'press');
+      expect(screen.queryByLabelText('Subcategory Chest')).toBeNull();
+      await fireEvent.press(screen.getByLabelText('Clear search'));
+      expect(screen.getByLabelText('Subcategory Chest')).toBeTruthy();
+      expect(screen.getByLabelText('Add Squat')).toBeTruthy();
+    });
+
+    it('shows matches from other categories in their own section', async () => {
+      const { onPick } = await open();
+      await fireEvent.changeText(await screen.findByLabelText('Search exercises'), 'run');
+      expect(screen.getByRole('header', { name: 'Other categories' })).toBeTruthy();
+      await fireEvent.press(screen.getByLabelText('Add Running'));
+      expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ name: 'Running' }));
+    });
+
+    it('offers to create the typed name only when it is not already an exercise here', async () => {
+      await open();
+      await fireEvent.changeText(await screen.findByLabelText('Search exercises'), 'bench press');
+      expect(screen.queryByLabelText('Create bench press')).toBeNull();
+      await fireEvent.changeText(screen.getByLabelText('Search exercises'), 'Cable Fly');
+      expect(screen.getByLabelText('Create Cable Fly')).toBeTruthy();
+      expect(screen.getByText('No matches in Lifts.')).toBeTruthy();
+    });
+
+    it('creates the exercise in the category being browsed', async () => {
+      const { onPick } = await open();
+      await fireEvent.press(await screen.findByLabelText('Category Cardio'));
+      await fireEvent.changeText(screen.getByLabelText('Search exercises'), 'Kayaking');
+      expect(screen.getByText('in Cardio')).toBeTruthy();
+      await fireEvent.press(screen.getByLabelText('Create Kayaking'));
+      await waitFor(() => expect(onPick).toHaveBeenCalled());
+      expect(onPick.mock.calls[0][0]).toMatchObject({ name: 'Kayaking', categoryName: 'Cardio', isCustom: true });
+    });
   });
 });

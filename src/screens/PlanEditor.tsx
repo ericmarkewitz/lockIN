@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Button, Card } from '@/components/ui';
+import { AddButton, Button } from '@/components/ui';
+import { Icon, sym } from '@/components/Icon';
+import { ExerciseMotionFor } from '@/components/motion/ExerciseMotion';
 import { DragHandle } from '@/components/DragHandle';
 import { ExercisePicker } from '@/components/ExercisePicker';
 import { KeyboardAvoider, keyboardScrollProps } from '@/components/KeyboardAvoider';
@@ -17,16 +20,19 @@ import { todayKey } from '@/lib/dates';
 import { parseNumber } from '@/lib/numbers';
 import { dropIndex, moveItem } from '@/lib/reorder';
 import { MAX_REPS, MAX_SETS, wheelOptions } from '@/lib/wheel';
-import { useTheme } from '@/theme';
+import { tint, useTheme } from '@/theme';
 
 type Draft = {
-  key: string; exerciseId: number; name: string; kind: CategoryKind;
+  key: string; exerciseId: number; name: string; kind: CategoryKind; isCustom: boolean;
   sets: string; reps: string; duration: string; distance: string;
 };
 type DayDraft = { weekday: number; isRest: boolean; items: Draft[] };
 
 const ORDER = [1, 2, 3, 4, 5, 6, 0]; // Monday first
 const ROW_GAP = 8; // Card gap between rows; part of the drag pitch
+/** One line under a day's name: how much is planned for it. */
+const summarize = (d: DayDraft) =>
+  d.isRest ? 'Rest day' : d.items.length ? `${d.items.length} exercise${d.items.length === 1 ? '' : 's'}` : 'Nothing planned';
 const txt = (n: number | null | undefined) => (n === null || n === undefined ? '' : String(n));
 
 /** `onCancel` shows a Cancel button; omit it when there is nowhere to go back to (first run). */
@@ -52,7 +58,7 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
             weekday: w,
             isRest: d.isRest,
             items: d.items.map((i) => ({
-              key: newKey(), exerciseId: i.exerciseId, name: i.exerciseName, kind: i.categoryKind,
+              key: newKey(), exerciseId: i.exerciseId, name: i.exerciseName, kind: i.categoryKind, isCustom: i.isCustom,
               sets: txt(i.targetSets), reps: txt(i.targetReps), duration: txt(i.targetDurationMin), distance: txt(i.targetDistance),
             })),
           };
@@ -110,7 +116,7 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
       ...d,
       isRest: false,
       items: [...d.items, {
-        key: newKey(), exerciseId: e.id, name: e.name, kind: e.categoryKind,
+        key: newKey(), exerciseId: e.id, name: e.name, kind: e.categoryKind, isCustom: e.isCustom,
         sets: e.categoryKind === 'strength' ? '3' : '', reps: e.categoryKind === 'strength' ? '10' : '', duration: '', distance: '',
       }],
     }));
@@ -143,19 +149,30 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
   return (
     <KeyboardAvoider>
       <ScrollView testID="plan-scroll" {...keyboardScrollProps} scrollEnabled={!drag} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.wrap} style={{ backgroundColor: t.bg }}>
-        <Text style={{ color: t.muted }}>Pick the exercises for each day, or mark it as a rest day.</Text>
+        <Text style={[styles.intro, { color: t.muted }]}>Pick the exercises for each day, or mark it as a rest day.</Text>
         {days.map((d) => (
-          <Card key={d.weekday} style={{ gap: 8 }}>
+          <View
+            key={d.weekday}
+            testID={`plan-day-${d.weekday}`}
+            style={[
+              styles.day,
+              { backgroundColor: d.isRest ? tint(t.rest, 0.07) : t.card, borderColor: d.isRest ? tint(t.rest, 0.3) : t.border },
+            ]}
+          >
             <View style={styles.dayHead}>
-              <Text style={[styles.dayName, { color: t.text }]}>{DAY_NAMES[d.weekday]}</Text>
-              <View style={styles.restRow}>
-                <Text style={{ color: t.muted }}>Rest</Text>
-                <Switch
-                  accessibilityLabel={`${DAY_NAMES[d.weekday]} rest day`}
-                  value={d.isRest}
-                  onValueChange={(v) => patchDay(d.weekday, (x) => ({ ...x, isRest: v, items: v ? [] : x.items }))}
-                />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.dayName, { color: t.text }]}>{DAY_NAMES[d.weekday]}</Text>
+                <View style={styles.summaryRow}>
+                  {d.isRest && <Icon name={sym('moon.zzz.fill', 'bedtime')} size={12} color={t.rest} fallback="☾" />}
+                  <Text style={[styles.summary, { color: d.isRest ? t.rest : t.muted }]}>{summarize(d)}</Text>
+                </View>
               </View>
+              <Text style={[styles.restLabel, { color: t.muted }]}>Rest</Text>
+              <Switch
+                accessibilityLabel={`${DAY_NAMES[d.weekday]} rest day`}
+                value={d.isRest}
+                onValueChange={(v) => patchDay(d.weekday, (x) => ({ ...x, isRest: v, items: v ? [] : x.items }))}
+              />
             </View>
             {!d.isRest && (
               <>
@@ -165,6 +182,7 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
                     onLayout={(e) => rowHeights.current.set(it.key, e.nativeEvent.layout.height)}
                     style={[
                       styles.item,
+                      { backgroundColor: t.bg },
                       drag?.weekday === d.weekday && drag.from === idx
                         ? [styles.dragging, { backgroundColor: t.card, transform: [{ translateY: dragY }] }]
                         : { transform: [{ translateY: rowShift(d.weekday, idx) }] },
@@ -179,17 +197,20 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
                       onMoveUp={() => reorder(d.weekday, idx, idx - 1)}
                       onMoveDown={() => reorder(d.weekday, idx, idx + 1)}
                     />
-                    <Text style={[styles.itemName, { color: t.text }]}>{it.name}</Text>
+                    <View style={styles.thumb}>
+                      {it.isCustom
+                        ? <Text style={[styles.thumbInitial, { color: t.primary }]}>{it.name.trim().charAt(0).toUpperCase()}</Text>
+                        : <ExerciseMotionFor name={it.name} isCustom={it.isCustom} size={34} />}
+                    </View>
+                    <Text numberOfLines={2} style={[styles.itemName, { color: t.text }]}>{it.name}</Text>
                     {it.kind === 'strength' ? (
-                      <>
-                        <TargetsField
-                          label={`${d.weekday} ${it.name} sets and reps`}
-                          title={it.name}
-                          sets={it.sets}
-                          reps={it.reps}
-                          onChange={(sets, reps) => patchItem(d.weekday, idx, { sets, reps })}
-                        />
-                      </>
+                      <TargetsField
+                        label={`${d.weekday} ${it.name} sets and reps`}
+                        title={it.name}
+                        sets={it.sets}
+                        reps={it.reps}
+                        onChange={(sets, reps) => patchItem(d.weekday, idx, { sets, reps })}
+                      />
                     ) : (
                       <>
                         <DurationButton
@@ -204,23 +225,27 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
                         )}
                       </>
                     )}
-                    <Button
-                      title="×" variant="secondary" label={`Remove ${it.name} from ${DAY_NAMES[d.weekday]}`}
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove ${it.name} from ${DAY_NAMES[d.weekday]}`}
                       onPress={() => patchDay(d.weekday, (x) => ({ ...x, items: x.items.filter((_, i) => i !== idx) }))}
-                      style={{ paddingHorizontal: 10, paddingVertical: 4 }}
-                    />
+                      hitSlop={8}
+                      style={({ pressed }) => [styles.remove, { backgroundColor: t.surface, opacity: pressed ? 0.5 : 1 }]}
+                    >
+                      <Icon name={sym('xmark', 'close')} size={10} color={t.muted} fallback="×" />
+                    </Pressable>
                   </Animated.View>
                 ))}
-                <Button title="+ Add exercise" variant="secondary" label={`Add exercise to ${DAY_NAMES[d.weekday]}`} onPress={() => setPickerFor(d.weekday)} />
+                <AddButton compact title="Add exercise" label={`Add exercise to ${DAY_NAMES[d.weekday]}`} onPress={() => setPickerFor(d.weekday)} />
               </>
             )}
-          </Card>
+          </View>
         ))}
-        <View style={styles.actions}>
-          {onCancel && <Button title="Cancel" variant="secondary" onPress={onCancel} disabled={saving} style={styles.action} />}
-          <Button title="Save plan" onPress={save} disabled={saving} style={styles.action} />
-        </View>
       </ScrollView>
+      <SafeAreaView testID="plan-footer" edges={['bottom']} style={[styles.footer, { backgroundColor: t.bg, borderColor: t.border }]}>
+        {onCancel && <Button title="Cancel" variant="secondary" onPress={onCancel} disabled={saving} style={styles.action} />}
+        <Button title="Save plan" onPress={save} disabled={saving} style={{ ...styles.action, ...styles.save }} />
+      </SafeAreaView>
       <ExercisePicker
         visible={pickerFor !== null}
         onClose={() => setPickerFor(null)}
@@ -260,7 +285,7 @@ function Num({ label, v, suffix, onChange }:{ label: string; v: string; suffix: 
         value={v}
         onChangeText={onChange}
         keyboardType="decimal-pad"
-        style={[styles.numInput, { color: t.text, borderColor: t.border, backgroundColor: t.bg }]}
+        style={[styles.numInput, { color: t.text, backgroundColor: t.surface }]}
       />
       <Text style={{ color: t.muted, fontSize: 12 }}>{suffix}</Text>
     </View>
@@ -269,16 +294,24 @@ function Num({ label, v, suffix, onChange }:{ label: string; v: string; suffix: 
 
 const styles = StyleSheet.create({
   wrap: { padding: 16, gap: 12 },
-  actions: { flexDirection: 'row', gap: 12 },
-  action: { flex: 1 },
-  dayHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  dayName: { fontSize: 18, fontWeight: '700' },
-  restRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  item: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 52 },
+  intro: { fontSize: 15 },
+  footer: { flexDirection: 'row', gap: 12, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12, borderTopWidth: StyleSheet.hairlineWidth },
+  action: { flex: 1, paddingVertical: 14, borderRadius: 14 },
+  save: { flex: 2 },
+  day: { borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, padding: 12, gap: ROW_GAP },
+  dayHead: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 2 },
+  dayName: { fontSize: 18, fontWeight: '800' },
+  summaryRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  summary: { fontSize: 13, fontWeight: '600' },
+  restLabel: { fontSize: 13, fontWeight: '600' },
+  item: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 56, paddingRight: 8, borderRadius: 14 },
   dragging: { zIndex: 10, elevation: 6, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
-  itemName: { flex: 1, fontSize: 15 },
+  thumb: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', marginLeft: -10 },
+  thumbInitial: { fontSize: 16, fontWeight: '800' },
+  itemName: { flex: 1, fontSize: 15, fontWeight: '600' },
   num: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  numInput: { width: 46, borderWidth: 1, borderRadius: 8, paddingVertical: 6, textAlign: 'center' },
-  targets: { minWidth: 72 },
-  duration: { minWidth: 46 },
+  numInput: { width: 46, minHeight: 40, borderRadius: 10, paddingVertical: 6, textAlign: 'center', fontWeight: '600' },
+  targets: { minWidth: 72, minHeight: 40 },
+  duration: { minWidth: 46, minHeight: 40 },
+  remove: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
 });

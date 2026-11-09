@@ -1,3 +1,4 @@
+import { addExercise, listCategoriesWithExercises } from '../exercises';
 import { getPlan, isPlanComplete, markPlanComplete, setPlanDay } from '../plan';
 import { findByName } from '@/test/helpers';
 import { createTestDb } from '@/test/testDb';
@@ -28,6 +29,18 @@ describe('weekly plan', () => {
       ['Squat', 5, 5],
     ]);
     expect(monday.items[0].categoryKind).toBe('strength');
+  });
+
+  it('tells built-in plan items from custom ones', async () => {
+    const db = await createTestDb();
+    const lifts = (await listCategoriesWithExercises(db)).find((c) => c.name === 'Lifts')!;
+    const custom = await addExercise(db, lifts.id, 'Sled Push');
+    await setPlanDay(db, 1, {
+      isRest: false,
+      items: [{ exerciseId: await findByName(db, 'Squat') }, { exerciseId: custom.id }],
+    });
+    const monday = (await getPlan(db)).find((d) => d.weekday === 1)!;
+    expect(monday.items.map((i) => [i.exerciseName, i.isCustom])).toEqual([['Squat', false], ['Sled Push', true]]);
   });
 
   it('replaces previous items when a day is saved again', async () => {

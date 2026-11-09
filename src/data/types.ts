@@ -32,6 +32,7 @@ export type PlanItem = PlanItemInput & {
   id: number;
   position: number;
   exerciseName: string;
+  isCustom: boolean;
   categoryName: string;
   categoryKind: CategoryKind;
 };

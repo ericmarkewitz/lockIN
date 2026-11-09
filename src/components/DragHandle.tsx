@@ -1,7 +1,8 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
 
 import { useTheme } from '@/theme';
+import { Icon, sym } from './Icon';
 
 export const HANDLE_SIZE = 48;
 
@@ -46,7 +47,7 @@ export function DragHandle({ label, onStart, onMove, onEnd, onCancel, onMoveUp, 
         }}
         style={styles.handle}
       >
-        <Text style={{ color: t.muted, fontSize: 26, lineHeight: 28 }}>☰</Text>
+        <Icon name={sym('line.3.horizontal', 'drag_indicator')} size={18} color={t.muted} fallback="☰" />
       </View>
     </GestureDetector>
   );
