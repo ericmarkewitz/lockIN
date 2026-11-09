@@ -6,12 +6,12 @@ import { Button, Card, Segmented } from '@/components/ui';
 import {
   getExerciseHistory, listLoggedExercises, listLoggedWorkouts, type ExerciseSession, type LoggedExercise,
 } from '@/data/history';
-import { getWeightUnit, type WeightUnit } from '@/data/settings';
+import { getUnits, type Units } from '@/data/settings';
 import { useDb } from '@/db/DbContext';
 import { useLoad } from '@/hooks/useLoad';
 import { DAY_NAMES } from '@/lib/calendar';
 import { parseDateKey } from '@/lib/dates';
-import { toDisplayWeight } from '@/lib/units';
+import { formatDistance, toDisplayWeight } from '@/lib/units';
 import { formatDuration } from '@/lib/duration';
 import { useTheme } from '@/theme';
 
@@ -19,13 +19,15 @@ type Tab = 'workouts' | 'exercises';
 
 const dayLabel = (date: string) => `${DAY_NAMES[parseDateKey(date).getDay()].slice(0, 3)} ${date}`;
 
-function sessionSummary(s: ExerciseSession, unit: WeightUnit): string {
+function sessionSummary(s: ExerciseSession, units: Units, kind: LoggedExercise['kind']): string {
+  const unit = units.weight;
   const parts: string[] = [];
   if (s.best) parts.push(`Best ${toDisplayWeight(s.best.weight, unit)} ${unit} × ${s.best.reps}`);
   if (s.estimatedOneRepMax !== null) parts.push(`Est. 1RM ${toDisplayWeight(s.estimatedOneRepMax, unit)} ${unit}`);
   if (s.durationMin !== null) parts.push(formatDuration(s.durationMin));
-  if (s.distance !== null) parts.push(`${s.distance} distance`);
-  return parts.length ? parts.join(' · ') : `${s.setCount} set${s.setCount === 1 ? '' : 's'}`;
+  if (s.distance !== null) parts.push(formatDistance(s.distance, units.distance));
+  if (parts.length) return parts.join(' · ');
+  return kind === 'strength' ? `${s.setCount} set${s.setCount === 1 ? '' : 's'}` : 'Done';
 }
 
 export function HistoryScreen() {
@@ -41,7 +43,7 @@ export function HistoryScreen() {
     async () => (exercise ? getExerciseHistory(db, exercise.id) : []),
     [db, exercise?.id],
   );
-  const unit = useLoad(() => getWeightUnit(db), [db]).data ?? 'lb';
+  const units = useLoad(() => getUnits(db), [db]).data ?? { weight: 'lb', distance: 'mi' };
 
   return (
     <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: t.bg }} contentContainerStyle={styles.wrap}>
@@ -62,7 +64,7 @@ export function HistoryScreen() {
             <Card style={{ gap: 2 }}>
               <Text style={{ color: t.text, fontWeight: '700' }}>{dayLabel(w.date)}</Text>
               <Text style={{ color: t.muted }}>{w.exerciseNames.join(', ')}</Text>
-              <Text style={{ color: t.muted }}>{w.setCount} set{w.setCount === 1 ? '' : 's'} logged</Text>
+              {w.setCount > 0 && <Text style={{ color: t.muted }}>{w.setCount} set{w.setCount === 1 ? '' : 's'} logged</Text>}
             </Card>
           </Pressable>
         )) : <Text style={{ color: t.muted }}>No logged workouts yet.</Text>
@@ -86,7 +88,7 @@ export function HistoryScreen() {
           {(sessions.data ?? []).map((s) => (
             <Card key={s.date} style={{ gap: 2 }}>
               <Text style={{ color: t.text, fontWeight: '700' }}>{s.date}</Text>
-              <Text style={{ color: t.muted }}>{sessionSummary(s, unit)}</Text>
+              <Text style={{ color: t.muted }}>{sessionSummary(s, units, exercise.kind)}</Text>
             </Card>
           ))}
         </View>

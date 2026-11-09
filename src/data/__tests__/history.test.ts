@@ -137,3 +137,18 @@ describe('getExerciseHistory', () => {
     expect(await getExerciseHistory(db, bench)).toEqual([]);
   });
 });
+
+describe('sets only count for strength', () => {
+  it('counts strength sets for a day, not cardio entries', async () => {
+    const { db } = await seeded();
+    await log(db, '2026-11-04', [{ weight: 135, reps: 5 }], 0);
+    await log(db, '2026-11-04', [{ durationMin: 30 }], 1);
+    expect(await listLoggedWorkouts(db)).toEqual([{ date: '2026-11-04', exerciseNames: ['Bench Press', 'Running'], setCount: 1 }]);
+  });
+
+  it('counts no sets for a cardio-only day', async () => {
+    const { db } = await seeded();
+    await log(db, '2026-11-04', [{ durationMin: 30 }], 1);
+    expect(await listLoggedWorkouts(db)).toEqual([{ date: '2026-11-04', exerciseNames: ['Running'], setCount: 0 }]);
+  });
+});

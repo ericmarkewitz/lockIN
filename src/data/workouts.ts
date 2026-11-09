@@ -2,6 +2,7 @@ import { datesInRange, weekdayOf } from '@/lib/dates';
 import type { Db } from '@/db/types';
 import { LOGGED_SET } from './logged';
 import { getPlan } from './plan';
+import { DISTANCE_UNITS, WEIGHT_UNITS, type DistanceUnit, type WeightUnit } from './settings';
 import type {
   CategoryKind, DaySummary, DayStatus, Targets, Workout, WorkoutExercise, WorkoutSet,
 } from './types';
@@ -14,6 +15,7 @@ type WeRow = {
 type SetRow = {
   id: number; workout_exercise_id: number; set_number: number; target_reps: number | null; reps: number | null;
   weight: number | null; duration_min: number | null; distance: number | null; completed: number; is_logged: number;
+  weight_unit: WeightUnit | null; distance_unit: DistanceUnit | null;
 };
 
 /** Selects a `SetRow`. The query must alias the `sets` table as `s`. */
@@ -27,6 +29,8 @@ const toSet = (s: SetRow): WorkoutSet => ({
   weight: s.weight,
   durationMin: s.duration_min,
   distance: s.distance,
+  weightUnit: s.weight_unit,
+  distanceUnit: s.distance_unit,
   completed: !!s.completed,
   isLogged: !!s.is_logged,
 });
@@ -116,12 +120,18 @@ export type SetPatch = {
   weight?: number | null;
   durationMin?: number | null;
   distance?: number | null;
+  /** The unit `weight`/`distance` were entered in; they are still passed in lb and mi. */
+  weightUnit?: WeightUnit | null;
+  distanceUnit?: DistanceUnit | null;
   completed?: boolean;
 };
 
 const SET_COLUMNS: Record<keyof SetPatch, string> = {
-  reps: 'reps', weight: 'weight', durationMin: 'duration_min', distance: 'distance', completed: 'completed',
+  reps: 'reps', weight: 'weight', durationMin: 'duration_min', distance: 'distance',
+  weightUnit: 'weight_unit', distanceUnit: 'distance_unit', completed: 'completed',
 };
+
+const ALLOWED_UNITS: Partial<Record<keyof SetPatch, readonly string[]>> = { weightUnit: WEIGHT_UNITS, distanceUnit: DISTANCE_UNITS };
 
 /** `undefined` leaves a field unchanged; `null` clears it. */
 export async function updateSet(db: Db, setId: number, patch: SetPatch): Promise<void> {
@@ -131,6 +141,7 @@ export async function updateSet(db: Db, setId: number, patch: SetPatch): Promise
     const v = patch[key];
     if (v === undefined) continue;
     if (typeof v === 'number' && v < 0) throw new Error(`${key} cannot be negative`);
+    if (typeof v === 'string' && !ALLOWED_UNITS[key]?.includes(v)) throw new Error(`Unsupported ${key}: ${v}`);
     sets.push(`${SET_COLUMNS[key]} = ?`);
     params.push(key === 'completed' ? (v ? 1 : 0) : v);
   }
@@ -146,16 +157,26 @@ function markCustomizedByExercise(db: Db, workoutExerciseId: number) {
   );
 }
 
+/** Strength only: cardio, yoga and mobility log a single entry per exercise. */
 export async function addSet(db: Db, workoutExerciseId: number): Promise<void> {
+  const cat = await db.getFirstAsync<{ kind: CategoryKind }>(
+    `SELECT c.kind FROM workout_exercises we JOIN exercises e ON e.id = we.exercise_id
+     JOIN categories c ON c.id = e.category_id WHERE we.id = ?`,
+    [workoutExerciseId],
+  );
+  if (cat?.kind !== 'strength') throw new Error('Only strength exercises have sets');
   // Marked first: if the insert then fails, an extra flag only stops the day regenerating.
   await markCustomizedByExercise(db, workoutExerciseId);
-  const r = await db.getFirstAsync<{ n: number | null; t: number | null }>(
-    'SELECT MAX(set_number) AS n, (SELECT target_reps FROM workout_exercises WHERE id = ?) AS t FROM sets WHERE workout_exercise_id = ?',
-    [workoutExerciseId, workoutExerciseId],
+  // The new set follows the last one's units, so a whole session at a kg gym stays in kg.
+  const last = await db.getFirstAsync<{ n: number; weight_unit: string | null; distance_unit: string | null }>(
+    'SELECT set_number AS n, weight_unit, distance_unit FROM sets WHERE workout_exercise_id = ? ORDER BY set_number DESC LIMIT 1',
+    [workoutExerciseId],
   );
-  await db.runAsync('INSERT INTO sets (workout_exercise_id, set_number, target_reps) VALUES (?, ?, ?)', [
-    workoutExerciseId, (r?.n ?? 0) + 1, r?.t ?? null,
-  ]);
+  const we = await db.getFirstAsync<{ t: number | null }>('SELECT target_reps AS t FROM workout_exercises WHERE id = ?', [workoutExerciseId]);
+  await db.runAsync(
+    'INSERT INTO sets (workout_exercise_id, set_number, target_reps, weight_unit, distance_unit) VALUES (?, ?, ?, ?, ?)',
+    [workoutExerciseId, (last?.n ?? 0) + 1, we?.t ?? null, last?.weight_unit ?? null, last?.distance_unit ?? null],
+  );
 }
 
 export async function removeSet(db: Db, setId: number): Promise<void> {

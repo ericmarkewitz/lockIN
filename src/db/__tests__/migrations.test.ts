@@ -8,6 +8,7 @@ import { createTestDb, wrap } from '@/test/testDb';
 // Undo later migrations so a test can replay the upgrade from an older schema.
 const UNDO_V2 = 'ALTER TABLE workouts DROP COLUMN is_customized';
 const UNDO_V3 = 'ALTER TABLE exercises DROP COLUMN subcategory';
+const UNDO_V5 = 'ALTER TABLE sets DROP COLUMN weight_unit; ALTER TABLE sets DROP COLUMN distance_unit';
 
 describe('migrations', () => {
   it('creates the schema and records the version', async () => {
@@ -64,7 +65,7 @@ describe('migrations', () => {
     const db = wrap(raw);
     await migrate(db);
     // Simulate a half-applied earlier run, which can only have the v1 schema.
-    raw.exec(`${UNDO_V3}; ${UNDO_V2}; PRAGMA user_version = 0`);
+    raw.exec(`${UNDO_V5}; ${UNDO_V3}; ${UNDO_V2}; PRAGMA user_version = 0`);
     await expect(migrate(db)).resolves.toBeUndefined();
     const cats = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM categories');
     expect(cats?.n).toBe(4);
@@ -74,7 +75,7 @@ describe('migrations', () => {
     const raw = new DatabaseSync(':memory:');
     const db = wrap(raw);
     await migrate(db);
-    raw.exec(`${UNDO_V3}; ${UNDO_V2}; PRAGMA user_version = 1`);
+    raw.exec(`${UNDO_V5}; ${UNDO_V3}; ${UNDO_V2}; PRAGMA user_version = 1`);
     await db.runAsync("INSERT INTO workouts (date, notes) VALUES ('2026-11-02', 'kept')");
 
     await migrate(db);
@@ -92,7 +93,7 @@ describe('migrations', () => {
       const raw = new DatabaseSync(':memory:');
       const db = wrap(raw);
       await migrate(db);
-      raw.exec(`${UNDO_V3}; PRAGMA user_version = 2`);
+      raw.exec(`${UNDO_V5}; ${UNDO_V3}; PRAGMA user_version = 2`);
       await prepare(db);
       await migrate(db);
       return db;
@@ -152,6 +153,7 @@ describe('migrations', () => {
       // Put the catalog back the way v3 left it.
       raw.exec(`DELETE FROM exercises WHERE name IN ('Ski Touring', 'Cross-Country Skiing', 'Snowshoeing', 'Climbing');
         UPDATE exercises SET name = 'Skiing' WHERE name = 'Downhill Skiing';
+        ${UNDO_V5};
         PRAGMA user_version = 3`);
       await prepare(db);
       await migrate(db);
@@ -204,6 +206,45 @@ describe('migrations', () => {
       expect(rows.filter((r) => r.name === 'Downhill Skiing')).toEqual([{ name: 'Downhill Skiing', is_custom: 1 }]);
       expect(rows.map((r) => r.name)).toContain('Skiing');
       expect(rows.map((r) => r.name)).toContain('Snowshoeing');
+    });
+  });
+
+  describe('v5 records the unit each set was entered in', () => {
+    async function upgradeFromV4(prepare: (db: Db) => Promise<void>) {
+      const raw = new DatabaseSync(':memory:');
+      const db = wrap(raw);
+      await migrate(db);
+      raw.exec(`${UNDO_V5}; PRAGMA user_version = 4`);
+      await prepare(db);
+      await migrate(db);
+      return db;
+    }
+
+    it('keeps existing weights and distances, with no entered unit so they follow the setting', async () => {
+      const db = await upgradeFromV4(async (d) => {
+        const { lastInsertRowId: workoutId } = await d.runAsync("INSERT INTO workouts (date) VALUES ('2026-01-10')");
+        const { lastInsertRowId: weId } = await d.runAsync(
+          "INSERT INTO workout_exercises (workout_id, exercise_id, position) VALUES (?, (SELECT id FROM exercises WHERE name = 'Running'), 0)",
+          [workoutId],
+        );
+        await d.runAsync('INSERT INTO sets (workout_exercise_id, set_number, weight, distance) VALUES (?, 1, 135, 3.1)', [weId]);
+      });
+      // Distances logged before v5 had no unit; they are read as miles, the stored unit.
+      expect(await db.getFirstAsync('SELECT weight, distance, weight_unit, distance_unit FROM sets')).toEqual({
+        weight: 135, distance: 3.1, weight_unit: null, distance_unit: null,
+      });
+    });
+
+    it('only accepts known units', async () => {
+      const db = await createTestDb();
+      const { lastInsertRowId: workoutId } = await db.runAsync("INSERT INTO workouts (date) VALUES ('2026-01-10')");
+      const { lastInsertRowId: weId } = await db.runAsync(
+        "INSERT INTO workout_exercises (workout_id, exercise_id, position) VALUES (?, (SELECT id FROM exercises WHERE name = 'Running'), 0)",
+        [workoutId],
+      );
+      await expect(db.runAsync("INSERT INTO sets (workout_exercise_id, set_number, weight_unit) VALUES (?, 1, 'st')", [weId])).rejects.toThrow();
+      await expect(db.runAsync("INSERT INTO sets (workout_exercise_id, set_number, distance_unit) VALUES (?, 1, 'yd')", [weId])).rejects.toThrow();
+      await db.runAsync("INSERT INTO sets (workout_exercise_id, set_number, weight_unit, distance_unit) VALUES (?, 1, 'kg', 'km')", [weId]);
     });
   });
 });

@@ -8,10 +8,13 @@ import { Icon, sym } from '@/components/Icon';
 import { ExerciseMotionFor } from '@/components/motion/ExerciseMotion';
 import { DragHandle } from '@/components/DragHandle';
 import { ExercisePicker } from '@/components/ExercisePicker';
+import { UnitPill } from '@/components/UnitPill';
 import { KeyboardAvoider, keyboardScrollProps } from '@/components/KeyboardAvoider';
 import { DurationButton } from '@/components/DurationButton';
 import { WheelButton } from '@/components/WheelSheet';
 import { getPlan, markPlanComplete, setPlanDay } from '@/data/plan';
+import { getDistanceUnit, type DistanceUnit } from '@/data/settings';
+import { fromDisplayDistance, otherDistanceUnit, toDisplayDistance } from '@/lib/units';
 import type { CategoryKind, Exercise } from '@/data/types';
 import { refreshUntouchedWorkouts } from '@/data/workouts';
 import { useDb } from '@/db/DbContext';
@@ -24,7 +27,9 @@ import { tint, useTheme } from '@/theme';
 
 type Draft = {
   key: string; exerciseId: number; name: string; kind: CategoryKind; isCustom: boolean;
-  sets: string; reps: string; duration: string; distance: string;
+  sets: string; reps: string; duration: string;
+  /** Typed in `distanceUnit`. `savedDistance` is the stored miles, kept exactly if the text is left alone. */
+  distance: string; distanceUnit: DistanceUnit; savedDistance: number | null;
 };
 type DayDraft = { weekday: number; isRest: boolean; items: Draft[] };
 
@@ -35,11 +40,20 @@ const summarize = (d: DayDraft) =>
   d.isRest ? 'Rest day' : d.items.length ? `${d.items.length} exercise${d.items.length === 1 ? '' : 's'}` : 'Nothing planned';
 const txt = (n: number | null | undefined) => (n === null || n === undefined ? '' : String(n));
 
+/** Stored miles for a draft's typed distance, without rounding drift when it wasn't edited. */
+function targetMiles(i: Draft): number | null {
+  const typed = parseNumber(i.distance);
+  if (i.savedDistance !== null && typed === toDisplayDistance(i.savedDistance, i.distanceUnit)) return i.savedDistance;
+  return fromDisplayDistance(typed, i.distanceUnit);
+}
+
 /** `onCancel` shows a Cancel button; omit it when there is nowhere to go back to (first run). */
 export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCancel?: () => void }) {
   const db = useDb();
   const t = useTheme();
   const [days, setDays] = useState<DayDraft[] | null>(null);
+  // The setting, for exercises added in this session.
+  const [distanceUnit, setDistanceUnit] = useState<DistanceUnit>('mi');
   const [pickerFor, setPickerFor] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [drag, setDrag] = useState<{ weekday: number; from: number; over: number; pitch: number } | null>(null);
@@ -50,7 +64,8 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
   const newKey = () => `row-${nextKey.current++}`;
 
   useEffect(() => {
-    getPlan(db).then((plan) =>
+    Promise.all([getPlan(db), getDistanceUnit(db)]).then(([plan, unit]) => {
+      setDistanceUnit(unit);
       setDays(
         ORDER.map((w) => {
           const d = plan.find((p) => p.weekday === w)!;
@@ -59,12 +74,13 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
             isRest: d.isRest,
             items: d.items.map((i) => ({
               key: newKey(), exerciseId: i.exerciseId, name: i.exerciseName, kind: i.categoryKind, isCustom: i.isCustom,
-              sets: txt(i.targetSets), reps: txt(i.targetReps), duration: txt(i.targetDurationMin), distance: txt(i.targetDistance),
+              sets: txt(i.targetSets), reps: txt(i.targetReps), duration: txt(i.targetDurationMin),
+              distance: txt(toDisplayDistance(i.targetDistance ?? null, unit)), distanceUnit: unit, savedDistance: i.targetDistance ?? null,
             })),
           };
         }),
-      ),
-    );
+      );
+    });
   }, [db]);
 
   if (!days) return null;
@@ -117,7 +133,8 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
       isRest: false,
       items: [...d.items, {
         key: newKey(), exerciseId: e.id, name: e.name, kind: e.categoryKind, isCustom: e.isCustom,
-        sets: e.categoryKind === 'strength' ? '3' : '', reps: e.categoryKind === 'strength' ? '10' : '', duration: '', distance: '',
+        sets: e.categoryKind === 'strength' ? '3' : '', reps: e.categoryKind === 'strength' ? '10' : '', duration: '',
+        distance: '', distanceUnit, savedDistance: null,
       }],
     }));
     setPickerFor(null);
@@ -134,7 +151,7 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
             targetSets: i.kind === 'strength' ? parseNumber(i.sets) : null,
             targetReps: i.kind === 'strength' ? parseNumber(i.reps) : null,
             targetDurationMin: i.kind === 'strength' ? null : parseNumber(i.duration),
-            targetDistance: i.kind === 'cardio' ? parseNumber(i.distance) : null,
+            targetDistance: i.kind === 'cardio' ? targetMiles(i) : null,
           })),
         });
       }
@@ -221,7 +238,22 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
                           style={styles.duration}
                         />
                         {it.kind === 'cardio' && (
-                          <Num label={`${d.weekday} ${it.name} distance`} v={it.distance} suffix="dist" onChange={(distance) => patchItem(d.weekday, idx, { distance })} />
+                          <View style={styles.num}>
+                            <TextInput
+                              accessibilityLabel={`${d.weekday} ${it.name} distance`}
+                              value={it.distance}
+                              onChangeText={(distance) => patchItem(d.weekday, idx, { distance })}
+                              keyboardType="decimal-pad"
+                              placeholder="–"
+                              placeholderTextColor={t.muted}
+                              style={[styles.numInput, { color: t.text, backgroundColor: t.surface }]}
+                            />
+                            <UnitPill
+                              label={`${d.weekday} ${it.name} distance unit`}
+                              unit={it.distanceUnit}
+                              onPress={() => patchItem(d.weekday, idx, { distanceUnit: otherDistanceUnit(it.distanceUnit) })}
+                            />
+                          </View>
                         )}
                       </>
                     )}
@@ -276,22 +308,6 @@ function TargetsField({
   );
 }
 
-function Num({ label, v, suffix, onChange }:{ label: string; v: string; suffix: string; onChange: (s: string) => void }) {
-  const t = useTheme();
-  return (
-    <View style={styles.num}>
-      <TextInput
-        accessibilityLabel={label}
-        value={v}
-        onChangeText={onChange}
-        keyboardType="decimal-pad"
-        style={[styles.numInput, { color: t.text, backgroundColor: t.surface }]}
-      />
-      <Text style={{ color: t.muted, fontSize: 12 }}>{suffix}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   wrap: { padding: 16, gap: 12 },
   intro: { fontSize: 15 },
@@ -309,9 +325,9 @@ const styles = StyleSheet.create({
   thumb: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', marginLeft: -10 },
   thumbInitial: { fontSize: 16, fontWeight: '800' },
   itemName: { flex: 1, fontSize: 15, fontWeight: '600' },
-  num: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  numInput: { width: 46, minHeight: 40, borderRadius: 10, paddingVertical: 6, textAlign: 'center', fontWeight: '600' },
   targets: { minWidth: 72, minHeight: 40 },
   duration: { minWidth: 46, minHeight: 40 },
+  num: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  numInput: { width: 46, minHeight: 40, borderRadius: 10, paddingVertical: 6, textAlign: 'center', fontWeight: '600' },
   remove: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
 });

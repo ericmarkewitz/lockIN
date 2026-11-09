@@ -136,6 +136,41 @@ describe('logging', () => {
     await expect(updateSet(db, w.exercises[0].sets[0].id, { weight: -5 })).rejects.toThrow(/negative/i);
   });
 
+  it('records the unit a set was entered in, which starts unset', async () => {
+    const db = await planned();
+    const w = await ensureWorkout(db, MON);
+    const id = w.exercises[0].sets[0].id;
+    expect(w.exercises[0].sets[0]).toMatchObject({ weightUnit: null, distanceUnit: null });
+    await updateSet(db, id, { weight: 44.0925, weightUnit: 'kg', distanceUnit: 'km' });
+    expect((await getWorkout(db, MON))!.exercises[0].sets[0]).toMatchObject({ weight: 44.0925, weightUnit: 'kg', distanceUnit: 'km' });
+    await updateSet(db, id, { weightUnit: null });
+    expect((await getWorkout(db, MON))!.exercises[0].sets[0].weightUnit).toBeNull();
+  });
+
+  it('rejects an unknown entered unit', async () => {
+    const db = await planned();
+    const w = await ensureWorkout(db, MON);
+    await expect(updateSet(db, w.exercises[0].sets[0].id, { weightUnit: 'st' as never })).rejects.toThrow(/unit/i);
+    await expect(updateSet(db, w.exercises[0].sets[0].id, { distanceUnit: 'yd' as never })).rejects.toThrow(/unit/i);
+  });
+
+  it('gives an added set the units of the last set, so a kg gym stays in kg', async () => {
+    const db = await planned();
+    const w = await ensureWorkout(db, MON);
+    const we = w.exercises[0];
+    await updateSet(db, we.sets[2].id, { weightUnit: 'kg', distanceUnit: 'km' });
+    await addSet(db, we.id);
+    const sets = (await getWorkout(db, MON))!.exercises[0].sets;
+    expect(sets[3]).toMatchObject({ setNumber: 4, weight: null, weightUnit: 'kg', distanceUnit: 'km' });
+  });
+
+  it('only adds sets to strength exercises; cardio, yoga and mobility log one entry', async () => {
+    const db = await planned();
+    const wed = await ensureWorkout(db, '2026-11-04');
+    await expect(addSet(db, wed.exercises[0].id)).rejects.toThrow(/strength/i);
+    expect((await getWorkout(db, '2026-11-04'))!.exercises[0].sets).toHaveLength(1);
+  });
+
   it('adds and removes sets, keeping set numbers contiguous', async () => {
     const db = await planned();
     const w = await ensureWorkout(db, MON);

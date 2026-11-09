@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 
-import { getWeightUnit } from '@/data/settings';
+import { getDistanceUnit, getWeightUnit } from '@/data/settings';
 import { renderWithDb } from '@/test/render';
 import { createTestDb } from '@/test/testDb';
 import { SettingsScreen } from '../SettingsScreen';
@@ -25,5 +25,21 @@ describe('SettingsScreen', () => {
     const db = await createTestDb();
     await renderWithDb(<SettingsScreen />, db);
     expect(await screen.findByText(/converted for display/i)).toBeTruthy();
+  });
+
+  it('saves the distance unit when toggled to km', async () => {
+    const db = await createTestDb();
+    await renderWithDb(<SettingsScreen />, db);
+    await waitFor(() => expect(screen.getByLabelText('Miles (mi)').props.accessibilityState).toMatchObject({ selected: true }));
+    await fireEvent.press(screen.getByLabelText('Kilometers (km)'));
+    await waitFor(async () => expect(await getDistanceUnit(db)).toBe('km'));
+    expect(screen.getByLabelText('Kilometers (km)').props.accessibilityState).toMatchObject({ selected: true });
+    expect(await getWeightUnit(db)).toBe('lb');
+  });
+
+  it('explains how to log a single set in the other unit', async () => {
+    const db = await createTestDb();
+    await renderWithDb(<SettingsScreen />, db);
+    expect(await screen.findByText(/tap the unit next to its weight/i)).toBeTruthy();
   });
 });

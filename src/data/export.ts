@@ -1,16 +1,16 @@
 import type { Db } from '@/db/types';
 import { parseDateKey } from '@/lib/dates';
 import { LOGGED_SET } from './logged';
-import { getWeightUnit } from './settings';
+import { getUnits } from './settings';
 import { roundMinutes } from '@/lib/duration';
-import { toDisplayWeight } from '@/lib/units';
+import { toDisplayDistance, toDisplayWeight } from '@/lib/units';
 import { toCsv, type CsvColumn } from './csv';
 
 export type ExportFieldKey =
   | 'date' | 'weekday' | 'category' | 'subcategory' | 'exercise' | 'set' | 'reps' | 'weight'
   | 'duration_min' | 'distance' | 'completed' | 'notes';
 
-/** Canonical column order. The weight header gets the user's unit appended. */
+/** Canonical column order. The weight and distance headers get the user's unit appended. */
 export const EXPORT_FIELDS: { key: ExportFieldKey; header: string; label: string }[] = [
   { key: 'date', header: 'Date', label: 'Date' },
   { key: 'weekday', header: 'Weekday', label: 'Weekday' },
@@ -75,7 +75,7 @@ export async function buildExport(
     params,
   );
 
-  const unit = await getWeightUnit(db);
+  const units = await getUnits(db);
   const rows = data.map((r) => ({
     date: r.date,
     weekday: WEEKDAYS[parseDateKey(r.date).getDay()],
@@ -84,16 +84,16 @@ export async function buildExport(
     exercise: r.exercise,
     set: r.set_number,
     reps: r.reps,
-    weight: toDisplayWeight(r.weight, unit),
+    weight: toDisplayWeight(r.weight, units.weight),
     duration_min: r.duration_min === null ? null : roundMinutes(r.duration_min),
-    distance: r.distance,
+    distance: toDisplayDistance(r.distance, units.distance),
     completed: !!r.completed,
     notes: r.notes,
   }));
 
   const columns: CsvColumn[] = EXPORT_FIELDS.filter((f) => opts.fields.includes(f.key)).map((f) => ({
     key: f.key,
-    header: f.key === 'weight' ? `Weight (${unit})` : f.header,
+    header: f.key === 'weight' ? `Weight (${units.weight})` : f.key === 'distance' ? `Distance (${units.distance})` : f.header,
   }));
   return { csv: toCsv(columns, rows), rows };
 }

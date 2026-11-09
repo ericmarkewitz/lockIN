@@ -1,3 +1,5 @@
+import type { DistanceUnit, WeightUnit } from './settings';
+
 export type CategoryKind = 'strength' | 'cardio' | 'mindbody';
 
 export type Exercise = {
@@ -47,6 +49,9 @@ export type WorkoutSet = {
   weight: number | null;
   durationMin: number | null;
   distance: number | null;
+  /** The unit this set was entered in; null follows the user's setting. */
+  weightUnit: WeightUnit | null;
+  distanceUnit: DistanceUnit | null;
   completed: boolean;
   /** Ticked off or holding any value, per the shared LOGGED_SET rule. */
   isLogged: boolean;
