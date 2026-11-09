@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react-native';
 
 import { setWeightUnit } from '@/data/settings';
 import { setPlanDay } from '@/data/plan';
@@ -55,6 +55,25 @@ describe('WorkoutView', () => {
       expect(sets[1].weight).toBeCloseTo(220.462262185, 6);
       expect(sets[0].weight).toBe(135); // untouched
     });
+  });
+
+  it('summarises how many sets are done, for the day and for each exercise', async () => {
+    const db = await setup();
+    await renderWithDb(<WorkoutView date={MON} />, db);
+    expect(await screen.findByLabelText('0 of 3 sets done')).toBeTruthy();
+    expect(within(screen.getByTestId('exercise-Bench Press')).getByText('0/2')).toBeTruthy();
+    await fireEvent.press(screen.getAllByLabelText('Mark set 1 done')[0]);
+    expect(await screen.findByLabelText('1 of 3 sets done')).toBeTruthy();
+    expect(within(screen.getByTestId('exercise-Bench Press')).getByText('1/2')).toBeTruthy();
+  });
+
+  it('calls the workout done once every set is', async () => {
+    const db = await setup();
+    const w = await ensureWorkout(db, MON);
+    for (const e of w.exercises) for (const s of e.sets) await updateSet(db, s.id, { completed: true });
+    await renderWithDb(<WorkoutView date={MON} />, db);
+    expect(await screen.findByLabelText('3 of 3 sets done')).toBeTruthy();
+    expect(screen.getByText('Workout complete')).toBeTruthy();
   });
 
   it('shows the full plan with a row per set', async () => {
@@ -249,7 +268,7 @@ describe('WorkoutView', () => {
     expect(screen.queryByText(/Rest and recover/)).toBeNull();
     expect(screen.getByText('Bench Press')).toBeTruthy();
     expect(screen.queryByText('Squat')).toBeNull();
-    expect(screen.queryByText('+ Add exercise')).toBeNull();
+    expect(screen.queryByLabelText('Add exercise')).toBeNull();
   });
 
   it('brings every exercise back when the rest day is turned off', async () => {
@@ -266,7 +285,7 @@ describe('WorkoutView', () => {
   it('adds an exercise from the picker', async () => {
     const db = await setup();
     await renderWithDb(<WorkoutView date={MON} />, db);
-    await fireEvent.press(await screen.findByText('+ Add exercise'));
+    await fireEvent.press(await screen.findByLabelText('Add exercise'));
     await fireEvent.press(await screen.findByLabelText('Category Cardio'));
     await fireEvent.press(await screen.findByLabelText('Add Hiking'));
     expect(await screen.findByText('Hiking')).toBeTruthy();

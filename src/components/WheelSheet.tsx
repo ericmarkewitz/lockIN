@@ -53,7 +53,7 @@ function Wheel({ label, options, value, onChange }: WheelColumn & { onChange: (n
         }}
         style={styles.wheel}
       >
-        <View pointerEvents="none" style={[styles.band, { backgroundColor: t.border }]} />
+        <View pointerEvents="none" style={[styles.band, { backgroundColor: t.surface }]} />
         <ScrollView
           ref={scroller}
           testID={`${label} wheel scroller`}
@@ -105,6 +105,7 @@ function SheetBody({
     <View style={styles.root}>
       <Pressable testID="wheel-backdrop" accessible={false} onPress={onCancel} style={styles.backdrop} />
       <View style={[styles.sheet, { backgroundColor: t.card }]}>
+        <View style={[styles.grabber, { backgroundColor: t.border }]} />
         <View style={styles.header}>
           <Button title="Cancel" variant="secondary" onPress={onCancel} />
           <Text numberOfLines={1} style={[styles.title, { color: t.text }]}>{title}</Text>
@@ -159,7 +160,7 @@ export function WheelButton({
         accessibilityLabel={label}
         accessibilityValue={{ text: valueText }}
         onPress={() => setOpen(true)}
-        style={[styles.button, { borderColor: t.border, backgroundColor: t.bg }, style]}
+        style={({ pressed }) => [styles.button, { backgroundColor: t.surface, opacity: pressed ? 0.6 : 1 }, style]}
       >
         <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.buttonText, { color: muted ? t.muted : t.text }]}>{text}</Text>
       </Pressable>
@@ -178,11 +179,12 @@ export function WheelButton({
 }
 
 const styles = StyleSheet.create({
-  button: { minHeight: 44, borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center' },
-  buttonText: { fontSize: 16, textAlign: 'center' },
+  button: { minHeight: 44, borderRadius: 10, paddingHorizontal: 10, alignItems: 'center', justifyContent: 'center' },
+  buttonText: { fontSize: 16, fontWeight: '600', textAlign: 'center', fontVariant: ['tabular-nums'] },
   root: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.45)' },
-  sheet: { borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 16, paddingBottom: 40, gap: 12 },
+  sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 16, paddingTop: 8, paddingBottom: 40, gap: 12 },
+  grabber: { alignSelf: 'center', width: 36, height: 5, borderRadius: 3 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   title: { flex: 1, textAlign: 'center', fontSize: 16, fontWeight: '700' },
   columns: { flexDirection: 'row', gap: 16 },

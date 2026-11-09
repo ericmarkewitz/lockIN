@@ -5,7 +5,7 @@ type ItemRow = {
   id: number; weekday: number; exercise_id: number; position: number;
   target_sets: number | null; target_reps: number | null;
   target_duration_min: number | null; target_distance: number | null;
-  exercise_name: string; category_name: string; category_kind: CategoryKind;
+  exercise_name: string; exercise_is_custom: number; category_name: string; category_kind: CategoryKind;
 };
 
 export async function getPlan(db: Db): Promise<PlanDay[]> {
@@ -13,7 +13,7 @@ export async function getPlan(db: Db): Promise<PlanDay[]> {
     'SELECT weekday, is_rest FROM plan_days ORDER BY weekday',
   );
   const items = await db.getAllAsync<ItemRow>(
-    `SELECT p.*, e.name AS exercise_name, c.name AS category_name, c.kind AS category_kind
+    `SELECT p.*, e.name AS exercise_name, e.is_custom AS exercise_is_custom, c.name AS category_name, c.kind AS category_kind
      FROM plan_items p JOIN exercises e ON e.id = p.exercise_id JOIN categories c ON c.id = e.category_id
      ORDER BY p.weekday, p.position`,
   );
@@ -27,6 +27,7 @@ export async function getPlan(db: Db): Promise<PlanDay[]> {
         position: i.position,
         exerciseId: i.exercise_id,
         exerciseName: i.exercise_name,
+        isCustom: !!i.exercise_is_custom,
         categoryName: i.category_name,
         categoryKind: i.category_kind,
         targetSets: i.target_sets,

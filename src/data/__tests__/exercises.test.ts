@@ -1,4 +1,4 @@
-import { LIFT_SUBCATEGORIES, addExercise, findExercise, groupBySubcategory, listCategoriesWithExercises } from '../exercises';
+import { LIFT_SUBCATEGORIES, addExercise, findExercise, groupBySubcategory, listCategoriesWithExercises, searchExercises } from '../exercises';
 import { createTestDb } from '@/test/testDb';
 
 describe('exercises', () => {
@@ -69,6 +69,38 @@ describe('exercises', () => {
       const db = await createTestDb();
       const cardio = (await listCategoriesWithExercises(db)).find((c) => c.name === 'Cardio')!;
       expect(groupBySubcategory(cardio)).toEqual([{ title: null, exercises: cardio.exercises }]);
+    });
+  });
+
+  describe('searchExercises', () => {
+    const names = (es: { name: string }[]) => es.map((e) => e.name);
+
+    it('matches names case-insensitively within the active category, and lists other categories apart', async () => {
+      const db = await createTestDb();
+      const cats = await listCategoriesWithExercises(db);
+      const lifts = cats.find((c) => c.name === 'Lifts')!;
+      const r = searchExercises(cats, lifts.id, '  PRESS ');
+      expect(names(r.here)).toEqual(['Bench Press', 'Incline Bench Press', 'Overhead Press', 'Leg Press']);
+      expect(r.elsewhere).toEqual([]);
+      expect(names(searchExercises(cats, lifts.id, 'run').elsewhere)).toEqual(['Running']);
+    });
+
+    it('matches a muscle group, so "legs" finds every leg lift', async () => {
+      const db = await createTestDb();
+      const cats = await listCategoriesWithExercises(db);
+      const lifts = cats.find((c) => c.name === 'Lifts')!;
+      expect(names(searchExercises(cats, lifts.id, 'legs').here)).toEqual(
+        ['Squat', 'Front Squat', 'Romanian Deadlift', 'Leg Press', 'Lunge'],
+      );
+    });
+
+    it('reports whether the query is already an exercise in the active category', async () => {
+      const db = await createTestDb();
+      const cats = await listCategoriesWithExercises(db);
+      const lifts = cats.find((c) => c.name === 'Lifts')!;
+      expect(searchExercises(cats, lifts.id, 'bench press ').exact).toBe(true);
+      expect(searchExercises(cats, lifts.id, 'bench').exact).toBe(false);
+      expect(searchExercises(cats, lifts.id, 'running').exact).toBe(false); // exists, but not in Lifts
     });
   });
 

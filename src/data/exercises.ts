@@ -74,3 +74,24 @@ export async function addExercise(
   );
   return (await findExercise(db, lastInsertRowId))!;
 }
+
+export type SearchResult = {
+  /** Matches in the category being browsed. */
+  here: Exercise[];
+  /** Matches in every other category. */
+  elsewhere: Exercise[];
+  /** The query is already the name of an exercise in the category being browsed. */
+  exact: boolean;
+};
+
+/** Case-insensitive match on an exercise's name or muscle group, split by the category being browsed. */
+export function searchExercises(categories: Category[], activeId: number, query: string): SearchResult {
+  const q = query.trim().toLowerCase();
+  const matches = (e: Exercise) => e.name.toLowerCase().includes(q) || !!e.subcategory?.toLowerCase().includes(q);
+  const here = categories.find((c) => c.id === activeId)?.exercises ?? [];
+  return {
+    here: here.filter(matches),
+    elsewhere: categories.filter((c) => c.id !== activeId).flatMap((c) => c.exercises.filter(matches)),
+    exact: here.some((e) => e.name.toLowerCase() === q),
+  };
+}

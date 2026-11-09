@@ -2,7 +2,8 @@ import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 
-import { useTheme } from '@/theme';
+import { tint, useTheme } from '@/theme';
+import { Icon, sym } from './Icon';
 
 export function Button({
   title, onPress, variant = 'primary', disabled, style, label,
@@ -89,11 +90,33 @@ export function IconButton({
   );
 }
 
+/** A dashed, accent-tinted button for adding something to the list above it. */
+export function AddButton({ title, label, onPress, compact }: { title: string; label?: string; onPress: () => void; compact?: boolean }) {
+  const t = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label ?? title}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.add,
+        compact && styles.addCompact,
+        { borderColor: tint(t.primary, 0.45), backgroundColor: tint(t.primary, pressed ? 0.14 : 0.06) },
+      ]}
+    >
+      <Icon name={sym('plus', 'add')} size={compact ? 13 : 15} color={t.primary} fallback="+" />
+      <Text style={{ color: t.primary, fontWeight: '700', fontSize: compact ? 14 : 15 }}>{title}</Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   btn: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, alignItems: 'center' },
   card: { borderRadius: 14, borderWidth: 1, padding: 14 },
   seg: { flexDirection: 'row', borderRadius: 12, padding: 3 },
   segItem: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 9 },
   segOn: { shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
+  add: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 13, borderRadius: 14, borderWidth: 1.5, borderStyle: 'dashed' },
+  addCompact: { paddingVertical: 9, borderRadius: 12, borderWidth: 1 },
   icon: { alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth },
 });
