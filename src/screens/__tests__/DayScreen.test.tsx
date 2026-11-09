@@ -4,8 +4,6 @@ import { renderWithDb } from '@/test/render';
 import { createTestDb } from '@/test/testDb';
 import { DayScreen } from '../DayScreen';
 
-jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
-
 describe('DayScreen', () => {
   it('shows the workout in a keyboard-aware scroll view', async () => {
     await renderWithDb(<DayScreen date="2026-11-02" />, await createTestDb());
