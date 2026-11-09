@@ -8,9 +8,6 @@ import { renderWithDb } from '@/test/render';
 import { createTestDb } from '@/test/testDb';
 import { WorkoutView } from '../WorkoutView';
 
-const mockPush = jest.fn();
-jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
-
 const MON = '2026-11-02';
 
 async function setup() {
@@ -75,19 +72,11 @@ describe('WorkoutView', () => {
     expect(screen.getByText('Lifts · Legs · 1×5')).toBeTruthy();
   });
 
-  it('shows the stick-figure animation for built-in exercises', async () => {
+  it('shows the stick figure for built-in exercises', async () => {
     const db = await setup();
     await renderWithDb(<WorkoutView date={MON} />, db);
     expect(await screen.findByTestId('motion-Bench Press', { includeHiddenElements: true })).toBeTruthy();
     expect(screen.getByTestId('motion-Squat', { includeHiddenElements: true })).toBeTruthy();
-  });
-
-  it('opens the exercise screen when its stick figure is tapped', async () => {
-    const db = await setup();
-    mockPush.mockClear();
-    await renderWithDb(<WorkoutView date={MON} />, db);
-    await fireEvent.press(await screen.findByLabelText('Show how to do Bench Press'));
-    expect(mockPush).toHaveBeenCalledWith({ pathname: '/exercise/[id]', params: { id: String(await findByName(db, 'Bench Press')) } });
   });
 
   it('leaves the muscle group out for exercises without one', async () => {

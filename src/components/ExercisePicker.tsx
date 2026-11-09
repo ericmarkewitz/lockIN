@@ -7,7 +7,6 @@ import { useDb } from '@/db/DbContext';
 import { useLoad } from '@/hooks/useLoad';
 import { useTheme } from '@/theme';
 import { keyboardAvoidance } from './KeyboardAvoider';
-import { ExerciseDetail } from './ExerciseDetail';
 import { ExerciseMotion } from './motion/ExerciseMotion';
 import { motionFor } from './motion/motions';
 import { Button } from './ui';
@@ -29,7 +28,7 @@ function Chip({ title, label, selected, onPress }: { title: string; label: strin
 
 const MOTION_SIZE = 64;
 
-function ExerciseCard({ exercise, onPress, onPreview }: { exercise: Exercise; onPress: () => void; onPreview: () => void }) {
+function ExerciseCard({ exercise, onPress }: { exercise: Exercise; onPress: () => void }) {
   const t = useTheme();
   const motion = motionFor(exercise);
   return (
@@ -43,18 +42,7 @@ function ExerciseCard({ exercise, onPress, onPreview }: { exercise: Exercise; on
       ]}
     >
       {motion ? (
-        <>
-          <ExerciseMotion motion={motion} size={MOTION_SIZE} testID={`motion-${exercise.name}`} />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Show how to do ${exercise.name}`}
-            hitSlop={10}
-            onPress={onPreview}
-            style={({ pressed }) => [styles.info, { borderColor: t.muted, opacity: pressed ? 0.5 : 1 }]}
-          >
-            <Text style={[styles.infoText, { color: t.muted }]}>i</Text>
-          </Pressable>
-        </>
+        <ExerciseMotion motion={motion} size={MOTION_SIZE} testID={`motion-${exercise.name}`} />
       ) : (
         <View style={[styles.initial, { backgroundColor: t.bg }]}>
           <Text style={[styles.initialText, { color: t.muted }]}>{exercise.name.trim().charAt(0).toUpperCase()}</Text>
@@ -75,7 +63,6 @@ export function ExercisePicker({
   const [subcategory, setSubcategory] = useState<string | null>(null); // null shows the whole category
   const [custom, setCustom] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [preview, setPreview] = useState<Exercise | null>(null);
   const active = cats?.find((c) => c.id === (catId ?? cats?.[0]?.id));
   const groups = active ? groupBySubcategory(active) : [];
   const shownGroups = subcategory ? groups.filter((g) => g.title === subcategory) : groups;
@@ -105,10 +92,8 @@ export function ExercisePicker({
       visible={visible}
       animationType="slide"
       presentationStyle="pageSheet"
-      onShow={() => setPreview(null)}
-      onRequestClose={() => (preview ? setPreview(null) : onClose())}
+      onRequestClose={onClose}
     >
-      <View testID="picker-sheet" style={{ flex: 1 }}>
       <KeyboardAvoidingView
         testID="picker-keyboard-avoider"
         // The modal fills the window, so no header offset; the custom input sits outside the list.
@@ -144,7 +129,7 @@ export function ExercisePicker({
                 )}
                 <View testID="exercise-grid" style={styles.grid}>
                   {g.exercises.map((e) => (
-                    <ExerciseCard key={e.id} exercise={e} onPress={() => onPick(e)} onPreview={() => setPreview(e)} />
+                    <ExerciseCard key={e.id} exercise={e} onPress={() => onPick(e)} />
                   ))}
                 </View>
               </View>
@@ -168,26 +153,6 @@ export function ExercisePicker({
           <Button title="Cancel" variant="secondary" onPress={onClose} />
         </View>
       </KeyboardAvoidingView>
-        {/*
-          Drawn over the list inside the picker's own sheet. A second Modal stacked on this one
-          crashed iOS when Add dismissed both at once, and a pushed route would open underneath.
-        */}
-        {preview && (
-          <View testID="exercise-preview" accessibilityViewIsModal style={[StyleSheet.absoluteFill, { backgroundColor: t.bg }]}>
-            <ExerciseDetail exercise={preview}>
-              <View style={styles.previewActions}>
-                <Button title="Cancel" label="Cancel preview" variant="secondary" onPress={() => setPreview(null)} style={{ flex: 1 }} />
-                <Button
-                  title="Add"
-                  label={`Add ${preview.name}`}
-                  onPress={() => { setPreview(null); onPick(preview); }}
-                  style={{ flex: 1 }}
-                />
-              </View>
-            </ExerciseDetail>
-          </View>
-        )}
-      </View>
     </Modal>
   );
 }
@@ -203,16 +168,10 @@ const styles = StyleSheet.create({
     width: '48%', alignItems: 'center', gap: 8, paddingVertical: 12, paddingHorizontal: 8,
     borderRadius: 14, borderWidth: StyleSheet.hairlineWidth,
   },
-  info: {
-    position: 'absolute', top: 8, right: 8, width: 22, height: 22, borderRadius: 11, borderWidth: 1.5,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  infoText: { fontSize: 13, fontWeight: '700', fontStyle: 'italic', lineHeight: 16 },
   initial: { width: MOTION_SIZE, height: MOTION_SIZE, borderRadius: MOTION_SIZE / 2, alignItems: 'center', justifyContent: 'center' },
   initialText: { fontSize: 26, fontWeight: '600' },
   cardName: { fontSize: 15, fontWeight: '600', textAlign: 'center', minHeight: 40 },
   empty: { paddingVertical: 14, textAlign: 'center' },
   customRow: { flexDirection: 'row', gap: 8 },
-  previewActions: { flexDirection: 'row', gap: 8, marginTop: 8 },
   input: { flex: 1, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, fontSize: 16 },
 });

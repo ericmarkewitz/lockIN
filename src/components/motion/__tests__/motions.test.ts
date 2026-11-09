@@ -1,14 +1,14 @@
 import { SEED } from '@/db/migrations';
 import type { Exercise } from '@/data/types';
 import { CANVAS, MOTIONS, motionFor } from '../motions';
-import { lerpPose, skeleton } from '../skeleton';
+import { skeleton } from '../skeleton';
 
 const exercise = (name: string, isCustom = false): Exercise => ({
   id: 1, categoryId: 1, name, isCustom, categoryName: 'Lifts', categoryKind: 'strength', subcategory: null,
 });
 
 describe('motions', () => {
-  it.each(SEED.flatMap((c) => c.exercises))('has an animation for the built-in %s', (name) => {
+  it.each(SEED.flatMap((c) => c.exercises))('has a stick figure for the built-in %s', (name) => {
     expect(motionFor(exercise(name))).not.toBeNull();
   });
 
@@ -17,15 +17,12 @@ describe('motions', () => {
     expect(motionFor(exercise('Farmer Carry', true))).toBeNull();
   });
 
-  it.each(Object.keys(MOTIONS))('keeps %s on the canvas throughout the loop', (name) => {
-    const { from, to } = MOTIONS[name];
-    for (const t of [0, 0.25, 0.5, 0.75, 1]) {
-      for (const [x, y] of Object.values(skeleton(lerpPose(from, to, t)))) {
-        expect(x).toBeGreaterThanOrEqual(0);
-        expect(x).toBeLessThanOrEqual(CANVAS);
-        expect(y).toBeGreaterThanOrEqual(0);
-        expect(y).toBeLessThanOrEqual(CANVAS);
-      }
+  it.each(Object.keys(MOTIONS))('keeps %s on the canvas', (name) => {
+    for (const [x, y] of Object.values(skeleton(MOTIONS[name].pose))) {
+      expect(x).toBeGreaterThanOrEqual(0);
+      expect(x).toBeLessThanOrEqual(CANVAS);
+      expect(y).toBeGreaterThanOrEqual(0);
+      expect(y).toBeLessThanOrEqual(CANVAS);
     }
   });
 });
