@@ -1,9 +1,12 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 
-import { getDistanceUnit, getWeightUnit } from '@/data/settings';
+import { getAppearance, getDistanceUnit, getThemeId, getWeightUnit } from '@/data/settings';
+import { ThemeProvider } from '@/theme';
 import { renderWithDb } from '@/test/render';
 import { createTestDb } from '@/test/testDb';
 import { SettingsScreen } from '../SettingsScreen';
+
+const themed = () => <ThemeProvider><SettingsScreen /></ThemeProvider>;
 
 describe('SettingsScreen', () => {
   it('shows the current unit as selected', async () => {
@@ -41,5 +44,31 @@ describe('SettingsScreen', () => {
     const db = await createTestDb();
     await renderWithDb(<SettingsScreen />, db);
     expect(await screen.findByText(/tap the unit next to its weight/i)).toBeTruthy();
+  });
+
+  it('shows the original theme as selected by default', async () => {
+    const db = await createTestDb();
+    await renderWithDb(themed(), db);
+    expect((await screen.findByLabelText('Cobalt theme')).props.accessibilityState).toMatchObject({ selected: true });
+    expect(screen.getByLabelText('Ember theme').props.accessibilityState).toMatchObject({ selected: false });
+  });
+
+  it('saves and applies a new theme when one is picked', async () => {
+    const db = await createTestDb();
+    await renderWithDb(themed(), db);
+    await fireEvent.press(await screen.findByLabelText('Ember theme'));
+    await waitFor(async () => expect(await getThemeId(db)).toBe('ember'));
+    await waitFor(() => expect(screen.getByLabelText('Ember theme').props.accessibilityState).toMatchObject({ selected: true }));
+    expect(screen.getByLabelText('Cobalt theme').props.accessibilityState).toMatchObject({ selected: false });
+  });
+
+  it('saves the appearance when forced to dark', async () => {
+    const db = await createTestDb();
+    await renderWithDb(themed(), db);
+    await waitFor(() => expect(screen.getByLabelText('System').props.accessibilityState).toMatchObject({ selected: true }));
+    await fireEvent.press(screen.getByLabelText('Dark'));
+    await waitFor(async () => expect(await getAppearance(db)).toBe('dark'));
+    await waitFor(() => expect(screen.getByLabelText('Dark').props.accessibilityState).toMatchObject({ selected: true }));
+    expect(await getThemeId(db)).toBe('cobalt');
   });
 });

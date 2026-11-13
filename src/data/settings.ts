@@ -45,3 +45,37 @@ export async function setDistanceUnit(db: Db, unit: DistanceUnit): Promise<void>
 export async function getUnits(db: Db): Promise<Units> {
   return { weight: await getWeightUnit(db), distance: await getDistanceUnit(db) };
 }
+
+/** Color themes, in the order the picker shows them. Cobalt is the app's original palette. */
+export const THEME_IDS = ['cobalt', 'volt', 'ember', 'midnight', 'mono', 'tide', 'trophy', 'sakura', 'trail'] as const;
+export type ThemeId = (typeof THEME_IDS)[number];
+
+/** Whether the app follows the system light/dark setting or forces one. */
+export const APPEARANCES = ['system', 'light', 'dark'] as const;
+export type Appearance = (typeof APPEARANCES)[number];
+
+export type ThemeSettings = { themeId: ThemeId; appearance: Appearance };
+
+export async function getThemeId(db: Db): Promise<ThemeId> {
+  const value = await readSetting(db, 'theme');
+  return THEME_IDS.find((id) => id === value) ?? 'cobalt';
+}
+
+export async function setThemeId(db: Db, id: ThemeId): Promise<void> {
+  if (!THEME_IDS.includes(id)) throw new Error(`Unsupported theme: ${id}`);
+  await writeSetting(db, 'theme', id);
+}
+
+export async function getAppearance(db: Db): Promise<Appearance> {
+  const value = await readSetting(db, 'appearance');
+  return APPEARANCES.find((a) => a === value) ?? 'system';
+}
+
+export async function setAppearance(db: Db, appearance: Appearance): Promise<void> {
+  if (!APPEARANCES.includes(appearance)) throw new Error(`Unsupported appearance: ${appearance}`);
+  await writeSetting(db, 'appearance', appearance);
+}
+
+export async function getThemeSettings(db: Db): Promise<ThemeSettings> {
+  return { themeId: await getThemeId(db), appearance: await getAppearance(db) };
+}

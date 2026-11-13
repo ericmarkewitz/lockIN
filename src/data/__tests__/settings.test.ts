@@ -1,7 +1,10 @@
 import { createTestDb } from '@/test/testDb';
 import { findByName } from '@/test/helpers';
 import { setPlanDay } from '../plan';
-import { getDistanceUnit, getUnits, getWeightUnit, setDistanceUnit, setWeightUnit } from '../settings';
+import {
+  getAppearance, getDistanceUnit, getThemeId, getThemeSettings, getUnits, getWeightUnit,
+  setAppearance, setDistanceUnit, setThemeId, setWeightUnit, THEME_IDS,
+} from '../settings';
 import { ensureWorkout, getWorkout, updateSet } from '../workouts';
 
 describe('weight unit setting', () => {
@@ -71,5 +74,69 @@ describe('distance unit setting', () => {
     await setWeightUnit(db, 'kg');
     await setDistanceUnit(db, 'km');
     expect(await getUnits(db)).toEqual({ weight: 'kg', distance: 'km' });
+  });
+});
+
+describe('theme setting', () => {
+  it('defaults to cobalt, the original colors', async () => {
+    expect(await getThemeId(await createTestDb())).toBe('cobalt');
+  });
+
+  it('persists a change of theme', async () => {
+    const db = await createTestDb();
+    await setThemeId(db, 'ember');
+    expect(await getThemeId(db)).toBe('ember');
+    await setThemeId(db, 'mono');
+    expect(await getThemeId(db)).toBe('mono');
+  });
+
+  it('offers every theme from the design review', () => {
+    expect(THEME_IDS).toEqual(['cobalt', 'volt', 'ember', 'midnight', 'mono', 'tide', 'trophy', 'sakura', 'trail']);
+  });
+
+  it('rejects an unknown theme', async () => {
+    const db = await createTestDb();
+    await expect(setThemeId(db, 'neon' as never)).rejects.toThrow('Unsupported theme');
+    expect(await getThemeId(db)).toBe('cobalt');
+  });
+
+  it('falls back to cobalt if the stored value is invalid', async () => {
+    const db = await createTestDb();
+    await db.runAsync("INSERT INTO settings (key, value) VALUES ('theme', 'neon')");
+    expect(await getThemeId(db)).toBe('cobalt');
+  });
+});
+
+describe('appearance setting', () => {
+  it('defaults to following the system', async () => {
+    expect(await getAppearance(await createTestDb())).toBe('system');
+  });
+
+  it('persists light and dark overrides, independently of the theme', async () => {
+    const db = await createTestDb();
+    await setAppearance(db, 'dark');
+    expect(await getAppearance(db)).toBe('dark');
+    expect(await getThemeId(db)).toBe('cobalt');
+    await setAppearance(db, 'light');
+    expect(await getAppearance(db)).toBe('light');
+  });
+
+  it('rejects an unknown appearance', async () => {
+    const db = await createTestDb();
+    await expect(setAppearance(db, 'sepia' as never)).rejects.toThrow('Unsupported appearance');
+    expect(await getAppearance(db)).toBe('system');
+  });
+
+  it('falls back to system if the stored value is invalid', async () => {
+    const db = await createTestDb();
+    await db.runAsync("INSERT INTO settings (key, value) VALUES ('appearance', 'sepia')");
+    expect(await getAppearance(db)).toBe('system');
+  });
+
+  it('getThemeSettings reads both', async () => {
+    const db = await createTestDb();
+    await setThemeId(db, 'tide');
+    await setAppearance(db, 'dark');
+    expect(await getThemeSettings(db)).toEqual({ themeId: 'tide', appearance: 'dark' });
   });
 });
