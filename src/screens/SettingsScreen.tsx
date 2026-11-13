@@ -1,15 +1,19 @@
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text } from 'react-native';
 
+import { ThemePicker } from '@/components/ThemePicker';
 import { Card, Segmented } from '@/components/ui';
-import { getUnits, setDistanceUnit, setWeightUnit, type DistanceUnit, type WeightUnit } from '@/data/settings';
+import {
+  getUnits, setDistanceUnit, setWeightUnit, type Appearance, type DistanceUnit, type WeightUnit,
+} from '@/data/settings';
 import { useDb } from '@/db/DbContext';
 import { useLoad } from '@/hooks/useLoad';
-import { useTheme } from '@/theme';
+import { useTheme, useThemeSettings } from '@/theme';
 
 export function SettingsScreen() {
   const db = useDb();
   const t = useTheme();
+  const theme = useThemeSettings();
   const { data, reload } = useLoad(() => getUnits(db), [db]);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,6 +56,21 @@ export function SettingsScreen() {
         )}
         <Text style={{ color: t.muted }}>
           Used for planned and logged distances, history and CSV exports. Tap the unit next to a distance to log one set in the other unit.
+        </Text>
+      </Card>
+      <Card style={{ gap: 10 }}>
+        <Text style={{ color: t.text, fontWeight: '700' }}>Theme</Text>
+        <ThemePicker value={theme.themeId} onChange={(id) => save(() => theme.setThemeId(id))} />
+      </Card>
+      <Card style={{ gap: 10 }}>
+        <Text style={{ color: t.text, fontWeight: '700' }}>Appearance</Text>
+        <Segmented<Appearance>
+          options={[{ value: 'system', label: 'System' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }]}
+          value={theme.appearance}
+          onChange={(appearance) => save(() => theme.setAppearance(appearance))}
+        />
+        <Text style={{ color: t.muted }}>
+          System follows your phone&apos;s light or dark mode. Every theme has both.
         </Text>
       </Card>
       {error && <Text style={{ color: t.danger }}>{error}</Text>}
