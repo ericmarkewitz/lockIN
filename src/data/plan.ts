@@ -63,6 +63,22 @@ export async function isPlanComplete(db: Db): Promise<boolean> {
   return r?.value === '1';
 }
 
-export async function markPlanComplete(db: Db): Promise<void> {
+/** Marks setup done. The first call also records `today` as the date the plan started counting. */
+export async function markPlanComplete(db: Db, today: string): Promise<void> {
   await db.runAsync("INSERT OR REPLACE INTO settings (key, value) VALUES ('plan_complete', '1')");
+  await db.runAsync("INSERT OR IGNORE INTO settings (key, value) VALUES ('plan_started', ?)", [today]);
+}
+
+/**
+ * The first date the plan can say a day was missed: when the plan was first saved, or the first
+ * workout if that is earlier (installs from before the start date was recorded). Null if neither.
+ */
+export async function getTrackingStart(db: Db): Promise<string | null> {
+  const r = await db.getFirstAsync<{ start: string | null }>(
+    `SELECT MIN(d) AS start FROM (
+       SELECT value AS d FROM settings WHERE key = 'plan_started'
+       UNION ALL SELECT MIN(date) FROM workouts
+     )`,
+  );
+  return r?.start ?? null;
 }

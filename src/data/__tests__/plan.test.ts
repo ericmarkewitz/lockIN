@@ -74,7 +74,7 @@ describe('weekly plan', () => {
 
   it('remembers when setup is complete', async () => {
     const db = await createTestDb();
-    await markPlanComplete(db);
+    await markPlanComplete(db, '2026-11-02');
     expect(await isPlanComplete(db)).toBe(true);
   });
 });

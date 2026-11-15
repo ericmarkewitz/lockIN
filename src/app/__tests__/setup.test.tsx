@@ -6,6 +6,8 @@ import { getPlan, isPlanComplete, markPlanComplete } from '@/data/plan';
 import { DbProvider } from '@/db/DbContext';
 import type { Db } from '@/db/types';
 import { createTestDb } from '@/test/testDb';
+import { ThemeProvider } from '@/theme';
+import { Screens } from '../_layout';
 import Index from '../index';
 import Setup from '../setup';
 
@@ -42,7 +44,7 @@ describe('setup route', () => {
 
   it('returns to the existing calendar instead of stacking a new one on each save', async () => {
     const db = await createTestDb();
-    await markPlanComplete(db);
+    await markPlanComplete(db, '2026-11-01');
     const r = await renderApp(db);
 
     for (let i = 0; i < 3; i++) {
@@ -55,7 +57,7 @@ describe('setup route', () => {
 
   it('leaves the plan without saving when cancelled', async () => {
     const db = await createTestDb();
-    await markPlanComplete(db);
+    await markPlanComplete(db, '2026-11-01');
     const before = await getPlan(db);
     const r = await renderApp(db);
 
@@ -74,5 +76,41 @@ describe('setup route', () => {
     await renderApp(db);
     await screen.findByText('Save plan');
     expect(screen.queryByText('Cancel')).toBeNull();
+  });
+});
+
+describe('root stack', () => {
+  it('labels the back button after the calendar, not the route file', async () => {
+    const db = await createTestDb();
+    await markPlanComplete(db, '2026-11-01');
+    await renderRouter(
+      {
+        _layout: () => (
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <DbProvider db={db}>
+              <ThemeProvider>
+                <Screens />
+              </ThemeProvider>
+            </DbProvider>
+          </GestureHandlerRootView>
+        ),
+        index: Index,
+        setup: Setup,
+      },
+      { initialUrl: '/' },
+    );
+    await fireEvent.press(await screen.findByLabelText('Plan'));
+    await screen.findByText('Save plan');
+    // iOS labels the back button with the previous screen's title, falling back to its route name.
+    const titles: (string | undefined)[] = [];
+    type Node = { type: string; props: { title?: string }; children: (Node | string)[] | null };
+    const walk = (n: Node | Node[] | string | null): void => {
+      if (!n || typeof n === 'string') return;
+      if (Array.isArray(n)) return n.forEach(walk);
+      if (n.type === 'RNSScreenStackHeaderConfig') titles.push(n.props.title);
+      n.children?.forEach(walk);
+    };
+    walk(screen.toJSON() as Node | Node[] | null);
+    expect(titles).toEqual(['lockIN', 'Weekly plan']);
   });
 });

@@ -1,5 +1,5 @@
 import { addExercise, listCategoriesWithExercises } from '../exercises';
-import { setPlanDay } from '../plan';
+import { markPlanComplete, setPlanDay } from '../plan';
 import type { Workout } from '../types';
 import {
   addExerciseToWorkout,
@@ -28,6 +28,7 @@ async function planned(): Promise<Db> {
   await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: bench, targetSets: 3, targetReps: 10 }] });
   await setPlanDay(db, 3, { isRest: false, items: [{ exerciseId: run, targetDurationMin: 30, targetDistance: 3 }] });
   await setPlanDay(db, 2, { isRest: true, items: [] });
+  await markPlanComplete(db, '2026-10-01');
   return db;
 }
 
@@ -365,6 +366,48 @@ describe('getRangeSummary', () => {
       await setRestDay(db, MON, true);
       const [day] = await getRangeSummary(db, MON, MON, TODAY);
       expect(day).toMatchObject({ status: 'completed', exerciseCount: 1, kinds: ['strength'] });
+    });
+  });
+
+  describe('before tracking started', () => {
+    async function freshPlan(): Promise<Db> {
+      const db = await createTestDb();
+      await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: await findByName(db, 'Bench Press'), targetSets: 3 }] });
+      await setPlanDay(db, 2, { isRest: true, items: [] });
+      return db;
+    }
+    const LATER = '2026-11-11';
+
+    it('shows nothing for past days before the plan was first saved', async () => {
+      const db = await freshPlan();
+      await markPlanComplete(db, '2026-11-04');
+      const by = Object.fromEntries((await getRangeSummary(db, '2026-11-02', '2026-11-10', LATER)).map((d) => [d.date, d.status]));
+      expect(by['2026-11-02']).toBe('none'); // Monday before the plan existed
+      expect(by['2026-11-03']).toBe('none'); // nor is an old Tuesday a rest day
+      expect(by['2026-11-09']).toBe('missed'); // Monday after it
+      expect(by['2026-11-10']).toBe('rest');
+    });
+
+    it('keeps the date of the first save when the plan is saved again', async () => {
+      const db = await freshPlan();
+      await markPlanComplete(db, '2026-11-01');
+      await markPlanComplete(db, '2026-11-10');
+      const [day] = await getRangeSummary(db, MON, MON, LATER);
+      expect(day.status).toBe('missed');
+    });
+
+    it('starts from the first workout when that is earlier than the plan save', async () => {
+      const db = await freshPlan();
+      await ensureWorkout(db, '2026-10-30');
+      await markPlanComplete(db, '2026-11-10');
+      const [day] = await getRangeSummary(db, MON, MON, LATER);
+      expect(day.status).toBe('missed');
+    });
+
+    it('marks no past day missed when tracking has not started', async () => {
+      const db = await freshPlan();
+      const [day] = await getRangeSummary(db, MON, MON, LATER);
+      expect(day.status).toBe('none');
     });
   });
 

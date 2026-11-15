@@ -5,7 +5,7 @@ import type { CategoryKind, DaySummary, DayStatus } from '@/data/types';
 import { weekProgress } from '@/lib/calendar';
 import { parseDateKey } from '@/lib/dates';
 import { tint, useTheme, type Theme } from '@/theme';
-import { STATUS_LABEL, statusColor } from './status';
+import { statusColor, statusLabel } from './status';
 
 const KIND_LABEL: Record<CategoryKind, string> = { strength: 'Lifts', cardio: 'Cardio', mindbody: 'Yoga/Mobility' };
 const SHORT_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -117,7 +117,7 @@ export function WeekView({ dates, byDate, today, onOpen }: {
                   </View>
                 ) : BADGED.includes(status) && (
                   <View style={[styles.badge, { backgroundColor: tint(statusColor(status, t), 0.15) }]}>
-                    <Text style={[styles.badgeText, { color: statusColor(status, t) }]}>{STATUS_LABEL[status]}</Text>
+                    <Text style={[styles.badgeText, { color: statusColor(status, t) }]}>{statusLabel(status, date, today)}</Text>
                   </View>
                 )}
               </Pressable>

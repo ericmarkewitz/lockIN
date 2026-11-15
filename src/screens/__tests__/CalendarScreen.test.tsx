@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react-native';
 
-import { setPlanDay } from '@/data/plan';
-import { updateSet, ensureWorkout } from '@/data/workouts';
+import { markPlanComplete, setPlanDay } from '@/data/plan';
+import { addExerciseToWorkout, updateSet, ensureWorkout } from '@/data/workouts';
 import { findByName } from '@/test/helpers';
 import { renderWithDb } from '@/test/render';
 import { createTestDb } from '@/test/testDb';
@@ -30,6 +30,7 @@ async function setup() {
   await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: bench, targetSets: 2, targetReps: 10 }] });
   await setPlanDay(db, 3, { isRest: false, items: [{ exerciseId: run, targetDurationMin: 30 }] });
   await setPlanDay(db, 2, { isRest: true, items: [] });
+  await markPlanComplete(db, '2026-10-01');
   return db;
 }
 
@@ -126,6 +127,21 @@ describe('CalendarScreen', () => {
     await fireEvent.press(screen.getByLabelText('Previous'));
     expect(await screen.findByText('Oct 26 – Nov 1')).toBeTruthy();
     expect((await screen.findAllByText('Missed')).length).toBeGreaterThan(0);
+  });
+
+  it('says a past day was partially done, while today is still in progress', async () => {
+    const db = await setup();
+    const past = await ensureWorkout(db, '2026-11-02');
+    await updateSet(db, past.exercises[0].sets[0].id, { completed: true });
+    const today = await ensureWorkout(db, TODAY);
+    await updateSet(db, today.exercises[0].sets[0].id, { durationMin: 10 });
+    await addExerciseToWorkout(db, today.id, await findByName(db, 'Bench Press')); // its sets are still open
+    await renderWithDb(<CalendarScreen today={TODAY} />, db);
+    expect(await screen.findByText('Partially done')).toBeTruthy();
+    expect(screen.queryByText('In progress')).toBeNull();
+    await fireEvent.press(screen.getByLabelText('Month'));
+    expect(await screen.findByLabelText('2026-11-02 Partially done')).toBeTruthy();
+    expect(screen.getByLabelText('2026-11-04 In progress')).toBeTruthy();
   });
 
   it('opens a day from the week view', async () => {

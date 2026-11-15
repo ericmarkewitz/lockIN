@@ -16,7 +16,7 @@ function Bridge({ children }: { children: ReactNode }) {
   return <DbProvider db={db as unknown as Db}>{children}</DbProvider>;
 }
 
-function Screens() {
+export function Screens() {
   const t = useTheme();
   return (
     <Stack
@@ -28,7 +28,8 @@ function Screens() {
         contentStyle: { backgroundColor: t.bg },
       }}
     >
-      <Stack.Screen name="index" options={{ headerShown: false }} />
+      {/* The title is unseen here but becomes the back button label on every screen pushed from the calendar. */}
+      <Stack.Screen name="index" options={{ headerShown: false, title: 'lockIN' }} />
       <Stack.Screen name="setup" options={{ title: 'Weekly plan' }} />
       <Stack.Screen name="day/[date]" options={{ title: 'Workout' }} />
       {/* Full screen with no swipe to dismiss, so a stray swipe mid-set doesn't end the workout; it draws its own End button. */}
