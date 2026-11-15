@@ -91,7 +91,7 @@ describe('CalendarScreen', () => {
     const w = await ensureWorkout(db, '2026-11-02');
     for (const s of w.exercises[0].sets) await updateSet(db, s.id, { completed: true });
     await fireEvent.press(screen.getByLabelText('Next'));
-    await fireEvent.press(await screen.findByLabelText('Go to today'));
+    await fireEvent.press(await screen.findByLabelText('Back to this week'));
     expect(await screen.findByLabelText('1 of 2 workouts done')).toBeTruthy();
   });
 
@@ -108,14 +108,33 @@ describe('CalendarScreen', () => {
     const db = await setup();
     await renderWithDb(<CalendarScreen today={TODAY} />, db);
     expect(await screen.findByText('Nov 2 – Nov 8')).toBeTruthy();
-    expect(screen.queryByLabelText('Go to today')).toBeNull();
+    expect(screen.queryByLabelText('Back to this week')).toBeNull();
     await fireEvent.press(screen.getByLabelText('Next'));
     expect(await screen.findByText('Nov 9 – Nov 15')).toBeTruthy();
     // Worded as an action so it can't be misread as a label saying the shown day is today.
-    expect(screen.getByText('Back to today')).toBeTruthy();
+    expect(screen.getByText('Back to this week')).toBeTruthy();
     expect(screen.queryByText('Today')).toBeNull();
-    await fireEvent.press(screen.getByLabelText('Go to today'));
+    await fireEvent.press(screen.getByLabelText('Back to this week'));
     expect(await screen.findByText('Nov 2 – Nov 8')).toBeTruthy();
+  });
+
+  it('names the period it goes back to in day and month views', async () => {
+    const db = await setup();
+    await renderWithDb(<CalendarScreen today={TODAY} />, db);
+    expect(await screen.findByText('Nov 2 – Nov 8')).toBeTruthy();
+
+    await fireEvent.press(screen.getByLabelText('Month'));
+    await fireEvent.press(screen.getByLabelText('Next'));
+    expect(await screen.findByText('December 2026')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Back to this month'));
+    expect(await screen.findByText('November 2026')).toBeTruthy();
+    expect(screen.queryByLabelText('Back to this month')).toBeNull();
+
+    await fireEvent.press(screen.getByLabelText('Day'));
+    await fireEvent.press(screen.getByLabelText('Previous'));
+    expect(await screen.findByText('Tuesday, Nov 3')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Back to today'));
+    expect(await screen.findByText('Wednesday, Nov 4')).toBeTruthy();
   });
 
   it('shows Missed for past planned days and Done for finished ones', async () => {

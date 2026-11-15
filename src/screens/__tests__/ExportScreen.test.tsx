@@ -1,6 +1,7 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 import * as Sharing from 'expo-sharing';
 
+import { EXPORT_FIELDS } from '@/data/export';
 import { setPlanDay } from '@/data/plan';
 import { ensureWorkout, updateSet } from '@/data/workouts';
 import { findByName } from '@/test/helpers';
@@ -29,6 +30,19 @@ async function setup() {
 beforeEach(() => { mockWrite.mockClear(); (Sharing.shareAsync as jest.Mock).mockClear(); });
 
 describe('ExportScreen', () => {
+  it('shows each field as a chip that toggles on and off, with a running count', async () => {
+    const db = await setup();
+    await renderWithDb(<ExportScreen today="2026-11-04" />, db);
+    const chip = () => screen.getByLabelText('Include Weekday');
+    expect(chip().props.accessibilityRole).toBe('checkbox');
+    expect(chip().props.accessibilityState).toMatchObject({ checked: true });
+    const n = EXPORT_FIELDS.length;
+    expect(screen.getByText(`${n} of ${n} fields`)).toBeTruthy();
+    await fireEvent.press(chip());
+    expect(chip().props.accessibilityState).toMatchObject({ checked: false });
+    expect(screen.getByText(`${n - 1} of ${n} fields`)).toBeTruthy();
+  });
+
   it('previews the matching row count', async () => {
     const db = await setup();
     await renderWithDb(<ExportScreen today="2026-11-04" />, db);
@@ -40,7 +54,7 @@ describe('ExportScreen', () => {
     const db = await setup();
     await renderWithDb(<ExportScreen today="2026-11-04" />, db);
     for (const label of ['Weekday', 'Category', 'Subcategory', 'Set number', 'Duration', 'Distance', 'Completed', 'Workout notes', 'Reps']) {
-      await fireEvent(screen.getByLabelText(`Include ${label}`), 'valueChange', false);
+      await fireEvent.press(screen.getByLabelText(`Include ${label}`));
     }
     await fireEvent.press(screen.getByText('Export CSV'));
     await waitFor(() => expect(Sharing.shareAsync).toHaveBeenCalled());
@@ -98,7 +112,7 @@ describe('ExportScreen', () => {
     const db = await setup();
     await renderWithDb(<ExportScreen today="2026-11-04" />, db);
     for (const label of ['Date','Weekday','Category','Subcategory','Exercise','Set number','Reps','Weight','Duration','Distance','Completed','Workout notes']) {
-      await fireEvent(screen.getByLabelText(`Include ${label}`), 'valueChange', false);
+      await fireEvent.press(screen.getByLabelText(`Include ${label}`));
     }
     await fireEvent.press(screen.getByText('Export CSV'));
     expect(await screen.findByText('Select at least one field.')).toBeTruthy();

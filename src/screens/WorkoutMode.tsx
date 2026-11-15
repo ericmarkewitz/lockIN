@@ -27,7 +27,7 @@ import { MAX_REPS } from '@/lib/wheel';
 import {
   firstOpenStep, formatSets, groupThousands, nextOpenStep, suggestEntry, workoutSteps, workoutVolume, type Step,
 } from '@/lib/workoutMode';
-import { tint, useTheme } from '@/theme';
+import { accentGradient, tint, useTheme } from '@/theme';
 
 const NO_INSETS: EdgeInsets = { top: 0, bottom: 0, left: 0, right: 0 };
 
@@ -626,7 +626,7 @@ function CTA({
       style={({ pressed }) => [
         styles.cta,
         primary
-          ? [styles.ctaRaised, { backgroundColor: t.primary, shadowColor: t.primary }]
+          ? [styles.ctaRaised, { backgroundColor: t.primary, experimental_backgroundImage: accentGradient(t), shadowColor: t.primary }]
           : { backgroundColor: tint(t.primary, 0.12) },
         { transform: [{ scale: pressed ? 0.97 : 1 }] },
         style,
@@ -776,7 +776,7 @@ const styles = StyleSheet.create({
   compactHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   compactTitle: { fontSize: 22, fontWeight: '800', letterSpacing: -0.4 },
   eyebrow: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1.2 },
-  title: { fontSize: 26, fontWeight: '800', letterSpacing: -0.6 },
+  title: { fontSize: 30, fontWeight: '900', fontStyle: 'italic', letterSpacing: -1 },
   tipsToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999 },
   sheetRoot: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.45)' },
@@ -788,7 +788,7 @@ const styles = StyleSheet.create({
   tipText: { flex: 1, fontSize: 15, lineHeight: 21 },
   card: { borderRadius: 24, borderWidth: StyleSheet.hairlineWidth, padding: 14 },
   entryHead: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 },
-  setLabel: { fontSize: 17, fontWeight: '800', letterSpacing: -0.3 },
+  setLabel: { fontSize: 18, fontWeight: '900', letterSpacing: -0.3 },
   dots: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   dotOn: { width: 22 },
@@ -796,19 +796,19 @@ const styles = StyleSheet.create({
   fieldLabel: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1.2 },
   duration: { minHeight: 44, backgroundColor: 'transparent' },
   // Matches the big numbers in the other tiles.
-  durationText: { fontSize: 30, fontWeight: '800', letterSpacing: -1 },
+  durationText: { fontSize: 34, fontWeight: '900', letterSpacing: -1.5 },
   lastRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: -4, paddingHorizontal: 4 },
   tiles: { flexDirection: 'row', gap: 8 },
   tile: { flex: 1, minWidth: 0, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, padding: 10, gap: 4 },
   tileHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 20 },
   tileInput: {
-    textAlign: 'center', fontSize: 34, fontWeight: '800', letterSpacing: -1, fontVariant: ['tabular-nums'], paddingVertical: 0, minHeight: 44,
+    textAlign: 'center', fontSize: 38, fontWeight: '900', letterSpacing: -1.5, fontVariant: ['tabular-nums'], paddingVertical: 0, minHeight: 44,
   },
   tileButtons: { flexDirection: 'row', gap: 6 },
   tileButton: { flex: 1, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   cta: { height: 60, borderRadius: 30, flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch' },
   ctaRaised: { shadowOpacity: 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 5 },
-  ctaText: { fontSize: 18, fontWeight: '800', letterSpacing: -0.2 },
+  ctaText: { fontSize: 19, fontWeight: '900', letterSpacing: -0.2 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
   roundAction: { width: 60, height: 60, borderRadius: 30, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
   upNext: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, paddingVertical: 6, paddingHorizontal: 8 },
@@ -818,7 +818,7 @@ const styles = StyleSheet.create({
   badgeInner: { alignItems: 'center', justifyContent: 'center' },
   stats: { flexDirection: 'row', gap: 10 },
   stat: { flex: 1, borderRadius: 20, borderWidth: StyleSheet.hairlineWidth, paddingVertical: 14, paddingHorizontal: 10, alignItems: 'center', gap: 2 },
-  statValue: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5, fontVariant: ['tabular-nums'] },
+  statValue: { fontSize: 28, fontWeight: '900', fontStyle: 'italic', letterSpacing: -0.5, fontVariant: ['tabular-nums'] },
   statLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8 },
   summaryRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
   count: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999 },

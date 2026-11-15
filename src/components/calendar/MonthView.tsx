@@ -2,7 +2,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { DaySummary, DayStatus } from '@/data/types';
 import { monthGrid, parseDateKey } from '@/lib/dates';
-import { tint, useTheme, type Theme } from '@/theme';
+import { accentGradient, tint, useTheme, type Theme } from '@/theme';
+import { useRaised } from '../ui';
 import { KindIcon } from './KindIcon';
 import { STATUS_LABEL, statusColor, statusLabel } from './status';
 
@@ -32,9 +33,10 @@ export function MonthView({ anchor, byDate, today, onPick }: {
   anchor: string; byDate: Map<string, DaySummary>; today: string; onPick: (date: string) => void;
 }) {
   const t = useTheme();
+  const raised = useRaised();
   const a = parseDateKey(anchor);
   return (
-    <View testID="month-view" style={[styles.wrap, { backgroundColor: t.card, borderColor: t.border }]}>
+    <View testID="month-view" style={[styles.wrap, { backgroundColor: t.card, borderColor: t.border }, raised]}>
       <View style={styles.gridRow}>
         {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((l, i) => (
           <Text key={i} style={[styles.head, { color: t.muted }]}>{l}</Text>
@@ -64,8 +66,8 @@ export function MonthView({ anchor, byDate, today, onPick }: {
                     pressed && { opacity: 0.5 },
                   ]}
                 >
-                  <View style={[styles.day, isToday && { backgroundColor: t.primary }]}>
-                    <Text style={{ color: isToday ? t.onPrimary : t.text, fontWeight: isToday || has ? '700' : '400' }}>
+                  <View style={[styles.day, isToday && { backgroundColor: t.primary, experimental_backgroundImage: accentGradient(t) }]}>
+                    <Text style={{ color: isToday ? t.onPrimary : t.text, fontWeight: isToday || has ? '900' : '500' }}>
                       {parseDateKey(date).getDate()}
                     </Text>
                   </View>
@@ -89,13 +91,13 @@ export function MonthView({ anchor, byDate, today, onPick }: {
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, padding: 8 },
+  wrap: { flex: 1, borderRadius: 24, borderWidth: StyleSheet.hairlineWidth, padding: 10 },
   gridRow: { flexDirection: 'row', gap: 4, marginBottom: 4 },
-  head: { flex: 1, textAlign: 'center', fontSize: 12, fontWeight: '700' },
+  head: { flex: 1, textAlign: 'center', fontSize: 11, fontWeight: '900', letterSpacing: 1 },
   grid: { flex: 1, gap: 4 },
   week: { flex: 1, flexDirection: 'row', gap: 4 },
   cell: { flex: 1 },
-  tile: { alignItems: 'center', justifyContent: 'space-evenly', paddingVertical: 4, borderRadius: 12, borderWidth: 1.5, borderColor: 'transparent' },
+  tile: { alignItems: 'center', justifyContent: 'space-evenly', paddingVertical: 4, borderRadius: 14, borderWidth: 1.5, borderColor: 'transparent' },
   day: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
   icons: { flexDirection: 'row', gap: 1 },
   swatch: { width: 8, height: 8, borderRadius: 2.5 },

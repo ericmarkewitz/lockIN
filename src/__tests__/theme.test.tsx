@@ -4,7 +4,7 @@ import { Text } from 'react-native';
 import { setAppearance, setThemeId, THEME_IDS } from '@/data/settings';
 import { renderWithDb } from '@/test/render';
 import { createTestDb } from '@/test/testDb';
-import { THEMES, ThemeProvider, useTheme } from '../theme';
+import { accentGradient, mix, THEMES, ThemeProvider, useTheme } from '../theme';
 
 function Probe() {
   const t = useTheme();
@@ -50,5 +50,25 @@ describe('useTheme', () => {
     await renderWithDb(<ThemeProvider><Probe /></ThemeProvider>, db);
     const { primary, bg } = THEMES.volt.dark;
     await waitFor(() => expect(screen.getByTestId('probe').props.children).toBe(`${primary} ${bg}`));
+  });
+});
+
+describe('mix', () => {
+  it('blends two colors by the given share of the second', () => {
+    expect(mix('#000000', '#ffffff', 0)).toBe('#000000');
+    expect(mix('#000000', '#ffffff', 1)).toBe('#ffffff');
+    expect(mix('#000000', '#ffffff', 0.5)).toBe('#808080');
+    expect(mix('#ff0000', '#0000ff', 0.25)).toBe('#bf0040');
+  });
+
+  it('returns 6-digit hex so tint() still works on the result', () => {
+    expect(mix('#2563eb', '#000000', 0.3)).toMatch(/^#[0-9a-f]{6}$/);
+  });
+});
+
+describe('accentGradient', () => {
+  it('sweeps from the accent into a deeper shade of it', () => {
+    const t = THEMES.cobalt.light;
+    expect(accentGradient(t)).toBe(`linear-gradient(135deg, ${t.primary} 0%, ${mix(t.primary, '#000000', 0.25)} 100%)`);
   });
 });

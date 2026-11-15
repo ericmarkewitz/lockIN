@@ -197,7 +197,10 @@ export function SetRow({
         onPress={() => onChange({ completed: !set.completed })}
         style={({ pressed }) => [
           styles.check,
-          { borderColor: done ? t.success : t.border, backgroundColor: done ? t.success : 'transparent', opacity: pressed ? 0.6 : 1 },
+          {
+            borderColor: done ? t.success : t.border, backgroundColor: done ? t.success : 'transparent',
+            boxShadow: done ? `0px 3px 10px ${tint(t.success, 0.4)}` : undefined, transform: [{ scale: pressed ? 0.9 : 1 }],
+          },
         ]}
       >
         <Icon name={sym('checkmark', 'check')} size={15} color={done ? t.bg : t.muted} fallback="✓" />
@@ -217,13 +220,13 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 5, paddingHorizontal: 6, marginHorizontal: -6, borderRadius: 12 },
   num: { width: 26 },
   badge: { height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-  numText: { fontSize: 13, fontWeight: '800', fontVariant: ['tabular-nums'] },
-  field: { flex: 1, minWidth: 0, minHeight: 44, flexDirection: 'row', alignItems: 'center', borderRadius: 10, paddingRight: 10 },
+  numText: { fontSize: 13, fontWeight: '900', fontVariant: ['tabular-nums'] },
+  field: { flex: 1, minWidth: 0, minHeight: 46, flexDirection: 'row', alignItems: 'center', borderRadius: 14, paddingRight: 10 },
   fieldBare: { paddingRight: 0 },
-  input: { flex: 1, minWidth: 0, paddingHorizontal: 8, paddingVertical: 10, textAlign: 'center', fontSize: 17, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  input: { flex: 1, minWidth: 0, paddingHorizontal: 8, paddingVertical: 10, textAlign: 'center', fontSize: 18, fontWeight: '800', fontVariant: ['tabular-nums'] },
   wheelButton: { flex: 1, minWidth: 0, backgroundColor: 'transparent' },
   suffix: { fontSize: 12, fontWeight: '600' },
-  check: { width: 36, height: 36, borderRadius: 18, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  check: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   remove: { width: 18, alignItems: 'center' },
   header: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 4 },
   headText: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.6, textAlign: 'center' },

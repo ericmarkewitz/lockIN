@@ -54,7 +54,7 @@ export function ThemePicker({ value, onChange }: { value: ThemeId; onChange: (id
 
 const styles = StyleSheet.create({
   list: { gap: 6 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 8, borderRadius: 12, borderWidth: 1 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10, borderRadius: 16, borderWidth: 1.5 },
   preview: { width: 44, height: 36, borderRadius: 8, borderWidth: 1, padding: 5, justifyContent: 'center' },
   previewCard: { flex: 1, borderRadius: 4, borderWidth: StyleSheet.hairlineWidth, padding: 3, gap: 3, justifyContent: 'center' },
   previewBar: { height: 4, width: '70%', borderRadius: 2 },

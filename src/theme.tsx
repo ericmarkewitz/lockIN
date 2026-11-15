@@ -128,3 +128,15 @@ export function useTheme(): Theme {
 
 /** A theme color (6-digit hex) at the given opacity, for soft fills behind accents. */
 export const tint = (hex: string, alpha: number) => `${hex}${Math.round(alpha * 255).toString(16).padStart(2, '0')}`;
+
+/** Blends two theme colors (6-digit hex), taking `amount` (0–1) of `b`. Returns 6-digit hex. */
+export function mix(a: string, b: string, amount: number): string {
+  const ch = (hex: string, i: number) => parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16);
+  return `#${[0, 1, 2]
+    .map((i) => Math.round(ch(a, i) + (ch(b, i) - ch(a, i)) * amount).toString(16).padStart(2, '0'))
+    .join('')}`;
+}
+
+/** The signature fill for hero cards and main actions: the accent sweeping into a deeper shade of itself. */
+export const accentGradient = (t: Theme) =>
+  `linear-gradient(135deg, ${t.primary} 0%, ${mix(t.primary, '#000000', 0.25)} 100%)`;
