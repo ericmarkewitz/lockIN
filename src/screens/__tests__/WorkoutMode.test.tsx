@@ -1,5 +1,4 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
-import type { ReactNode } from 'react';
 
 import { setPlanDay } from '@/data/plan';
 import { setRestSeconds, setWeightUnit } from '@/data/settings';
@@ -10,11 +9,7 @@ import { createTestDb } from '@/test/testDb';
 import { WorkoutMode } from '../WorkoutMode';
 
 const mockBack = jest.fn();
-jest.mock('expo-router', () => ({
-  useRouter: () => ({ back: mockBack }),
-  // Renders the header's buttons into the tree so they can be pressed.
-  Stack: { Screen: ({ options }: { options: { headerLeft?: () => ReactNode } }) => options.headerLeft?.() ?? null },
-}));
+jest.mock('expo-router', () => ({ useRouter: () => ({ back: mockBack }) }));
 
 const MON = '2026-11-02';
 
@@ -251,7 +246,7 @@ describe('WorkoutMode', () => {
     });
   });
 
-  it('ends workout mode from the header', async () => {
+  it('ends workout mode from the top of the card', async () => {
     await open(await setup());
     await fireEvent.press(screen.getByLabelText('End workout'));
     expect(mockBack).toHaveBeenCalled();

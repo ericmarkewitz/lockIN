@@ -1,5 +1,5 @@
 import * as Haptics from 'expo-haptics';
-import { Stack, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useState, type ReactNode } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type ViewStyle } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
@@ -64,19 +64,7 @@ export function WorkoutMode({ date }: { date: string }) {
   /** A running rest, and the exercise it followed (to say when the next set is a new lift). */
   const [rest, setRest] = useState<{ endsAt: number; afterExerciseId: number } | null>(null);
 
-  const header = (
-    <Stack.Screen
-      options={{
-        title: 'Workout',
-        headerLeft: () => (
-          <Pressable accessibilityRole="button" accessibilityLabel="End workout" hitSlop={10} onPress={() => router.back()}>
-            <Text style={{ color: t.primary, fontSize: 17, fontWeight: '600' }}>End</Text>
-          </Pressable>
-        ),
-      }}
-    />
-  );
-  if (!data) return header;
+  if (!data) return <View style={[styles.screen, { backgroundColor: t.bg }]} />;
 
   const { workout, units, last, restSeconds } = data;
   const steps = workoutSteps(shownExercises(workout));
@@ -106,12 +94,12 @@ export function WorkoutMode({ date }: { date: string }) {
   const exercises = [...new Map(steps.map((s) => [s.exercise.id, s.exercise])).values()];
   const upcoming = step && steps.slice(index + 1).find((s) => s.exerciseIndex !== step.exerciseIndex)?.exercise;
 
-  // Everything fits on one screen with Done pinned at the bottom: nothing here scrolls but the
-  // finish screen's summary.
+  // The screen has no header: a set is one card from End and the progress at the top to Done at
+  // the bottom, and nothing scrolls but the finish screen's summary.
+  const top = <TopBar steps={steps} exercises={exercises} current={step?.exercise.id ?? null} onEnd={() => router.back()} />;
   return (
     <KeyboardAvoider scrolls={false}>
-      {header}
-      <SafeAreaView edges={['bottom']} style={[styles.screen, { backgroundColor: t.bg }]}>
+      <SafeAreaView edges={['top', 'bottom']} style={[styles.screen, { backgroundColor: t.bg }]}>
         {steps.length === 0 ? (
           <View style={[styles.empty, styles.page, { justifyContent: 'center' }]}>
             <Badge icon={sym('calendar.badge.plus', 'event')} fallback="+" color={t.muted} />
@@ -121,10 +109,10 @@ export function WorkoutMode({ date }: { date: string }) {
           </View>
         ) : (
           <View style={styles.page}>
-            <Progress steps={steps} exercises={exercises} current={step?.exercise.id ?? null} />
             {step ? (
               <StepView
                 key={step.set.id}
+                top={top}
                 step={step}
                 exerciseCount={exercises.length}
                 units={units}
@@ -141,15 +129,18 @@ export function WorkoutMode({ date }: { date: string }) {
                 upcoming={upcoming ?? undefined}
               />
             ) : (
-              <FinishView
-                steps={steps}
-                exercises={exercises}
-                units={units}
-                notes={workout.notes}
-                onNotes={async (text) => { await setWorkoutNotes(db, date, text); await reload(); }}
-                onSkipped={first === -1 ? undefined : () => move(first)}
-                onFinish={() => router.back()}
-              />
+              <>
+                {top}
+                <FinishView
+                  steps={steps}
+                  exercises={exercises}
+                  units={units}
+                  notes={workout.notes}
+                  onNotes={async (text) => { await setWorkoutNotes(db, date, text); await reload(); }}
+                  onSkipped={first === -1 ? undefined : () => move(first)}
+                  onFinish={() => router.back()}
+                />
+              </>
             )}
           </View>
         )}
@@ -158,12 +149,26 @@ export function WorkoutMode({ date }: { date: string }) {
   );
 }
 
-/** One capsule per exercise, filling as its sets are done; the current one is ringed. */
-function Progress({ steps, exercises, current }: { steps: Step[]; exercises: WorkoutExercise[]; current: number | null }) {
+/**
+ * End, then one capsule per exercise filling as its sets are done (the current one tinted),
+ * then the count of sets done.
+ */
+function TopBar({
+  steps, exercises, current, onEnd,
+}: { steps: Step[]; exercises: WorkoutExercise[]; current: number | null; onEnd: () => void }) {
   const t = useTheme();
   const done = steps.filter((s) => s.set.completed).length;
   return (
-    <View style={{ gap: 8 }}>
+    <View style={styles.topBar}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="End workout"
+        onPress={onEnd}
+        hitSlop={8}
+        style={({ pressed }) => [styles.end, { backgroundColor: tint(t.card, 0.55), borderColor: tint(t.text, 0.06), opacity: pressed ? 0.6 : 1 }]}
+      >
+        <Icon name={sym('xmark', 'close')} size={13} color={t.text} fallback="✕" />
+      </Pressable>
       <View accessible accessibilityLabel={`${done} of ${steps.length} sets done`} style={styles.capsules}>
         {exercises.map((e) => {
           const share = e.sets.filter((s) => s.completed).length / e.sets.length;
@@ -175,14 +180,19 @@ function Progress({ steps, exercises, current }: { steps: Step[]; exercises: Wor
           );
         })}
       </View>
+      <Text style={[styles.topCount, { color: t.muted }]} importantForAccessibility="no" accessibilityElementsHidden>
+        {done}/{steps.length}
+      </Text>
     </View>
   );
 }
 
 function StepView({
-  step, exerciseCount, units, last, rest, onDone, onSkip, onPrevious, upcoming,
+  step, top, exerciseCount, units, last, rest, onDone, onSkip, onPrevious, upcoming,
 }: {
-  step: Step; exerciseCount: number; units: Units; last: { sets: WorkoutSet[] } | null;
+  step: Step;
+  /** End and progress, drawn as the top row of the card. */
+  top: ReactNode; exerciseCount: number; units: Units; last: { sets: WorkoutSet[] } | null;
   /** While resting, the rest takes the place of the set; the set's entry keeps what's typed. */
   rest: { endsAt: number; newExercise: boolean; onAdjust: (seconds: number) => void; onEnd: () => void } | null;
   onDone: (patch: SetPatch) => void; onSkip: () => void; onPrevious?: () => void;
@@ -259,7 +269,8 @@ function StepView({
   return (
     <Animated.View entering={FadeIn.duration(240)} style={styles.fill}>
       {rest ? (
-        <>
+        <View style={[styles.hero, { backgroundColor: tint(t.primary, 0.07), borderColor: tint(t.primary, 0.12) }]}>
+          {top}
           <View style={styles.compactHead}>
             <Thumb exercise={exercise} size={48} />
             <View style={{ flex: 1 }}>
@@ -275,10 +286,11 @@ function StepView({
             onSkip={rest.onEnd}
             onFinish={rest.onEnd}
           />
-        </>
+        </View>
       ) : (
         <>
           <Hero
+            top={top}
             exercise={exercise}
             label={`Exercise ${step.exerciseIndex + 1} of ${exerciseCount}`}
             upcoming={upcoming}
@@ -386,8 +398,10 @@ function StepView({
  * The figure is sized to the space measured, so a small phone still fits the whole set.
  */
 function Hero({
-  exercise, label, upcoming, tips, children,
-}: { exercise: WorkoutExercise; label: string; upcoming?: WorkoutExercise; tips?: ReactNode; children?: ReactNode }) {
+  top, exercise, label, upcoming, tips, children,
+}: {
+  top?: ReactNode; exercise: WorkoutExercise; label: string; upcoming?: WorkoutExercise; tips?: ReactNode; children?: ReactNode;
+}) {
   const t = useTheme();
   // The figure gets whatever room the name and the set leave; its glow is 1.15× the figure.
   const [room, setRoom] = useState<{ width: number; height: number } | null>(null);
@@ -398,6 +412,7 @@ function Hero({
       entering={FadeInDown.duration(260)}
       style={[styles.hero, { backgroundColor: tint(t.primary, 0.07), borderColor: tint(t.primary, 0.12) }]}
     >
+      {top}
       <View style={styles.heroTop}>
         <View style={{ flex: 1, gap: 2 }}>
           <View style={styles.heroMeta}>
@@ -710,10 +725,13 @@ function FinishView({
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  page: { flex: 1, padding: 16, paddingBottom: 8, gap: 12 },
+  page: { flex: 1, paddingHorizontal: 12, paddingTop: 4, paddingBottom: 8, gap: 12 },
   fill: { flex: 1, minHeight: 0, gap: 12 },
   empty: { alignItems: 'center', gap: 10, paddingVertical: 20 },
-  capsules: { flexDirection: 'row', gap: 4 },
+  topBar: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  end: { width: 32, height: 32, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
+  capsules: { flex: 1, flexDirection: 'row', gap: 4 },
+  topCount: { fontSize: 12, fontWeight: '700', fontVariant: ['tabular-nums'], minWidth: 30, textAlign: 'right' },
   capsule: { flex: 1, height: 6, borderRadius: 3, overflow: 'hidden' },
   capsuleFill: { height: '100%', borderRadius: 3 },
   hero: { flex: 1, minHeight: 0, borderRadius: 28, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden', padding: 12, gap: 8 },

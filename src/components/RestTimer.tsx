@@ -103,7 +103,7 @@ export function RestTimer({
   );
 
   return (
-    <Animated.View entering={FadeIn.duration(220)} style={[styles.wrap, { backgroundColor: t.card, borderColor: t.border }]}>
+    <Animated.View entering={FadeIn.duration(220)} style={[styles.wrap, { backgroundColor: tint(t.card, 0.55), borderColor: tint(t.text, 0.06) }]}>
       <View
         style={styles.room}
         onLayout={(e) => {
@@ -140,7 +140,7 @@ export function RestTimer({
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1, minHeight: 0, alignItems: 'center', gap: 14, padding: 16, borderRadius: 28, borderWidth: StyleSheet.hairlineWidth },
+  wrap: { flex: 1, minHeight: 0, alignItems: 'center', gap: 14, padding: 16, borderRadius: 22, borderWidth: StyleSheet.hairlineWidth },
   room: { flex: 1, minHeight: 0, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' },
   ring: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
   glow: { position: 'absolute' },
