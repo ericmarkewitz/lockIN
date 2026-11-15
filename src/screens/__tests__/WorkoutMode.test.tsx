@@ -46,7 +46,7 @@ describe('WorkoutMode', () => {
     expect(screen.getByLabelText('Weight').props.value).toBe('');
     expect(screen.getByLabelText('Reps').props.value).toBe('10');
     expect(screen.getByLabelText('0 of 3 sets done')).toBeTruthy();
-    expect(screen.getByText('Next: Squat')).toBeTruthy();
+    expect(screen.getByLabelText('Next: Squat')).toBeTruthy();
   });
 
   it('shows the stick figure for a built-in exercise', async () => {
@@ -131,7 +131,7 @@ describe('WorkoutMode', () => {
     expect(screen.getByText('Exercise 2 of 2')).toBeTruthy();
     expect(screen.getByText('Set 1 of 1')).toBeTruthy();
     expect(screen.getByLabelText('Reps').props.value).toBe('5');
-    expect(screen.queryByText(/^Next:/)).toBeNull();
+    expect(screen.queryByLabelText(/^Next:/)).toBeNull();
   });
 
   it('resumes at the first set not done', async () => {
@@ -214,10 +214,14 @@ describe('WorkoutMode', () => {
       const db = await setup();
       await setRestSeconds(db, 0);
       await open(db);
+      await fireEvent.changeText(screen.getByLabelText('Weight'), '100');
       await fireEvent.press(screen.getByLabelText('Done with set 1'));
       await fireEvent.press(await screen.findByLabelText('Done with set 2'));
       await fireEvent.press(await screen.findByLabelText('Done with set 1'));
       expect(await screen.findByText('Workout complete')).toBeTruthy();
+      expect(screen.getByLabelText('Sets: 3/3')).toBeTruthy();
+      expect(screen.getByLabelText('Volume (lb): 2,000')).toBeTruthy();
+      expect(screen.getByLabelText('Exercises: 2')).toBeTruthy();
       expect(screen.queryByLabelText(/^Rest,/)).toBeNull();
       await fireEvent.press(screen.getByLabelText('Finish workout'));
       expect(mockBack).toHaveBeenCalled();
@@ -271,6 +275,7 @@ describe('WorkoutMode', () => {
     expect(screen.getByLabelText('Distance').props.value).toBe('3');
     await fireEvent.press(screen.getByLabelText('Done with Running'));
     expect(await screen.findByText('Workout complete')).toBeTruthy();
+    expect(screen.queryByLabelText(/^Volume/)).toBeNull();
     expect((await sets(db))[0]).toMatchObject({ durationMin: 30, distance: 3, completed: true });
   });
 

@@ -1,5 +1,5 @@
 import type { CategoryKind, WorkoutExercise, WorkoutSet } from '@/data/types';
-import { firstOpenStep, formatSets, nextOpenStep, suggestEntry, workoutSteps } from '../workoutMode';
+import { firstOpenStep, formatSets, groupThousands, nextOpenStep, suggestEntry, workoutSteps, workoutVolume } from '../workoutMode';
 
 const set = (n: number, over: Partial<WorkoutSet> = {}): WorkoutSet => ({
   id: n, setNumber: n, targetReps: 10, reps: null, weight: null, durationMin: null, distance: null,
@@ -94,5 +94,28 @@ describe('formatSets', () => {
 
   it('shows cardio as time and distance', () => {
     expect(formatSets([set(1, { durationMin: 30, distance: 3 })], 'cardio', { weight: 'lb', distance: 'km' })).toBe('30 min 4.83 km');
+  });
+});
+
+describe('workoutVolume', () => {
+  it('adds weight × reps over the finished strength sets, in the user\'s unit', () => {
+    const steps = workoutSteps([
+      ex('Bench', [set(1, { weight: 135, reps: 10, completed: true }), set(2, { weight: 135, reps: 8, completed: true }), set(3, { weight: 135, reps: 8 })]),
+      ex('Running', [set(4, { durationMin: 30, completed: true })], 'cardio'),
+    ]);
+    expect(workoutVolume(steps, 'lb')).toBe(2430);
+    expect(workoutVolume(steps, 'kg')).toBeCloseTo(1102.2, 0);
+  });
+
+  it('is 0 with nothing lifted', () => {
+    expect(workoutVolume(workoutSteps([ex('Bench', [set(1)])]), 'lb')).toBe(0);
+  });
+});
+
+describe('groupThousands', () => {
+  it('rounds and puts commas in big numbers', () => {
+    expect(groupThousands(12450.4)).toBe('12,450');
+    expect(groupThousands(1234567)).toBe('1,234,567');
+    expect(groupThousands(950)).toBe('950');
   });
 });

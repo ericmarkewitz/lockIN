@@ -65,3 +65,14 @@ export const formatSets = (sets: WorkoutSet[], kind: CategoryKind, units: Units)
       ? `${toDisplayWeight(s.weight, units.weight) ?? '–'}×${s.reps ?? '–'}`
       : `${formatDuration(s.durationMin) || '–'}${s.distance ? ` ${formatDistance(s.distance, units.distance)}` : ''}`))
     .join(', ');
+
+/** Total weight × reps over finished strength sets, in `unit`. */
+export function workoutVolume(steps: Step[], unit: WeightUnit): number {
+  return steps.reduce((sum, { exercise, set }) => {
+    if (exercise.categoryKind !== 'strength' || !set.completed || !set.weight || !set.reps) return sum;
+    return sum + (toDisplayWeight(set.weight, unit) ?? 0) * set.reps;
+  }, 0);
+}
+
+/** "12,450". Done by hand because Hermes doesn't always group with toLocaleString. */
+export const groupThousands = (n: number) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
