@@ -3,12 +3,15 @@ import { DatabaseSync } from 'node:sqlite';
 import { LATEST_VERSION, migrate } from '../migrations';
 import type { Db } from '../types';
 import { LIFT_SUBCATEGORIES } from '@/data/exercises';
+import { setPlanDay } from '@/data/plan';
+import { getRangeSummary } from '@/data/workouts';
 import { createTestDb, wrap } from '@/test/testDb';
 
 // Undo later migrations so a test can replay the upgrade from an older schema.
 const UNDO_V2 = 'ALTER TABLE workouts DROP COLUMN is_customized';
 const UNDO_V3 = 'ALTER TABLE exercises DROP COLUMN subcategory';
 const UNDO_V5 = 'ALTER TABLE sets DROP COLUMN weight_unit; ALTER TABLE sets DROP COLUMN distance_unit';
+const UNDO_V6 = 'DROP TABLE plan_history';
 
 describe('migrations', () => {
   it('creates the schema and records the version', async () => {
@@ -65,7 +68,7 @@ describe('migrations', () => {
     const db = wrap(raw);
     await migrate(db);
     // Simulate a half-applied earlier run, which can only have the v1 schema.
-    raw.exec(`${UNDO_V5}; ${UNDO_V3}; ${UNDO_V2}; PRAGMA user_version = 0`);
+    raw.exec(`${UNDO_V6}; ${UNDO_V5}; ${UNDO_V3}; ${UNDO_V2}; PRAGMA user_version = 0`);
     await expect(migrate(db)).resolves.toBeUndefined();
     const cats = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM categories');
     expect(cats?.n).toBe(4);
@@ -75,7 +78,7 @@ describe('migrations', () => {
     const raw = new DatabaseSync(':memory:');
     const db = wrap(raw);
     await migrate(db);
-    raw.exec(`${UNDO_V5}; ${UNDO_V3}; ${UNDO_V2}; PRAGMA user_version = 1`);
+    raw.exec(`${UNDO_V6}; ${UNDO_V5}; ${UNDO_V3}; ${UNDO_V2}; PRAGMA user_version = 1`);
     await db.runAsync("INSERT INTO workouts (date, notes) VALUES ('2026-11-02', 'kept')");
 
     await migrate(db);
@@ -93,7 +96,7 @@ describe('migrations', () => {
       const raw = new DatabaseSync(':memory:');
       const db = wrap(raw);
       await migrate(db);
-      raw.exec(`${UNDO_V5}; ${UNDO_V3}; PRAGMA user_version = 2`);
+      raw.exec(`${UNDO_V6}; ${UNDO_V5}; ${UNDO_V3}; PRAGMA user_version = 2`);
       await prepare(db);
       await migrate(db);
       return db;
@@ -153,7 +156,7 @@ describe('migrations', () => {
       // Put the catalog back the way v3 left it.
       raw.exec(`DELETE FROM exercises WHERE name IN ('Ski Touring', 'Cross-Country Skiing', 'Snowshoeing', 'Climbing');
         UPDATE exercises SET name = 'Skiing' WHERE name = 'Downhill Skiing';
-        ${UNDO_V5};
+        ${UNDO_V6}; ${UNDO_V5};
         PRAGMA user_version = 3`);
       await prepare(db);
       await migrate(db);
@@ -214,7 +217,7 @@ describe('migrations', () => {
       const raw = new DatabaseSync(':memory:');
       const db = wrap(raw);
       await migrate(db);
-      raw.exec(`${UNDO_V5}; PRAGMA user_version = 4`);
+      raw.exec(`${UNDO_V6}; ${UNDO_V5}; PRAGMA user_version = 4`);
       await prepare(db);
       await migrate(db);
       return db;
@@ -245,6 +248,42 @@ describe('migrations', () => {
       await expect(db.runAsync("INSERT INTO sets (workout_exercise_id, set_number, weight_unit) VALUES (?, 1, 'st')", [weId])).rejects.toThrow();
       await expect(db.runAsync("INSERT INTO sets (workout_exercise_id, set_number, distance_unit) VALUES (?, 1, 'yd')", [weId])).rejects.toThrow();
       await db.runAsync("INSERT INTO sets (workout_exercise_id, set_number, weight_unit, distance_unit) VALUES (?, 1, 'kg', 'km')", [weId]);
+    });
+  });
+
+  describe('v6 keeps a history of the weekly plan', () => {
+    /** An install from before v6 with Bench Press planned on Mondays. */
+    async function upgradeFromV5(prepare: (db: Db) => Promise<void>) {
+      const raw = new DatabaseSync(':memory:');
+      const db = wrap(raw);
+      await migrate(db);
+      raw.exec(`${UNDO_V6}; PRAGMA user_version = 5`);
+      const bench = (await db.getFirstAsync<{ id: number }>("SELECT id FROM exercises WHERE name = 'Bench Press'"))!.id;
+      await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: bench, targetSets: 3 }] });
+      await db.runAsync("UPDATE settings SET value = '1' WHERE key = 'plan_complete'");
+      await prepare(db);
+      await migrate(db);
+      return db;
+    }
+    const monday = async (db: Db) => (await getRangeSummary(db, '2026-11-02', '2026-11-02', '2026-11-11'))[0];
+
+    it('starts the history when the plan was first saved', async () => {
+      const db = await upgradeFromV5(async (d) => { await d.runAsync("INSERT INTO settings (key, value) VALUES ('plan_started', '2026-11-01')"); });
+      expect((await monday(db)).status).toBe('missed');
+    });
+
+    it('starts it at the first workout when that is earlier', async () => {
+      const db = await upgradeFromV5(async (d) => {
+        await d.runAsync("INSERT INTO settings (key, value) VALUES ('plan_started', '2026-11-10')");
+        await d.runAsync("INSERT INTO workouts (date) VALUES ('2026-10-30')");
+      });
+      expect((await monday(db)).status).toBe('missed');
+    });
+
+    it('records nothing when there is no start to go by', async () => {
+      const db = await upgradeFromV5(async () => {});
+      expect(await db.getFirstAsync('SELECT COUNT(*) AS n FROM plan_history')).toEqual({ n: 0 });
+      expect((await monday(db)).status).toBe('none');
     });
   });
 });

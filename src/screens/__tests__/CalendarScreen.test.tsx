@@ -144,6 +144,15 @@ describe('CalendarScreen', () => {
     expect(screen.getByLabelText('2026-11-04 In progress')).toBeTruthy();
   });
 
+  it('says which past days came before the plan', async () => {
+    const db = await createTestDb();
+    await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: await findByName(db, 'Bench Press'), targetSets: 2 }] });
+    await markPlanComplete(db, '2026-11-03');
+    await renderWithDb(<CalendarScreen today={TODAY} />, db);
+    expect(within(await screen.findByLabelText('Open 2026-11-02')).getByText('Before your plan')).toBeTruthy();
+    expect(within(screen.getByLabelText('Open 2026-11-05')).getByText('Nothing planned')).toBeTruthy();
+  });
+
   it('opens a day from the week view', async () => {
     const db = await setup();
     await renderWithDb(<CalendarScreen today={TODAY} />, db);

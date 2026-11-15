@@ -1,7 +1,7 @@
 import { datesInRange, weekdayOf } from '@/lib/dates';
 import type { Db } from '@/db/types';
 import { LOGGED_SET } from './logged';
-import { getPlan, getTrackingStart } from './plan';
+import { getPlan, getPlanHistory } from './plan';
 import { DISTANCE_UNITS, getUnits, WEIGHT_UNITS, type DistanceUnit, type WeightUnit } from './settings';
 import type {
   CategoryKind, DaySummary, DayStatus, Targets, Workout, WorkoutExercise, WorkoutSet,
@@ -247,10 +247,13 @@ export async function getLastPerformance(
   return { date: row.date, sets: sets.map(toSet) };
 }
 
-/** Status for each date in [from, to]: logged workouts win, otherwise the weekly plan is used. */
+/**
+ * Status for each date in [from, to]. Logged workouts win; otherwise today and later follow the
+ * current plan, and past days the plan that was in use on that date (none before the first save).
+ */
 export async function getRangeSummary(db: Db, from: string, to: string, today: string): Promise<DaySummary[]> {
   const plan = await getPlan(db);
-  const start = await getTrackingStart(db);
+  const history = await getPlanHistory(db); // newest first
   const rows = await db.getAllAsync<{
     date: string; is_rest: number; kind: CategoryKind | null; we_id: number | null;
     total: number | null; done: number | null;
@@ -282,17 +285,19 @@ export async function getRangeSummary(db: Db, from: string, to: string, today: s
       const status: DayStatus = done === 0 ? unfinished() : done >= total ? 'completed' : 'partial';
       return { date, status, exerciseCount: ex.length, kinds };
     }
-    // The current plan says nothing about past days before it was in use.
-    if (date < today && (!start || date < start)) return { date, status: 'none', exerciseCount: 0, kinds: [] };
-    const day = plan.find((d) => d.weekday === weekdayOf(date))!;
+    const weekday = weekdayOf(date);
+    let day: { isRest: boolean; exerciseCount: number; kinds: CategoryKind[] };
+    if (date < today) {
+      const then = history.find((h) => h.weekday === weekday && h.effectiveFrom <= date);
+      if (!then) return { date, status: 'none', exerciseCount: 0, kinds: [], beforePlan: true };
+      day = then;
+    } else {
+      const now = plan.find((d) => d.weekday === weekday)!;
+      day = { isRest: now.isRest, exerciseCount: now.items.length, kinds: [...new Set(now.items.map((i) => i.categoryKind))] };
+    }
     if (day.isRest) return { date, status: 'rest', exerciseCount: 0, kinds: [] };
-    if (!day.items.length) return { date, status: 'none', exerciseCount: 0, kinds: [] };
-    return {
-      date,
-      status: unfinished(),
-      exerciseCount: day.items.length,
-      kinds: [...new Set(day.items.map((i) => i.categoryKind))],
-    };
+    if (!day.exerciseCount) return { date, status: 'none', exerciseCount: 0, kinds: [] };
+    return { date, status: unfinished(), exerciseCount: day.exerciseCount, kinds: day.kinds };
   });
 }
 
