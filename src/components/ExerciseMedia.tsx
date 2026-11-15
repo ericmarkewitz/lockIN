@@ -13,10 +13,11 @@ import { ExerciseMotionFor } from './motion/ExerciseMotion';
 export function ExerciseMedia({ name, isCustom, size = 160 }: { name: string; isCustom: boolean; size?: number }) {
   const t = useTheme();
   const glow = size * 1.15;
+  const ring = glow * 0.92;
   return (
     <View style={[styles.frame, { width: glow, height: glow }]}>
-      <View style={[styles.glow, { width: glow, height: glow, borderRadius: glow / 2, backgroundColor: tint(t.primary, 0.08) }]} />
-      <View style={[styles.glow, { width: glow * 0.7, height: glow * 0.7, borderRadius: glow, backgroundColor: tint(t.primary, 0.07) }]} />
+      <View style={[styles.glow, { width: ring, height: ring, borderRadius: ring / 2, backgroundColor: tint(t.primary, 0.06) }]} />
+      <View style={[styles.glow, { width: ring * 0.68, height: ring * 0.68, borderRadius: ring, backgroundColor: tint(t.primary, 0.06) }]} />
       {isCustom ? (
         <Text style={[styles.initial, { color: t.primary, fontSize: size * 0.4 }]}>{name.trim().charAt(0).toUpperCase()}</Text>
       ) : (

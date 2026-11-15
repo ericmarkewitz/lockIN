@@ -199,7 +199,7 @@ function TopBar({
           const share = e.sets.filter((s) => s.completed).length / e.sets.length;
           const on = e.id === current;
           return (
-            <View key={e.id} style={[styles.capsule, { backgroundColor: on ? tint(t.primary, 0.18) : t.surface }]}>
+            <View key={e.id} style={[styles.capsule, { backgroundColor: on ? tint(t.primary, 0.25) : tint(t.text, 0.1) }]}>
               <View style={[styles.capsuleFill, { width: `${share * 100}%`, backgroundColor: share === 1 ? t.success : t.primary }]} />
             </View>
           );
@@ -284,7 +284,7 @@ function StepView({
       accessibilityState={{ expanded: tips }}
       onPress={() => setTips(true)}
       hitSlop={6}
-      style={({ pressed }) => [styles.tipsToggle, { backgroundColor: t.card, opacity: pressed ? 0.7 : 1 }]}
+      style={({ pressed }) => [styles.tipsToggle, { backgroundColor: tint(t.card, 0.55), opacity: pressed ? 0.7 : 1 }]}
     >
       <Icon name={sym('lightbulb.fill', 'lightbulb')} size={13} color={t.primary} fallback="💡" />
       <Text style={{ color: t.primary, fontWeight: '700', fontSize: 14 }}>Tips</Text>
@@ -539,7 +539,7 @@ function SetDots({ sets, current }: { sets: WorkoutSet[]; current: number }) {
           style={[
             styles.dot,
             i === current && styles.dotOn,
-            { backgroundColor: i === current ? t.primary : s.completed ? t.success : t.surface },
+            { backgroundColor: i === current ? t.primary : s.completed ? t.success : tint(t.text, 0.15) },
           ]}
         />
       ))}
@@ -591,7 +591,7 @@ function NumberTile({
         onChangeText={onChangeText}
         keyboardType={integer ? 'number-pad' : 'decimal-pad'}
         selectTextOnFocus
-        placeholder="0"
+        placeholder="–"
         placeholderTextColor={tint(t.muted, 0.5)}
         style={[styles.tileInput, { color: t.text }]}
       />
@@ -657,7 +657,7 @@ function UpNext({ exercise }: { exercise: WorkoutExercise }) {
     ? `${exercise.sets.length} ${exercise.sets.length === 1 ? 'set' : 'sets'}${exercise.targetReps ? ` × ${exercise.targetReps}` : ''}`
     : formatDuration(exercise.targetDurationMin) || exercise.categoryName;
   return (
-    <View accessible accessibilityLabel={`Next: ${exercise.exerciseName}`} style={[styles.upNext, { backgroundColor: t.card }]}>
+    <View accessible accessibilityLabel={`Next: ${exercise.exerciseName}`} style={[styles.upNext, { backgroundColor: tint(t.card, 0.55), borderColor: tint(t.text, 0.06) }]}>
       <Thumb exercise={exercise} size={32} />
       <Text style={[styles.eyebrow, { color: t.muted }]}>Next</Text>
       <Text style={{ color: t.text, fontWeight: '700', flex: 1 }} numberOfLines={1}>{exercise.exerciseName}</Text>
@@ -673,6 +673,7 @@ function FinishView({
   onNotes: (text: string) => void; onSkipped?: () => void; onFinish: () => void;
 }) {
   const t = useTheme();
+  const glass = { bg: tint(t.card, 0.55), border: tint(t.text, 0.06) };
   const done = steps.filter((s) => s.set.completed).length;
   const open = steps.length - done;
   const lifts = exercises.some((e) => e.categoryKind === 'strength');
@@ -699,13 +700,13 @@ function FinishView({
         </View>
         <View style={styles.stats}>
           {stats.map((s) => (
-            <View key={s.label} accessible accessibilityLabel={`${s.label}: ${s.value}`} style={[styles.stat, { backgroundColor: t.card, borderColor: t.border }]}>
+            <View key={s.label} accessible accessibilityLabel={`${s.label}: ${s.value}`} style={[styles.stat, { backgroundColor: glass.bg, borderColor: glass.border }]}>
               <Text style={[styles.statValue, { color: t.text }]} numberOfLines={1} adjustsFontSizeToFit>{s.value}</Text>
               <Text style={[styles.statLabel, { color: t.muted }]}>{s.label}</Text>
             </View>
           ))}
         </View>
-        <View style={[styles.card, { backgroundColor: t.card, borderColor: t.border, paddingVertical: 6 }]}>
+        <View style={[styles.card, { backgroundColor: glass.bg, borderColor: glass.border, paddingVertical: 6 }]}>
           {exercises.map((e, i) => {
             const d = e.sets.filter((s) => s.completed).length;
             const all = d === e.sets.length;
@@ -728,7 +729,7 @@ function FinishView({
             );
           })}
         </View>
-        <View style={[styles.card, { backgroundColor: t.card, borderColor: t.border, gap: 8 }]}>
+        <View style={[styles.card, { backgroundColor: glass.bg, borderColor: glass.border, gap: 8 }]}>
           <Text style={[styles.fieldLabel, { color: t.muted }]}>Notes</Text>
           <TextInput
             accessibilityLabel="Workout notes"
@@ -800,7 +801,7 @@ const styles = StyleSheet.create({
   ctaText: { fontSize: 18, fontWeight: '800', letterSpacing: -0.2 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
   roundAction: { width: 60, height: 60, borderRadius: 30, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
-  upNext: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 16, paddingVertical: 6, paddingHorizontal: 8 },
+  upNext: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, paddingVertical: 6, paddingHorizontal: 8 },
   thumb: { alignItems: 'center', justifyContent: 'center' },
   thumbSmall: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   badgeOuter: { alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
