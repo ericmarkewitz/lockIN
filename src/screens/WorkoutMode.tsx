@@ -249,7 +249,7 @@ function StepView({
       accessibilityState={{ expanded: tips }}
       onPress={() => setTips(true)}
       hitSlop={6}
-      style={({ pressed }) => [styles.tipsToggle, { backgroundColor: tint(t.primary, 0.12), opacity: pressed ? 0.7 : 1 }]}
+      style={({ pressed }) => [styles.tipsToggle, { backgroundColor: t.card, opacity: pressed ? 0.7 : 1 }]}
     >
       <Icon name={sym('lightbulb.fill', 'lightbulb')} size={13} color={t.primary} fallback="💡" />
       <Text style={{ color: t.primary, fontWeight: '700', fontSize: 14 }}>Tips</Text>
@@ -278,13 +278,12 @@ function StepView({
         </>
       ) : (
         <>
-          <Hero exercise={exercise} label={`Exercise ${step.exerciseIndex + 1} of ${exerciseCount}`} upcoming={upcoming} />
-          <View style={styles.titleRow}>
-            <Text style={[styles.title, { color: t.text }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
-              {exercise.exerciseName}
-            </Text>
-            {tipsButton}
-          </View>
+          <Hero
+            exercise={exercise}
+            label={`Exercise ${step.exerciseIndex + 1} of ${exerciseCount}`}
+            upcoming={upcoming}
+            tips={tipsButton}
+          />
 
           <Animated.View entering={FadeInDown.duration(260)} style={[styles.card, { backgroundColor: t.card, borderColor: t.border, gap: 12 }]}>
             <View style={styles.entryHead}>
@@ -386,28 +385,34 @@ function StepView({
 }
 
 /**
- * The exercise's picture, filling whatever height the screen has left. The figure is sized to
- * the space measured, so a small phone still fits the whole set on one screen.
+ * The exercise card: its name, tips and picture, filling whatever height the screen has left.
+ * The figure is sized to the space measured, so a small phone still fits the whole set.
  */
-function Hero({ exercise, label, upcoming }: { exercise: WorkoutExercise; label: string; upcoming?: WorkoutExercise }) {
+function Hero({
+  exercise, label, upcoming, tips,
+}: { exercise: WorkoutExercise; label: string; upcoming?: WorkoutExercise; tips?: ReactNode }) {
   const t = useTheme();
   const [height, setHeight] = useState(0);
-  // Leaves room for the chip row and the up-next line; the glow is 1.15× the figure.
-  const size = height ? Math.min(220, (height - (upcoming ? 96 : 52)) / 1.15) : 160;
+  // Leaves room for the name and the up-next line; the glow is 1.15× the figure.
+  const size = height ? Math.min(220, (height - (upcoming ? 120 : 76)) / 1.15) : 160;
+  const kind = [exercise.categoryName, exercise.subcategory].filter(Boolean).join(' · ');
   return (
     <View
       onLayout={(e) => setHeight(e.nativeEvent.layout.height)}
       style={[styles.hero, { backgroundColor: tint(t.primary, 0.07), borderColor: tint(t.primary, 0.12) }]}
     >
       <View style={styles.heroTop}>
-        <View style={[styles.chip, { backgroundColor: t.card }]}>
-          <Icon name={categoryIcon({ name: exercise.categoryName, kind: exercise.categoryKind })} size={12} color={t.primary} fallback="•" />
-          <Text style={[styles.chipText, { color: t.text }]} numberOfLines={1}>
-            {exercise.categoryName}
-            {exercise.subcategory ? ` · ${exercise.subcategory}` : ''}
+        <View style={{ flex: 1, gap: 2 }}>
+          <View style={styles.heroMeta}>
+            <Text style={[styles.eyebrow, { color: t.primary }]}>{label}</Text>
+            <Icon name={categoryIcon({ name: exercise.categoryName, kind: exercise.categoryKind })} size={11} color={t.muted} fallback="•" />
+            <Text style={[styles.eyebrow, { color: t.muted, flexShrink: 1 }]} numberOfLines={1}>{kind}</Text>
+          </View>
+          <Text style={[styles.title, { color: t.text }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+            {exercise.exerciseName}
           </Text>
         </View>
-        <Text style={[styles.eyebrow, { color: t.primary }]}>{label}</Text>
+        {tips}
       </View>
       <View style={styles.heroMedia}>
         {size >= 48 && <ExerciseMedia name={exercise.exerciseName} isCustom={exercise.isCustom} size={size} />}
@@ -704,15 +709,13 @@ const styles = StyleSheet.create({
   capsule: { flex: 1, height: 6, borderRadius: 3, overflow: 'hidden' },
   capsuleFill: { height: '100%', borderRadius: 3 },
   hero: { flex: 1, minHeight: 0, borderRadius: 28, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden', padding: 12, gap: 8 },
-  heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  heroTop: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 4 },
+  heroMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   heroMedia: { flex: 1, minHeight: 0, alignItems: 'center', justifyContent: 'center' },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   compactHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   compactTitle: { fontSize: 22, fontWeight: '800', letterSpacing: -0.4 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 },
-  chipText: { fontSize: 12, fontWeight: '700' },
   eyebrow: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1.2 },
-  title: { flex: 1, fontSize: 28, fontWeight: '800', letterSpacing: -0.6 },
+  title: { fontSize: 26, fontWeight: '800', letterSpacing: -0.6 },
   tipsToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999 },
   sheetRoot: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.45)' },
