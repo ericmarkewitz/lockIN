@@ -46,11 +46,7 @@ You need a paid Apple Developer account and access to the `ericmarkewitz` Expo a
    - Let it create the distribution certificate, the provisioning profile and an **App Store Connect API key**. EAS stores all of these, so later builds don't ask for Apple credentials.
 
    It creates the app in App Store Connect, builds it in the cloud (about 15–30 min) and uploads it. Apple then takes another 5–15 min to process it.
-2. In [App Store Connect](https://appstoreconnect.apple.com), open the app and copy its **Apple ID** (a number) from **General → App Information**. Add it to `eas.json` and commit it, so releases never ask which app to submit to:
-
-   ```json
-   "submit": { "production": { "ios": { "ascAppId": "1234567890" } } }
-   ```
+2. Set `submit.production.ios.ascAppId` in `eas.json` to the app's **Apple ID** (a number) from App Store Connect, under **General → App Information**. It's already set for lockIN (`6835224059`). It isn't a secret, and with it set, releases never ask which app to submit to.
 
 ### Adding testers
 
@@ -74,7 +70,7 @@ Bump `version` in `app.json` when you want a new user-facing version (for exampl
 
 ### Later: automation
 
-The next step is an [EAS Workflow](https://docs.expo.dev/eas/workflows/examples/deploy-to-production/) on pushes to `main`. It fingerprints the app, then either publishes an OTA update or builds and submits to TestFlight. It needs the GitHub repo linked in the project settings on expo.dev and `ascAppId` set (step 2 above).
+The next step is an [EAS Workflow](https://docs.expo.dev/eas/workflows/examples/deploy-to-production/) on pushes to `main`. It fingerprints the app, then either publishes an OTA update or builds and submits to TestFlight. It needs the GitHub repo linked in the project settings on expo.dev and `ascAppId` (already set).
 
 ## Project layout
 
