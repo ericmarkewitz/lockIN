@@ -283,80 +283,77 @@ function StepView({
             label={`Exercise ${step.exerciseIndex + 1} of ${exerciseCount}`}
             upcoming={upcoming}
             tips={tipsButton}
-          />
-
-          <Animated.View entering={FadeInDown.duration(260)} style={[styles.card, { backgroundColor: t.card, borderColor: t.border, gap: 12 }]}>
+          >
             <View style={styles.entryHead}>
-              {isStrength ? (
-                <>
-                  <Text style={[styles.setLabel, { color: t.text }]}>Set {set.setNumber} of {exercise.sets.length}</Text>
-                  <SetDots sets={exercise.sets} current={setIndex} />
-                </>
-              ) : (
-                <Text style={[styles.setLabel, { color: t.text }]}>{exercise.categoryKind === 'cardio' ? 'Log your session' : 'Log your practice'}</Text>
-              )}
+              <Text style={[styles.setLabel, { color: t.text }]}>
+                {isStrength ? `Set ${set.setNumber} of ${exercise.sets.length}` : exercise.categoryKind === 'cardio' ? 'Log your session' : 'Log your practice'}
+              </Text>
+              {set.completed && <Pill icon={sym('checkmark.circle.fill', 'check_circle')} fallback="✓" text="Done" color={t.success} />}
+              <View style={{ flex: 1 }} />
+              {isStrength && <SetDots sets={exercise.sets} current={setIndex} />}
             </View>
-            {(set.completed || (last && last.sets.length > 0)) && (
-              <View style={styles.metaRow}>
-                {set.completed && <Pill icon={sym('checkmark.circle.fill', 'check_circle')} fallback="✓" text="Done" color={t.success} />}
-                {last && last.sets.length > 0 && (
-                  <Pill icon={sym('clock.arrow.circlepath', 'history')} fallback="↺" text={`Last time: ${formatSets(last.sets, exercise.categoryKind, units)}`} color={t.muted} />
-                )}
+            {last && last.sets.length > 0 && (
+              <View style={styles.lastRow}>
+                <Icon name={sym('clock.arrow.circlepath', 'history')} size={11} color={t.muted} fallback="↺" />
+                <Text style={{ color: t.muted, fontSize: 12, fontWeight: '600', flexShrink: 1 }} numberOfLines={1}>
+                  Last time: {formatSets(last.sets, exercise.categoryKind, units)}
+                </Text>
               </View>
             )}
-            {isStrength ? (
-              <>
-                <Stepper
-                  label="Weight"
-                  value={weight}
-                  onChangeText={setWeight}
-                  less="Less weight"
-                  more="More weight"
-                  onStep={stepWeight}
-                  unit={
-                    <UnitPill
-                      label="Weight unit"
-                      unit={weightUnit}
-                      // The number stays as typed and now means the other unit, as in the day view.
-                      onPress={() => setWeightUnit(otherWeightUnit(weightUnit))}
-                    />
-                  }
-                />
-                <View style={[styles.divider, { backgroundColor: t.border }]} />
-                <Stepper label="Reps" value={reps} onChangeText={setReps} less="Fewer reps" more="More reps" onStep={stepReps} integer />
-              </>
-            ) : (
-              <>
-                <View style={[styles.field, { backgroundColor: t.surface }]}>
-                  <Text style={[styles.fieldLabel, styles.inlineLabel, { color: t.muted }]}>Time</Text>
-                  <DurationButton
-                    label="Duration"
-                    title={exercise.exerciseName}
-                    value={durationMin}
-                    target={exercise.targetDurationMin}
-                    onChange={setDurationMin}
-                    style={styles.duration}
+            <View style={styles.tiles}>
+              {isStrength ? (
+                <>
+                  <NumberTile
+                    label="Weight"
+                    value={weight}
+                    onChangeText={setWeight}
+                    less="Less weight"
+                    more="More weight"
+                    onStep={stepWeight}
+                    unit={
+                      <UnitPill
+                        label="Weight unit"
+                        unit={weightUnit}
+                        // The number stays as typed and now means the other unit, as in the day view.
+                        onPress={() => setWeightUnit(otherWeightUnit(weightUnit))}
+                      />
+                    }
                   />
-                </View>
-                {exercise.categoryKind === 'cardio' && (
-                  <View style={[styles.field, { backgroundColor: t.surface }]}>
-                    <Text style={[styles.fieldLabel, styles.inlineLabel, { color: t.muted }]}>Distance</Text>
-                    <TextInput
-                      accessibilityLabel="Distance"
-                      value={distance}
-                      onChangeText={setDistance}
-                      keyboardType="decimal-pad"
-                      selectTextOnFocus
-                      placeholder="–"
-                      placeholderTextColor={t.muted}
-                      style={[styles.input, { color: t.text }]}
+                  <NumberTile label="Reps" value={reps} onChangeText={setReps} less="Fewer reps" more="More reps" onStep={stepReps} integer />
+                </>
+              ) : (
+                <>
+                  <Tile label="Time">
+                    <DurationButton
+                      label="Duration"
+                      title={exercise.exerciseName}
+                      value={durationMin}
+                      target={exercise.targetDurationMin}
+                      onChange={setDurationMin}
+                      style={styles.duration}
                     />
-                    <UnitPill label="Distance unit" unit={distanceUnit} onPress={() => setDistanceUnit(otherDistanceUnit(distanceUnit))} />
-                  </View>
-                )}
-              </>
-            )}
-          </Animated.View>
+                  </Tile>
+                  {exercise.categoryKind === 'cardio' && (
+                    <Tile
+                      label="Distance"
+                      unit={<UnitPill label="Distance unit" unit={distanceUnit} onPress={() => setDistanceUnit(otherDistanceUnit(distanceUnit))} />}
+                    >
+                      <TextInput
+                        accessibilityLabel="Distance"
+                        value={distance}
+                        onChangeText={setDistance}
+                        keyboardType="decimal-pad"
+                        selectTextOnFocus
+                        placeholder="–"
+                        placeholderTextColor={t.muted}
+                        style={[styles.tileInput, { color: t.text }]}
+                      />
+                    </Tile>
+                  )}
+                </>
+              )}
+            </View>
+          </Hero>
 
           <View style={styles.actions}>
             <RoundAction
@@ -389,16 +386,16 @@ function StepView({
  * The figure is sized to the space measured, so a small phone still fits the whole set.
  */
 function Hero({
-  exercise, label, upcoming, tips,
-}: { exercise: WorkoutExercise; label: string; upcoming?: WorkoutExercise; tips?: ReactNode }) {
+  exercise, label, upcoming, tips, children,
+}: { exercise: WorkoutExercise; label: string; upcoming?: WorkoutExercise; tips?: ReactNode; children?: ReactNode }) {
   const t = useTheme();
-  const [height, setHeight] = useState(0);
-  // Leaves room for the name and the up-next line; the glow is 1.15× the figure.
-  const size = height ? Math.min(220, (height - (upcoming ? 120 : 76)) / 1.15) : 160;
+  // The figure gets whatever room the name and the set leave; its glow is 1.15× the figure.
+  const [room, setRoom] = useState<{ width: number; height: number } | null>(null);
+  const size = room ? Math.min(220, room.width / 1.15, room.height / 1.15) : 160;
   const kind = [exercise.categoryName, exercise.subcategory].filter(Boolean).join(' · ');
   return (
-    <View
-      onLayout={(e) => setHeight(e.nativeEvent.layout.height)}
+    <Animated.View
+      entering={FadeInDown.duration(260)}
       style={[styles.hero, { backgroundColor: tint(t.primary, 0.07), borderColor: tint(t.primary, 0.12) }]}
     >
       <View style={styles.heroTop}>
@@ -414,11 +411,12 @@ function Hero({
         </View>
         {tips}
       </View>
-      <View style={styles.heroMedia}>
+      <View style={styles.heroMedia} onLayout={(e) => setRoom(e.nativeEvent.layout)}>
         {size >= 48 && <ExerciseMedia name={exercise.exerciseName} isCustom={exercise.isCustom} size={size} />}
       </View>
+      {children}
       {upcoming && <UpNext exercise={upcoming} />}
-    </View>
+    </Animated.View>
   );
 }
 
@@ -508,8 +506,22 @@ function SetDots({ sets, current }: { sets: WorkoutSet[]; current: number }) {
   );
 }
 
-/** A big number with round − and + either side, sized for sweaty thumbs. */
-function Stepper({
+/** A see-through panel inside the exercise card, so the card's color shows through. */
+function Tile({ label, unit, children }: { label: string; unit?: ReactNode; children: ReactNode }) {
+  const t = useTheme();
+  return (
+    <View style={[styles.tile, { backgroundColor: tint(t.card, 0.55), borderColor: tint(t.text, 0.06) }]}>
+      <View style={styles.tileHead}>
+        <Text style={[styles.fieldLabel, { color: t.muted }]}>{label}</Text>
+        {unit}
+      </View>
+      {children}
+    </View>
+  );
+}
+
+/** A number in a tile with − and + underneath, sized for sweaty thumbs. */
+function NumberTile({
   label, value, onChangeText, less, more, onStep, unit, integer,
 }: {
   label: string; value: string; onChangeText: (s: string) => void; less: string; more: string;
@@ -523,34 +535,30 @@ function Stepper({
       onPress={() => onStep(dir)}
       hitSlop={4}
       style={({ pressed }) => [
-        styles.round,
-        { backgroundColor: pressed ? tint(t.primary, 0.2) : t.surface, transform: [{ scale: pressed ? 0.92 : 1 }] },
+        styles.tileButton,
+        { backgroundColor: tint(t.primary, pressed ? 0.24 : 0.12), transform: [{ scale: pressed ? 0.94 : 1 }] },
       ]}
     >
-      <Icon name={icon} size={20} color={t.text} fallback={fallback} />
+      <Icon name={icon} size={16} color={t.primary} fallback={fallback} />
     </Pressable>
   );
   return (
-    <View style={{ gap: 4 }}>
-      <View style={styles.stepperHead}>
-        <Text style={[styles.fieldLabel, { color: t.muted }]}>{label}</Text>
-        {unit}
-      </View>
-      <View style={styles.stepper}>
+    <Tile label={label} unit={unit}>
+      <TextInput
+        accessibilityLabel={label}
+        value={value}
+        onChangeText={onChangeText}
+        keyboardType={integer ? 'number-pad' : 'decimal-pad'}
+        selectTextOnFocus
+        placeholder="0"
+        placeholderTextColor={tint(t.muted, 0.5)}
+        style={[styles.tileInput, { color: t.text }]}
+      />
+      <View style={styles.tileButtons}>
         {button(less, sym('minus', 'remove'), '−', -1)}
-        <TextInput
-          accessibilityLabel={label}
-          value={value}
-          onChangeText={onChangeText}
-          keyboardType={integer ? 'number-pad' : 'decimal-pad'}
-          selectTextOnFocus
-          placeholder="0"
-          placeholderTextColor={tint(t.muted, 0.5)}
-          style={[styles.bigInput, { color: t.text }]}
-        />
         {button(more, sym('plus', 'add'), '+', 1)}
       </View>
-    </View>
+    </Tile>
   );
 }
 
@@ -726,26 +734,23 @@ const styles = StyleSheet.create({
   tipNumText: { fontSize: 12, fontWeight: '800' },
   tipText: { flex: 1, fontSize: 15, lineHeight: 21 },
   card: { borderRadius: 24, borderWidth: StyleSheet.hairlineWidth, padding: 14 },
-  entryHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  setLabel: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
+  entryHead: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 },
+  setLabel: { fontSize: 17, fontWeight: '800', letterSpacing: -0.3 },
   dots: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   dotOn: { width: 22 },
-  metaRow: { flexDirection: 'row', gap: 8, marginTop: -4, overflow: 'hidden' },
   pill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, maxWidth: '100%' },
   fieldLabel: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1.2 },
-  stepperHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 20 },
-  stepper: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  round: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
-  bigInput: {
-    flex: 1, minWidth: 0, textAlign: 'center', fontSize: 44, fontWeight: '800', letterSpacing: -1.5,
-    fontVariant: ['tabular-nums'], paddingVertical: 0,
+  duration: { minHeight: 44, backgroundColor: 'transparent' },
+  lastRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: -4, paddingHorizontal: 4 },
+  tiles: { flexDirection: 'row', gap: 8 },
+  tile: { flex: 1, minWidth: 0, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, padding: 10, gap: 4 },
+  tileHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 20 },
+  tileInput: {
+    textAlign: 'center', fontSize: 34, fontWeight: '800', letterSpacing: -1, fontVariant: ['tabular-nums'], paddingVertical: 0, minHeight: 44,
   },
-  divider: { height: StyleSheet.hairlineWidth },
-  field: { minHeight: 56, flexDirection: 'row', alignItems: 'center', borderRadius: 16, paddingRight: 12 },
-  inlineLabel: { paddingLeft: 14, width: 86 },
-  duration: { flex: 1, minWidth: 0, backgroundColor: 'transparent' },
-  input: { flex: 1, minWidth: 0, paddingHorizontal: 12, paddingVertical: 12, fontSize: 22, fontWeight: '700', textAlign: 'center' },
+  tileButtons: { flexDirection: 'row', gap: 6 },
+  tileButton: { flex: 1, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   cta: { height: 60, borderRadius: 30, flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch' },
   ctaRaised: { shadowOpacity: 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 5 },
   ctaText: { fontSize: 18, fontWeight: '800', letterSpacing: -0.2 },
