@@ -155,7 +155,7 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
           })),
         });
       }
-      await markPlanComplete(db);
+      await markPlanComplete(db, todayKey());
       await refreshUntouchedWorkouts(db, todayKey());
       onSaved();
     } finally {

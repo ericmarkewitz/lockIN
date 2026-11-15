@@ -1,7 +1,7 @@
 import { datesInRange, weekdayOf } from '@/lib/dates';
 import type { Db } from '@/db/types';
 import { LOGGED_SET } from './logged';
-import { getPlan } from './plan';
+import { getPlan, getTrackingStart } from './plan';
 import { DISTANCE_UNITS, getUnits, WEIGHT_UNITS, type DistanceUnit, type WeightUnit } from './settings';
 import type {
   CategoryKind, DaySummary, DayStatus, Targets, Workout, WorkoutExercise, WorkoutSet,
@@ -250,6 +250,7 @@ export async function getLastPerformance(
 /** Status for each date in [from, to]: logged workouts win, otherwise the weekly plan is used. */
 export async function getRangeSummary(db: Db, from: string, to: string, today: string): Promise<DaySummary[]> {
   const plan = await getPlan(db);
+  const start = await getTrackingStart(db);
   const rows = await db.getAllAsync<{
     date: string; is_rest: number; kind: CategoryKind | null; we_id: number | null;
     total: number | null; done: number | null;
@@ -281,6 +282,8 @@ export async function getRangeSummary(db: Db, from: string, to: string, today: s
       const status: DayStatus = done === 0 ? unfinished() : done >= total ? 'completed' : 'partial';
       return { date, status, exerciseCount: ex.length, kinds };
     }
+    // The current plan says nothing about past days before it was in use.
+    if (date < today && (!start || date < start)) return { date, status: 'none', exerciseCount: 0, kinds: [] };
     const day = plan.find((d) => d.weekday === weekdayOf(date))!;
     if (day.isRest) return { date, status: 'rest', exerciseCount: 0, kinds: [] };
     if (!day.items.length) return { date, status: 'none', exerciseCount: 0, kinds: [] };

@@ -4,7 +4,7 @@ import type { DaySummary, DayStatus } from '@/data/types';
 import { monthGrid, parseDateKey } from '@/lib/dates';
 import { tint, useTheme, type Theme } from '@/theme';
 import { KindIcon } from './KindIcon';
-import { STATUS_LABEL, statusColor } from './status';
+import { STATUS_LABEL, statusColor, statusLabel } from './status';
 
 /** Splits the month's cells into Monday-first week rows. */
 const weeks = <T,>(cells: T[]): T[][] =>
@@ -54,7 +54,7 @@ export function MonthView({ anchor, byDate, today, onPick }: {
                 <Pressable
                   key={date}
                   accessibilityRole="button"
-                  accessibilityLabel={`${date}${has ? ` ${STATUS_LABEL[status]}` : ''}`}
+                  accessibilityLabel={`${date}${has ? ` ${statusLabel(status, date, today)}` : ''}`}
                   onPress={() => onPick(date)}
                   style={({ pressed }) => [
                     styles.cell,
