@@ -15,6 +15,7 @@ import type { WorkoutSet } from '@/data/types';
 import { loadDay, setWorkoutNotes, shownExercises, updateSet, type SetPatch } from '@/data/workouts';
 import { useDb } from '@/db/DbContext';
 import { useLoad } from '@/hooks/useLoad';
+import { formatDuration } from '@/lib/duration';
 import { parseNumber } from '@/lib/numbers';
 import {
   fromDisplayDistance, fromDisplayWeight, otherDistanceUnit, otherWeightUnit, toDisplayDistance, toDisplayWeight,
@@ -46,7 +47,8 @@ export function WorkoutMode({ date }: { date: string }) {
   const router = useRouter();
   const { data, reload } = useLoad(() => load(db, date), [db, date]);
   const [cursor, setCursor] = useState<Cursor>(null);
-  const [restEndsAt, setRestEndsAt] = useState<number | null>(null);
+  /** A running rest, and the exercise it followed (to say when the next set is a new lift). */
+  const [rest, setRest] = useState<{ endsAt: number; afterExerciseId: number } | null>(null);
 
   const header = (
     <Stack.Screen
@@ -76,11 +78,13 @@ export function WorkoutMode({ date }: { date: string }) {
     const next = nextOpenStep(steps, index);
     await updateSet(db, steps[index].set.id, { ...patch, completed: true });
     await reload();
-    setRestEndsAt(!wasDone && next !== -1 && restSeconds > 0 ? restUntil(restSeconds) : null);
+    setRest(!wasDone && next !== -1 && restSeconds > 0
+      ? { endsAt: restUntil(restSeconds), afterExerciseId: steps[index].exercise.id }
+      : null);
     goTo(next);
   };
   const move = (i: number) => {
-    setRestEndsAt(null);
+    setRest(null);
     goTo(i);
   };
 
@@ -115,19 +119,17 @@ export function WorkoutMode({ date }: { date: string }) {
                   exerciseCount={exerciseCount}
                   units={units}
                   last={last[step.exercise.exerciseId] ?? null}
-                  rest={restEndsAt !== null && (
-                    <RestTimer
-                      endsAt={restEndsAt}
-                      onAdjust={(s) => setRestEndsAt(Math.max(restUntil(0), restEndsAt + s * 1000))}
-                      onSkip={() => setRestEndsAt(null)}
-                      onFinish={() => setRestEndsAt(null)}
-                    />
-                  )}
+                  rest={rest && {
+                    endsAt: rest.endsAt,
+                    newExercise: rest.afterExerciseId !== step.exercise.id,
+                    onAdjust: (s) => setRest({ ...rest, endsAt: Math.max(restUntil(0), rest.endsAt + s * 1000) }),
+                    onEnd: () => setRest(null),
+                  }}
                   onDone={finishStep}
                   onSkip={() => move(nextOpenStep(steps, index))}
                   onPrevious={index > 0 ? () => move(index - 1) : undefined}
                 />
-                {(() => {
+                {!rest && (() => {
                   const upcoming = steps.slice(index + 1).find((s) => s.exerciseIndex !== step.exerciseIndex);
                   return upcoming && (
                     <Text style={[styles.next, { color: t.muted }]}>Next: {upcoming.exercise.exerciseName}</Text>
@@ -153,7 +155,9 @@ export function WorkoutMode({ date }: { date: string }) {
 function StepView({
   step, exerciseCount, units, last, rest, onDone, onSkip, onPrevious,
 }: {
-  step: Step; exerciseCount: number; units: Units; last: { sets: WorkoutSet[] } | null; rest: React.ReactNode;
+  step: Step; exerciseCount: number; units: Units; last: { sets: WorkoutSet[] } | null;
+  /** While resting, the rest takes the place of the set; the set's entry keeps what's typed. */
+  rest: { endsAt: number; newExercise: boolean; onAdjust: (seconds: number) => void; onEnd: () => void } | null;
   onDone: (patch: SetPatch) => void; onSkip: () => void; onPrevious?: () => void;
 }) {
   const t = useTheme();
@@ -176,6 +180,17 @@ function StepView({
     setWeight(show(Math.max(0, (parseNumber(weight) ?? 0) + dir * WEIGHT_STEP[weightUnit])));
   const stepReps = (dir: 1 | -1) =>
     setReps(show(Math.min(MAX_REPS, Math.max(0, Math.round(parseNumber(reps) ?? 0) + dir))));
+
+  /** "Up next: Set 2 of 3 · 135 lb × 10", naming the exercise when it's a new one. */
+  const upNext = (newExercise: boolean) => {
+    const w = parseNumber(weight);
+    const r = parseNumber(reps);
+    const what = isStrength
+      ? [`Set ${set.setNumber} of ${exercise.sets.length}`, w !== null && r !== null ? `${show(w)} ${weightUnit} × ${r}` : r !== null ? `${r} reps` : null]
+      : [durationMin !== null ? formatDuration(durationMin) : null];
+    const parts = [newExercise || !isStrength ? exercise.exerciseName : null, ...what].filter(Boolean);
+    return `Up next: ${parts.join(' · ')}`;
+  };
 
   const done = () => {
     // A unit is only stored when it differs from the setting (or already was), as in the day view.
@@ -233,8 +248,16 @@ function StepView({
         </View>
       )}
 
-      {rest}
-
+      {rest ? (
+        <RestTimer
+          endsAt={rest.endsAt}
+          next={upNext(rest.newExercise)}
+          onAdjust={rest.onAdjust}
+          onSkip={rest.onEnd}
+          onFinish={rest.onEnd}
+        />
+      ) : (
+      <>
       <View style={[styles.entry, { backgroundColor: t.card, borderColor: t.border }]}>
         <View style={styles.entryHead}>
           {isStrength && (
@@ -314,6 +337,8 @@ function StepView({
         />
         <Button title={isStrength ? 'Skip set' : 'Skip'} label={`Skip ${subject}`} variant="secondary" onPress={onSkip} style={{ flex: 1 }} />
       </View>
+      </>
+      )}
     </View>
   );
 }

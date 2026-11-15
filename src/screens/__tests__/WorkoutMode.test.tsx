@@ -56,6 +56,7 @@ describe('WorkoutMode', () => {
 
   it('logs the set on Done and moves on with the same weight', async () => {
     const db = await setup();
+    await setRestSeconds(db, 0);
     await open(db);
     await fireEvent.changeText(screen.getByLabelText('Weight'), '135');
     await fireEvent.press(screen.getByLabelText('Done with set 1'));
@@ -67,6 +68,7 @@ describe('WorkoutMode', () => {
 
   it('logs fewer reps when you did fewer', async () => {
     const db = await setup();
+    await setRestSeconds(db, 0);
     await open(db);
     await fireEvent.press(screen.getByLabelText('Fewer reps'));
     await fireEvent.press(screen.getByLabelText('Fewer reps'));
@@ -91,6 +93,7 @@ describe('WorkoutMode', () => {
 
   it('stores a kg entry in pounds, in the unit it was entered', async () => {
     const db = await setup();
+    await setRestSeconds(db, 0);
     await setWeightUnit(db, 'kg');
     await open(db);
     await fireEvent.changeText(screen.getByLabelText('Weight'), '60');
@@ -161,6 +164,31 @@ describe('WorkoutMode', () => {
       expect(await screen.findByLabelText('Rest, 1:30 left')).toBeTruthy();
       await fireEvent.press(screen.getByLabelText('Skip rest'));
       expect(screen.queryByLabelText(/^Rest,/)).toBeNull();
+    });
+
+    it('takes the place of the set until it is over', async () => {
+      const db = await setup();
+      await open(db);
+      await fireEvent.changeText(screen.getByLabelText('Weight'), '135');
+      await fireEvent.press(screen.getByLabelText('Done with set 1'));
+      await screen.findByLabelText('Rest, 1:30 left');
+      expect(screen.queryByLabelText('Weight')).toBeNull();
+      expect(screen.queryByLabelText('Done with set 2')).toBeNull();
+      expect(screen.queryByLabelText('Skip set 2')).toBeNull();
+      expect(screen.getByText('Up next: Set 2 of 2 · 135 lb × 10')).toBeTruthy();
+      await fireEvent.press(screen.getByLabelText('Skip rest'));
+      expect(screen.getByLabelText('Weight').props.value).toBe('135');
+      expect(screen.getByLabelText('Done with set 2')).toBeTruthy();
+    });
+
+    it('names the next exercise when resting between lifts', async () => {
+      const db = await setup();
+      await open(db);
+      await fireEvent.press(screen.getByLabelText('Done with set 1'));
+      await fireEvent.press(await screen.findByLabelText('Skip rest'));
+      await fireEvent.press(screen.getByLabelText('Done with set 2'));
+      await screen.findByLabelText('Rest, 1:30 left');
+      expect(screen.getByText('Up next: Squat · Set 1 of 1 · 5 reps')).toBeTruthy();
     });
 
     it('uses the rest from settings, and none when it is off', async () => {

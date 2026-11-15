@@ -26,7 +26,7 @@ describe('RestTimer', () => {
 
   const renderTimer = async () => {
     const handlers = { onAdjust: jest.fn(), onSkip: jest.fn(), onFinish: jest.fn() };
-    await render(<RestTimer endsAt={Date.now() + 90_000} {...handlers} />);
+    await render(<RestTimer endsAt={Date.now() + 90_000} next="Up next: Set 2 of 3" {...handlers} />);
     return handlers;
   };
 
@@ -35,6 +35,11 @@ describe('RestTimer', () => {
     expect(screen.getByLabelText('Rest, 1:30 left')).toBeTruthy();
     await act(() => jest.advanceTimersByTime(30_000));
     expect(screen.getByLabelText('Rest, 1:00 left')).toBeTruthy();
+  });
+
+  it('says what comes after the rest', async () => {
+    await renderTimer();
+    expect(screen.getByText('Up next: Set 2 of 3')).toBeTruthy();
   });
 
   it('buzzes and finishes once the time is up', async () => {
