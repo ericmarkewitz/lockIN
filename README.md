@@ -34,43 +34,20 @@ CI runs typecheck, lint and tests on every push.
 
 ## Releasing to TestFlight (iOS)
 
-Builds, signing and uploads run on [EAS](https://docs.expo.dev/eas/) (Expo's cloud build service). You don't need Xcode. Config lives in `eas.json` and `app.json` (bundle ID `com.ericmarkewitz.lockin`).
+Builds run in the cloud on [EAS](https://docs.expo.dev/eas/), so you don't need Xcode. Config lives in `eas.json` and `app.json`.
 
-### One-time setup
+**First time:** run `npx testflight`, sign in to Expo and Apple, and accept the defaults. EAS creates and stores the signing credentials.
 
-You need a paid Apple Developer account and access to the `ericmarkewitz` Expo account.
+**After that:**
 
-1. From the project root, run `npx testflight` and follow the prompts:
-   - Sign in to Expo and to your Apple Developer account.
-   - Confirm the bundle ID `com.ericmarkewitz.lockin`. It can't be changed once the App Store Connect app exists.
-   - Let it create the distribution certificate, the provisioning profile and an **App Store Connect API key**. EAS stores all of these, so later builds don't ask for Apple credentials.
+| Change | Command |
+| --- | --- |
+| Native: packages with native code, `app.json` config, SDK upgrades | `npm run release:ios` (new TestFlight build) |
+| JS/TS only | `npm run release:update` (over-the-air update; testers relaunch to get it) |
 
-   It creates the app in App Store Connect, builds it in the cloud (about 15–30 min) and uploads it. Apple then takes another 5–15 min to process it.
-2. Set `submit.production.ios.ascAppId` in `eas.json` to the app's **Apple ID** (a number) from App Store Connect, under **General → App Information**. It's already set for lockIN (`6835224059`). It isn't a secret, and with it set, releases never ask which app to submit to.
+If you're not sure, use `release:ios`. Bump `version` in `app.json` for a new user-facing version. EAS handles build numbers.
 
-### Adding testers
-
-In App Store Connect, open the app and go to **TestFlight**:
-
-- **Internal testers** (up to 100 members of your developer team): add them under *Internal Testing*. They get each build as soon as Apple finishes processing it, with no review.
-- **External testers** (anyone): create a group under *External Testing*, add the build and turn on a **public link** you can share. A group's first build goes through Beta App Review, which usually takes under a day.
-
-Testers install the **TestFlight** app from the App Store, then open the invite email or the public link.
-
-### Shipping changes
-
-| Change | Command | What happens |
-| --- | --- | --- |
-| Native: new or upgraded package with native code, `app.json` plugins or permissions, or an Expo SDK upgrade | `npm run release:ios` | A new build is made and submitted to TestFlight. The build number goes up automatically. |
-| JS/TS only: screens, logic, styles, images | `npm run release:update` | An over-the-air update goes out. Testers get it the next time they relaunch the app (it can take two launches). |
-
-Not sure which one you need? `npm run release:ios` is always safe. `runtimeVersion` uses the `fingerprint` policy, so an OTA update only reaches builds with matching native code. If native code changed, the update just won't reach existing builds, and you'll need a new build.
-
-Bump `version` in `app.json` when you want a new user-facing version (for example `1.1.0`). Build numbers are managed remotely by EAS (`appVersionSource: "remote"`).
-
-### Later: automation
-
-The next step is an [EAS Workflow](https://docs.expo.dev/eas/workflows/examples/deploy-to-production/) on pushes to `main`. It fingerprints the app, then either publishes an OTA update or builds and submits to TestFlight. It needs the GitHub repo linked in the project settings on expo.dev and `ascAppId` (already set).
+**Testers:** add them in App Store Connect under **TestFlight**. Internal testers (people on your team) can install right away. External testers can join with a public link once the build passes Beta App Review, which usually takes under a day.
 
 ## Project layout
 
