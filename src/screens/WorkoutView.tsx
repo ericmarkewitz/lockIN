@@ -1,4 +1,5 @@
-import { useCallback, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -6,37 +7,18 @@ import { ExercisePicker } from '@/components/ExercisePicker';
 import { ExerciseMotionFor } from '@/components/motion/ExerciseMotion';
 import { Icon, sym } from '@/components/Icon';
 import { SetHeader, SetRow } from '@/components/SetRow';
-import { AddButton, Button, Segmented } from '@/components/ui';
-import type { Exercise, WorkoutExercise, WorkoutSet } from '@/data/types';
+import { AddButton, Button } from '@/components/ui';
+import type { Exercise, WorkoutExercise } from '@/data/types';
 import {
-  addExerciseToWorkout, addSet, ensureWorkout, getLastPerformance, removeExerciseFromWorkout, removeSet,
-  setRestDay, setWorkoutNotes, updateSet, type SetPatch,
+  addExerciseToWorkout, addSet, loadDay, removeExerciseFromWorkout, removeSet,
+  setRestDay, setWorkoutNotes, shownExercises, updateSet, type SetPatch,
 } from '@/data/workouts';
-import { getUnits, type Units } from '@/data/settings';
 import { useDb } from '@/db/DbContext';
 import { useLoad } from '@/hooks/useLoad';
 import { formatDuration } from '@/lib/duration';
-import { formatDistance, toDisplayWeight } from '@/lib/units';
+import { formatDistance } from '@/lib/units';
+import { formatSets } from '@/lib/workoutMode';
 import { tint, useTheme } from '@/theme';
-
-type Mode = 'plan' | 'focus';
-
-async function loadDay(db: ReturnType<typeof useDb>, date: string) {
-  const workout = await ensureWorkout(db, date);
-  const units = await getUnits(db);
-  const last: Record<number, { date: string; sets: WorkoutSet[] } | null> = {};
-  for (const e of workout.exercises) last[e.exerciseId] = await getLastPerformance(db, e.exerciseId, date);
-  return { workout, units, last };
-}
-
-/** Always in the user's units, even for sets that were entered in the other one. */
-const fmtLast = (l: { date: string; sets: WorkoutSet[] }, kind: WorkoutExercise['categoryKind'], units: Units) =>
-  `Last (${l.date}): ` +
-  l.sets
-    .map((s) => (kind === 'strength'
-      ? `${toDisplayWeight(s.weight, units.weight) ?? '–'}×${s.reps ?? '–'}`
-      : `${formatDuration(s.durationMin) || '–'}${s.distance ? ` ${formatDistance(s.distance, units.distance)}` : ''}`))
-    .join(', ');
 
 /** An exercise is finished once it has sets and every one is marked done. */
 const isFinished = (e: WorkoutExercise) => e.sets.length > 0 && e.sets.every((x) => x.completed);
@@ -44,9 +26,15 @@ const isFinished = (e: WorkoutExercise) => e.sets.length > 0 && e.sets.every((x)
 export function WorkoutView({ date }: { date: string }) {
   const db = useDb();
   const t = useTheme();
+  const router = useRouter();
   const { data, reload } = useLoad(() => loadDay(db, date), [db, date]);
-  const [mode, setMode] = useState<Mode>('plan');
-  const [focusIdx, setFocusIdx] = useState(0);
+  // Workout mode logs sets on its own screen; pick them up on the way back. Not on the first
+  // focus: useLoad is already loading, and two loads at once would both create the day.
+  const focusedBefore = useRef(false);
+  useFocusEffect(useCallback(() => {
+    if (focusedBefore.current) reload();
+    focusedBefore.current = true;
+  }, [reload]));
   const [picking, setPicking] = useState(false);
   const [removal, setRemoval] = useState<{ title: string; message: string; remove: () => Promise<void> } | null>(null);
 
@@ -54,25 +42,17 @@ export function WorkoutView({ date }: { date: string }) {
 
   if (!data) return null;
   const { workout, units, last } = data;
-  // A rest day hides what was only planned, but never what was logged.
-  const exercises = workout.isRest ? workout.exercises.filter((e) => e.hasLoggedSets) : workout.exercises;
-  const idx = Math.min(focusIdx, Math.max(exercises.length - 1, 0));
-  const shown = mode === 'focus' && exercises.length ? [exercises[idx]] : exercises;
+  const exercises = shownExercises(workout);
 
   const addEx = async (e: Exercise) => {
     setPicking(false);
     await act(() => addExerciseToWorkout(db, workout.id, e.id, e.categoryKind === 'strength' ? { targetSets: 3, targetReps: 10 } : {}));
   };
 
-  // The full plan counts finished exercises; focus mode counts the current lift's sets.
-  const focused = mode === 'focus' && exercises.length > 0 ? exercises[idx] : null;
-  // Cardio, yoga and mobility have no sets, so a focused one counts as a single exercise.
-  const progress = focused?.categoryKind === 'strength'
-    ? { done: focused.sets.filter((x) => x.completed).length, total: focused.sets.length, unit: 'sets', finished: 'Exercise complete', empty: 'No sets yet' }
-    : focused
-    ? { done: isFinished(focused) ? 1 : 0, total: 1, unit: 'exercises', finished: 'Exercise complete', empty: 'No exercises yet' }
-    : { done: exercises.filter(isFinished).length, total: exercises.length, unit: 'exercises', finished: 'Workout complete', empty: 'No exercises yet' };
+  const progress = { done: exercises.filter(isFinished).length, total: exercises.length };
   const complete = progress.total > 0 && progress.done === progress.total;
+  const allSets = exercises.flatMap((e) => e.sets);
+  const canStart = !workout.isRest && allSets.some((x) => !x.completed);
 
   const confirmRemoveExercise = (ex: WorkoutExercise) => {
     const remove = () => removeExerciseFromWorkout(db, ex.id);
@@ -85,13 +65,13 @@ export function WorkoutView({ date }: { date: string }) {
     <View style={{ gap: 14 }}>
       <View style={[styles.summary, { backgroundColor: t.card, borderColor: t.border }]}>
         {!workout.isRest && (
-          <View accessible accessibilityLabel={`${progress.done} of ${progress.total} ${progress.unit} done`} style={styles.progress}>
+          <View accessible accessibilityLabel={`${progress.done} of ${progress.total} exercises done`} style={styles.progress}>
             <View style={styles.progressTop}>
               <Text style={[styles.big, { color: t.text }]}>
                 {progress.done}<Text style={{ color: t.muted }}>/{progress.total}</Text>
               </Text>
               <Text style={[styles.progressLabel, { color: complete ? t.success : t.muted }]}>
-                {complete ? progress.finished : progress.total ? `${progress.unit} done` : progress.empty}
+                {complete ? 'Workout complete' : progress.total ? 'exercises done' : 'No exercises yet'}
               </Text>
             </View>
             <View style={[styles.track, { backgroundColor: t.surface }]}>
@@ -114,16 +94,16 @@ export function WorkoutView({ date }: { date: string }) {
           </Text>
         </View>
       )}
+      {canStart && (
+        <Button
+          title={allSets.some((x) => x.isLogged) ? 'Resume workout' : 'Start workout'}
+          onPress={() => router.push({ pathname: '/workout/[date]', params: { date } })}
+          style={styles.start}
+        />
+      )}
       {(!workout.isRest || exercises.length > 0) && (
         <>
-          {exercises.length > 1 && (
-            <Segmented<Mode>
-              options={[{ value: 'plan', label: 'Full plan' }, { value: 'focus', label: 'Current lift' }]}
-              value={mode}
-              onChange={setMode}
-            />
-          )}
-          {shown.map((ex) => {
+          {exercises.map((ex) => {
             const exDone = ex.sets.filter((x) => x.completed).length;
             const finished = isFinished(ex);
             const isStrength = ex.categoryKind === 'strength';
@@ -165,7 +145,9 @@ export function WorkoutView({ date }: { date: string }) {
                 {last[ex.exerciseId] && (
                   <View style={[styles.last, { backgroundColor: t.surface }]}>
                     <Icon name={sym('clock.arrow.circlepath', 'history')} size={12} color={t.muted} fallback="↺" />
-                    <Text style={{ color: t.muted, fontSize: 12, flexShrink: 1 }}>{fmtLast(last[ex.exerciseId]!, ex.categoryKind, units)}</Text>
+                    <Text style={{ color: t.muted, fontSize: 12, flexShrink: 1 }}>
+                      {`Last (${last[ex.exerciseId]!.date}): ${formatSets(last[ex.exerciseId]!.sets, ex.categoryKind, units)}`}
+                    </Text>
                   </View>
                 )}
                 {isStrength && ex.sets.length > 0 && <SetHeader />}
@@ -193,13 +175,6 @@ export function WorkoutView({ date }: { date: string }) {
               </View>
             );
           })}
-          {mode === 'focus' && exercises.length > 1 && (
-            <View style={styles.nav}>
-              <Button title="‹ Previous" variant="secondary" disabled={idx === 0} onPress={() => setFocusIdx(idx - 1)} style={{ flex: 1 }} />
-              <Text style={{ color: t.muted, alignSelf: 'center', fontVariant: ['tabular-nums'] }}>{idx + 1} / {exercises.length}</Text>
-              <Button title="Next ›" variant="secondary" disabled={idx >= exercises.length - 1} onPress={() => setFocusIdx(idx + 1)} style={{ flex: 1 }} />
-            </View>
-          )}
           {!workout.isRest && <AddButton title="Add exercise" onPress={() => setPicking(true)} />}
           <View style={[styles.notesCard, { backgroundColor: t.card, borderColor: t.border }]}>
             <View style={styles.notesHead}>
@@ -254,7 +229,7 @@ const styles = StyleSheet.create({
   countText: { fontSize: 12, fontWeight: '800', fontVariant: ['tabular-nums'] },
   trash: { padding: 4 },
   last: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  nav: { flexDirection: 'row', gap: 8, justifyContent: 'space-between' },
+  start: { paddingVertical: 14, borderRadius: 14 },
   notesCard: { borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, padding: 14, gap: 6 },
   notesHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   notesTitle: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.6 },

@@ -31,6 +31,8 @@ function Screens() {
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="setup" options={{ title: 'Weekly plan' }} />
       <Stack.Screen name="day/[date]" options={{ title: 'Workout' }} />
+      {/* Full screen with no swipe to dismiss, so a stray swipe mid-set doesn't end the workout; it draws its own End button. */}
+      <Stack.Screen name="workout/[date]" options={{ headerShown: false, presentation: 'fullScreenModal', gestureEnabled: false }} />
       <Stack.Screen name="export" options={{ title: 'Export' }} />
       <Stack.Screen name="history" options={{ title: 'History' }} />
       <Stack.Screen name="settings" options={{ title: 'Settings' }} />

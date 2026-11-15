@@ -1,4 +1,5 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react-native';
+import { useEffect } from 'react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react-native';
 
 import { setDistanceUnit, setWeightUnit } from '@/data/settings';
 import { setPlanDay } from '@/data/plan';
@@ -7,6 +8,23 @@ import { findByName } from '@/test/helpers';
 import { renderWithDb } from '@/test/render';
 import { createTestDb } from '@/test/testDb';
 import { WorkoutView } from '../WorkoutView';
+
+const mockPush = jest.fn();
+/** Call to simulate the screen regaining focus, e.g. returning from workout mode. */
+const mockFocus = { current: () => {} };
+function useMockFocusEffect(cb: () => void) {
+  // Runs once on mount, like a screen gaining focus.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(cb, []);
+}
+const mockUseFocusEffect = useMockFocusEffect;
+jest.mock('expo-router', () => ({
+  useRouter: () => ({ push: mockPush }),
+  useFocusEffect: (cb: () => void) => {
+    mockFocus.current = cb;
+    mockUseFocusEffect(cb);
+  },
+}));
 
 const MON = '2026-11-02';
 
@@ -79,23 +97,6 @@ describe('WorkoutView', () => {
     await renderWithDb(<WorkoutView date={MON} />, db);
     expect(await screen.findByLabelText('2 of 2 exercises done')).toBeTruthy();
     expect(screen.getByText('Workout complete')).toBeTruthy();
-  });
-
-  it('summarises the current lift by its sets in focus mode', async () => {
-    const db = await setup();
-    const w = await ensureWorkout(db, MON);
-    await updateSet(db, w.exercises[0].sets[0].id, { completed: true });
-    await renderWithDb(<WorkoutView date={MON} />, db);
-    await fireEvent.press(await screen.findByLabelText('Current lift'));
-    expect(screen.getByLabelText('1 of 2 sets done')).toBeTruthy();
-    expect(screen.getByText('sets done')).toBeTruthy();
-    await fireEvent.press(within(screen.getByTestId('exercise-Bench Press')).getByLabelText('Mark set 2 done'));
-    expect(await screen.findByLabelText('2 of 2 sets done')).toBeTruthy();
-    expect(screen.getByText('Exercise complete')).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText('Next ›'));
-    expect(screen.getByLabelText('0 of 1 sets done')).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText('Full plan'));
-    expect(screen.getByLabelText('1 of 2 exercises done')).toBeTruthy();
   });
 
   it('shows the full plan with a row per set', async () => {
@@ -207,16 +208,6 @@ describe('WorkoutView', () => {
       expect(await screen.findByLabelText('1 of 3 exercises done')).toBeTruthy();
     });
 
-    it('do not count sets when focused', async () => {
-      await mixed();
-      await fireEvent.press(screen.getByLabelText('Current lift'));
-      await fireEvent.press(screen.getByLabelText('Next ›'));
-      expect(screen.getByLabelText('0 of 1 exercises done')).toBeTruthy();
-      await fireEvent.press(screen.getByLabelText('Mark Running done'));
-      expect(await screen.findByText('Exercise complete')).toBeTruthy();
-      expect(screen.queryByText(/sets done/)).toBeNull();
-    });
-
     it('do not talk about sets when removing the exercise', async () => {
       const db = await mixed();
       const w = (await getWorkout(db, MON))!;
@@ -245,17 +236,6 @@ describe('WorkoutView', () => {
     await waitFor(async () => expect((await getWorkout(db, MON))!.exercises[0].sets[0].weight).toBe(135));
     await fireEvent.press(screen.getAllByLabelText('Mark set 1 done')[0]);
     await waitFor(async () => expect((await getWorkout(db, MON))!.exercises[0].sets[0].completed).toBe(true));
-  });
-
-  it('focus mode shows one lift at a time', async () => {
-    const db = await setup();
-    await renderWithDb(<WorkoutView date={MON} />, db);
-    await fireEvent.press(await screen.findByLabelText('Current lift'));
-    expect(screen.getByText('Bench Press')).toBeTruthy();
-    expect(screen.queryByText('Squat')).toBeNull();
-    await fireEvent.press(screen.getByLabelText('Next ›'));
-    expect(screen.getByText('Squat')).toBeTruthy();
-    expect(screen.queryByText('Bench Press')).toBeNull();
   });
 
   it('adds a set and removes an exercise', async () => {
@@ -402,5 +382,62 @@ describe('WorkoutView', () => {
     await fireEvent.press(await screen.findByLabelText('Add Hiking'));
     expect(await screen.findByText('Hiking')).toBeTruthy();
     expect((await getWorkout(db, MON))!.exercises.map((e) => e.exerciseName)).toContain('Hiking');
+  });
+
+  describe('workout mode', () => {
+    beforeEach(() => mockPush.mockClear());
+
+    it('starts workout mode for the day', async () => {
+      const db = await setup();
+      await renderWithDb(<WorkoutView date={MON} />, db);
+      await fireEvent.press(await screen.findByLabelText('Start workout'));
+      expect(mockPush).toHaveBeenCalledWith({ pathname: '/workout/[date]', params: { date: MON } });
+    });
+
+    it('resumes once something is logged', async () => {
+      const db = await setup();
+      const w = await ensureWorkout(db, MON);
+      await updateSet(db, w.exercises[0].sets[0].id, { completed: true });
+      await renderWithDb(<WorkoutView date={MON} />, db);
+      expect(await screen.findByLabelText('Resume workout')).toBeTruthy();
+      expect(screen.queryByLabelText('Start workout')).toBeNull();
+    });
+
+    it('is not offered once everything is done, on a rest day or with nothing planned', async () => {
+      const db = await setup();
+      const w = await ensureWorkout(db, MON);
+      for (const e of w.exercises) for (const x of e.sets) await updateSet(db, x.id, { completed: true });
+      await renderWithDb(<WorkoutView date={MON} />, db);
+      await screen.findByText('Workout complete');
+      expect(screen.queryByLabelText(/(Start|Resume) workout/)).toBeNull();
+
+      await setRestDay(db, '2026-11-09', true);
+      await renderWithDb(<WorkoutView date="2026-11-09" />, db);
+      await screen.findByText('Rest and recover. 😴');
+      expect(screen.queryByLabelText(/(Start|Resume) workout/)).toBeNull();
+
+      await renderWithDb(<WorkoutView date="2026-11-03" />, db);
+      await screen.findByText('No exercises yet');
+      expect(screen.queryByLabelText(/(Start|Resume) workout/)).toBeNull();
+    });
+
+    it('shows what workout mode logged on the way back', async () => {
+      const db = await setup();
+      await renderWithDb(<WorkoutView date={MON} />, db);
+      await screen.findByLabelText('0 of 2 exercises done');
+      const w = (await getWorkout(db, MON))!;
+      await updateSet(db, w.exercises[1].sets[0].id, { completed: true });
+      await act(async () => mockFocus.current());
+      expect(await screen.findByLabelText('1 of 2 exercises done')).toBeTruthy();
+    });
+
+    it('no longer splits the day into full plan and current lift', async () => {
+      const db = await setup();
+      await renderWithDb(<WorkoutView date={MON} />, db);
+      await screen.findByText('Bench Press');
+      expect(screen.queryByLabelText('Current lift')).toBeNull();
+      expect(screen.queryByLabelText('Full plan')).toBeNull();
+      expect(screen.getByText('Squat')).toBeTruthy();
+    });
   });
 });

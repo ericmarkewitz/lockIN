@@ -1,4 +1,4 @@
-import type { ViewStyle } from 'react-native';
+import type { TextStyle, ViewStyle } from 'react-native';
 
 import { durationSeconds, formatDuration, minutesFromParts, partsFromMinutes } from '@/lib/duration';
 import { MAX_DURATION_HOURS, wheelRange } from '@/lib/wheel';
@@ -9,10 +9,10 @@ import { WheelButton } from './WheelSheet';
  * Opens on `value`, or `target` so a planned duration takes one tap to log.
  */
 export function DurationButton({
-  label, title, value, target = null, onChange, style,
+  label, title, value, target = null, onChange, style, textStyle,
 }: {
   label: string; title: string; value: number | null; target?: number | null;
-  onChange: (minutes: number | null) => void; style?: ViewStyle;
+  onChange: (minutes: number | null) => void; style?: ViewStyle; textStyle?: TextStyle;
 }) {
   const start = value ?? target;
   const [hours, minutes, seconds] = partsFromMinutes(start);
@@ -35,6 +35,7 @@ export function DurationButton({
         if (durationSeconds(next) !== durationSeconds(value)) onChange(next);
       }}
       style={style}
+      textStyle={textStyle}
     />
   );
 }

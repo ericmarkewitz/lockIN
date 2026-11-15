@@ -4,8 +4,10 @@ import { ScrollView, StyleSheet, Text } from 'react-native';
 import { ThemePicker } from '@/components/ThemePicker';
 import { Card, Segmented } from '@/components/ui';
 import {
-  getUnits, setDistanceUnit, setWeightUnit, type Appearance, type DistanceUnit, type WeightUnit,
+  getRestSeconds, getUnits, REST_OPTIONS, setDistanceUnit, setRestSeconds, setWeightUnit,
+  type Appearance, type DistanceUnit, type WeightUnit,
 } from '@/data/settings';
+import { formatRest } from '@/components/RestTimer';
 import { useDb } from '@/db/DbContext';
 import { useLoad } from '@/hooks/useLoad';
 import { useTheme, useThemeSettings } from '@/theme';
@@ -14,7 +16,7 @@ export function SettingsScreen() {
   const db = useDb();
   const t = useTheme();
   const theme = useThemeSettings();
-  const { data, reload } = useLoad(() => getUnits(db), [db]);
+  const { data, reload } = useLoad(async () => ({ ...(await getUnits(db)), rest: await getRestSeconds(db) }), [db]);
   const [error, setError] = useState<string | null>(null);
 
   const save = async (write: () => Promise<void>) => {
@@ -56,6 +58,19 @@ export function SettingsScreen() {
         )}
         <Text style={{ color: t.muted }}>
           Used for planned and logged distances, history and CSV exports. Tap the unit next to a distance to log one set in the other unit.
+        </Text>
+      </Card>
+      <Card style={{ gap: 10 }}>
+        <Text style={{ color: t.text, fontWeight: '700' }}>Rest between sets</Text>
+        {data && (
+          <Segmented<string>
+            options={REST_OPTIONS.map((s) => ({ value: String(s), label: s ? formatRest(s * 1000) : 'Off' }))}
+            value={String(data.rest)}
+            onChange={(s) => save(() => setRestSeconds(db, Number(s)))}
+          />
+        )}
+        <Text style={{ color: t.muted }}>
+          Workout mode counts this down after each set. Add or take away time while it runs.
         </Text>
       </Card>
       <Card style={{ gap: 10 }}>

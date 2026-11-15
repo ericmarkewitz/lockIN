@@ -1,8 +1,6 @@
 import * as Haptics from 'expo-haptics';
 import { useRef, useState } from 'react';
-import {
-  Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, type ScrollViewInstance, type ViewStyle,
-} from 'react-native';
+import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, type ScrollViewInstance, type ViewStyle, type TextStyle } from 'react-native';
 
 import { wheelIndexAt } from '@/lib/wheel';
 import { useTheme } from '@/theme';
@@ -146,10 +144,10 @@ export function WheelSheet({
 
 /** A field that shows `text` and opens a WheelSheet when tapped. */
 export function WheelButton({
-  label, valueText, text, muted, title, columns, onDone, style,
+  label, valueText, text, muted, title, columns, onDone, style, textStyle,
 }: {
   label: string; valueText: string; text: string; muted?: boolean; title: string; columns: WheelColumn[];
-  onDone: (values: (number | null)[]) => void; style?: ViewStyle;
+  onDone: (values: (number | null)[]) => void; style?: ViewStyle; textStyle?: TextStyle;
 }) {
   const t = useTheme();
   const [open, setOpen] = useState(false);
@@ -162,7 +160,7 @@ export function WheelButton({
         onPress={() => setOpen(true)}
         style={({ pressed }) => [styles.button, { backgroundColor: t.surface, opacity: pressed ? 0.6 : 1 }, style]}
       >
-        <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.buttonText, { color: muted ? t.muted : t.text }]}>{text}</Text>
+        <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.buttonText, { color: muted ? t.muted : t.text }, textStyle]}>{text}</Text>
       </Pressable>
       <WheelSheet
         visible={open}

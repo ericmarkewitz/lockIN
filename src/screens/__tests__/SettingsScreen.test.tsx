@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 
-import { getAppearance, getDistanceUnit, getThemeId, getWeightUnit } from '@/data/settings';
+import { getAppearance, getDistanceUnit, getRestSeconds, getThemeId, getWeightUnit } from '@/data/settings';
 import { ThemeProvider } from '@/theme';
 import { renderWithDb } from '@/test/render';
 import { createTestDb } from '@/test/testDb';
@@ -70,5 +70,15 @@ describe('SettingsScreen', () => {
     await waitFor(async () => expect(await getAppearance(db)).toBe('dark'));
     await waitFor(() => expect(screen.getByLabelText('Dark').props.accessibilityState).toMatchObject({ selected: true }));
     expect(await getThemeId(db)).toBe('cobalt');
+  });
+
+  it('saves the rest between sets', async () => {
+    const db = await createTestDb();
+    await renderWithDb(<SettingsScreen />, db);
+    await waitFor(() => expect(screen.getByLabelText('1:30').props.accessibilityState).toMatchObject({ selected: true }));
+    await fireEvent.press(screen.getByLabelText('2:00'));
+    await waitFor(async () => expect(await getRestSeconds(db)).toBe(120));
+    await fireEvent.press(screen.getByLabelText('Off'));
+    await waitFor(async () => expect(await getRestSeconds(db)).toBe(0));
   });
 });

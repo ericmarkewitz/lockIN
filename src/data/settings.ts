@@ -46,6 +46,20 @@ export async function getUnits(db: Db): Promise<Units> {
   return { weight: await getWeightUnit(db), distance: await getDistanceUnit(db) };
 }
 
+/** Seconds of rest workout mode counts down after a set; 0 turns the timer off. */
+export const REST_OPTIONS = [0, 60, 90, 120, 180] as const;
+const DEFAULT_REST = 90;
+
+export async function getRestSeconds(db: Db): Promise<number> {
+  const value = Number(await readSetting(db, 'rest_seconds'));
+  return (REST_OPTIONS as readonly number[]).includes(value) ? value : DEFAULT_REST;
+}
+
+export async function setRestSeconds(db: Db, seconds: number): Promise<void> {
+  if (!(REST_OPTIONS as readonly number[]).includes(seconds)) throw new Error(`Unsupported rest: ${seconds}`);
+  await writeSetting(db, 'rest_seconds', String(seconds));
+}
+
 /** Color themes, in the order the picker shows them. Cobalt is the app's original palette. */
 export const THEME_IDS = ['cobalt', 'volt', 'ember', 'midnight', 'mono', 'tide', 'trophy', 'sakura', 'trail'] as const;
 export type ThemeId = (typeof THEME_IDS)[number];
