@@ -2,7 +2,7 @@ import { datesInRange, weekdayOf } from '@/lib/dates';
 import type { Db } from '@/db/types';
 import { LOGGED_SET } from './logged';
 import { getPlan } from './plan';
-import { DISTANCE_UNITS, WEIGHT_UNITS, type DistanceUnit, type WeightUnit } from './settings';
+import { DISTANCE_UNITS, getUnits, WEIGHT_UNITS, type DistanceUnit, type WeightUnit } from './settings';
 import type {
   CategoryKind, DaySummary, DayStatus, Targets, Workout, WorkoutExercise, WorkoutSet,
 } from './types';
@@ -302,3 +302,15 @@ export async function refreshUntouchedWorkouts(db: Db, fromDate: string): Promis
     [fromDate],
   );
 }
+
+/** A day as the workout screens show it: its workout, the user's units, and each exercise's last performance. */
+export async function loadDay(db: Db, date: string) {
+  const workout = await ensureWorkout(db, date);
+  const units = await getUnits(db);
+  const last: Record<number, { date: string; sets: WorkoutSet[] } | null> = {};
+  for (const e of workout.exercises) last[e.exerciseId] = await getLastPerformance(db, e.exerciseId, date);
+  return { workout, units, last };
+}
+
+/** A rest day hides what was only planned, but never what was logged. */
+export const shownExercises = (w: Workout) => (w.isRest ? w.exercises.filter((e) => e.hasLoggedSets) : w.exercises);

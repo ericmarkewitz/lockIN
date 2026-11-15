@@ -2,8 +2,8 @@ import { createTestDb } from '@/test/testDb';
 import { findByName } from '@/test/helpers';
 import { setPlanDay } from '../plan';
 import {
-  getAppearance, getDistanceUnit, getThemeId, getThemeSettings, getUnits, getWeightUnit,
-  setAppearance, setDistanceUnit, setThemeId, setWeightUnit, THEME_IDS,
+  getAppearance, getDistanceUnit, getRestSeconds, getThemeId, getThemeSettings, getUnits, getWeightUnit,
+  REST_OPTIONS, setAppearance, setDistanceUnit, setRestSeconds, setThemeId, setWeightUnit, THEME_IDS,
 } from '../settings';
 import { ensureWorkout, getWorkout, updateSet } from '../workouts';
 
@@ -138,5 +138,39 @@ describe('appearance setting', () => {
     await setThemeId(db, 'tide');
     await setAppearance(db, 'dark');
     expect(await getThemeSettings(db)).toEqual({ themeId: 'tide', appearance: 'dark' });
+  });
+});
+
+describe('rest timer setting', () => {
+  it('defaults to 90 seconds', async () => {
+    expect(await getRestSeconds(await createTestDb())).toBe(90);
+  });
+
+  it('persists a change', async () => {
+    const db = await createTestDb();
+    await setRestSeconds(db, 120);
+    expect(await getRestSeconds(db)).toBe(120);
+  });
+
+  it('can be turned off with 0', async () => {
+    const db = await createTestDb();
+    await setRestSeconds(db, 0);
+    expect(await getRestSeconds(db)).toBe(0);
+  });
+
+  it('offers off and a few common rests', () => {
+    expect(REST_OPTIONS).toEqual([0, 60, 90, 120, 180]);
+  });
+
+  it('rejects a rest the picker does not offer', async () => {
+    const db = await createTestDb();
+    await expect(setRestSeconds(db, -5)).rejects.toThrow('Unsupported rest');
+    await expect(setRestSeconds(db, 45)).rejects.toThrow('Unsupported rest');
+  });
+
+  it('falls back to 90 if the stored value is invalid', async () => {
+    const db = await createTestDb();
+    await db.runAsync("INSERT INTO settings (key, value) VALUES ('rest_seconds', 'soon')");
+    expect(await getRestSeconds(db)).toBe(90);
   });
 });
