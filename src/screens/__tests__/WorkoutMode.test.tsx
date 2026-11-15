@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
-import { StyleSheet } from 'react-native';
+import { Keyboard, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { setPlanDay } from '@/data/plan';
@@ -264,6 +264,14 @@ describe('WorkoutMode', () => {
     await open(await setup());
     await fireEvent.press(screen.getByLabelText('End workout'));
     expect(mockBack).toHaveBeenCalled();
+  });
+
+  it('puts the keyboard away when you tap the picture', async () => {
+    const dismiss = jest.spyOn(Keyboard, 'dismiss');
+    await open(await setup());
+    await fireEvent.press(screen.getByTestId('exercise-picture'));
+    expect(dismiss).toHaveBeenCalled();
+    dismiss.mockRestore();
   });
 
   it('shows form tips on request', async () => {

@@ -1,7 +1,7 @@
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { useContext, useState, type ReactNode } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type ViewStyle } from 'react-native';
+import { Keyboard, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type ViewStyle } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { SafeAreaInsetsContext, type EdgeInsets } from 'react-native-safe-area-context';
 
@@ -368,6 +368,7 @@ function StepView({
                       target={exercise.targetDurationMin}
                       onChange={setDurationMin}
                       style={styles.duration}
+                      textStyle={styles.durationText}
                     />
                   </Tile>
                   {exercise.categoryKind === 'cardio' && (
@@ -451,9 +452,16 @@ function Hero({
         </View>
         {tips}
       </View>
-      <View style={styles.heroMedia} onLayout={(e) => setRoom(e.nativeEvent.layout)}>
+      {/* Tapping the picture puts the number keyboard away; there's nothing else to tap off. */}
+      <Pressable
+        testID="exercise-picture"
+        accessible={false}
+        onPress={Keyboard.dismiss}
+        style={styles.heroMedia}
+        onLayout={(e) => setRoom(e.nativeEvent.layout)}
+      >
         {size >= 48 && <ExerciseMedia name={exercise.exerciseName} isCustom={exercise.isCustom} size={size} />}
-      </View>
+      </Pressable>
       {upcoming && <UpNext exercise={upcoming} />}
       {children}
     </Animated.View>
@@ -787,6 +795,8 @@ const styles = StyleSheet.create({
   pill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, maxWidth: '100%' },
   fieldLabel: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1.2 },
   duration: { minHeight: 44, backgroundColor: 'transparent' },
+  // Matches the big numbers in the other tiles.
+  durationText: { fontSize: 30, fontWeight: '800', letterSpacing: -1 },
   lastRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: -4, paddingHorizontal: 4 },
   tiles: { flexDirection: 'row', gap: 8 },
   tile: { flex: 1, minWidth: 0, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, padding: 10, gap: 4 },

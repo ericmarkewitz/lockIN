@@ -1,8 +1,8 @@
 import { fireEvent, render, screen, within } from '@testing-library/react-native';
 import * as Haptics from 'expo-haptics';
-import { Platform } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 
-import { WHEEL_ROW_HEIGHT, WheelSheet } from '../WheelSheet';
+import { WHEEL_ROW_HEIGHT, WheelButton, WheelSheet } from '../WheelSheet';
 
 jest.mock('expo-haptics', () => ({ selectionAsync: jest.fn(() => Promise.resolve()) }));
 
@@ -143,5 +143,14 @@ describe('WheelSheet', () => {
     await fireEvent.press(target());
     expect(onCancel).toHaveBeenCalled();
     expect(onDone).not.toHaveBeenCalled();
+  });
+});
+
+describe('WheelButton', () => {
+  it('takes a text style, so a value can match the fields beside it', async () => {
+    await render(
+      <WheelButton label="Duration" valueText="30 min" text="30 min" title="Running" columns={columns} onDone={jest.fn()} textStyle={{ fontSize: 30 }} />,
+    );
+    expect(StyleSheet.flatten(screen.getByText('30 min').props.style)).toMatchObject({ fontSize: 30 });
   });
 });
