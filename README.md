@@ -27,8 +27,27 @@ Requires Node with the built-in `node:sqlite` module (Node 26, matching CI; `nod
 | `npm run test:watch` | Re-run tests on change |
 | `npm run type` | TypeScript check (`tsc --noEmit`) |
 | `npx expo lint` | Lint |
+| `npm run release:ios` | Build in the cloud and submit to TestFlight (see [Releasing](#releasing-to-testflight-ios)) |
+| `npm run release:update` | Publish an over-the-air JS update to TestFlight builds |
 
 CI runs typecheck, lint and tests on every push.
+
+## Releasing to TestFlight (iOS)
+
+Builds run in the cloud on [EAS](https://docs.expo.dev/eas/), so you don't need Xcode. Config lives in `eas.json` and `app.json`.
+
+**First time:** run `npx testflight`, sign in to Expo and Apple, and accept the defaults. EAS creates and stores the signing credentials.
+
+**After that:**
+
+| Change | Command |
+| --- | --- |
+| Native: packages with native code, `app.json` config, SDK upgrades | `npm run release:ios` (new TestFlight build) |
+| JS/TS only | `npm run release:update` (over-the-air update; testers relaunch to get it) |
+
+If you're not sure, use `release:ios`. Bump `version` in `app.json` for a new user-facing version. EAS handles build numbers.
+
+**Testers:** add them in App Store Connect under **TestFlight**. Internal testers (people on your team) can install right away. External testers can join with a public link once the build passes Beta App Review, which usually takes under a day.
 
 ## Project layout
 
