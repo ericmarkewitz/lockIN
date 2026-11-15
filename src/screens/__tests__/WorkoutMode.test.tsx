@@ -1,4 +1,6 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { setPlanDay } from '@/data/plan';
 import { setRestSeconds, setWeightUnit } from '@/data/settings';
@@ -244,6 +246,18 @@ describe('WorkoutMode', () => {
       await fireEvent(notes, 'endEditing', { nativeEvent: { text: 'Felt strong' } });
       await waitFor(async () => expect((await getWorkout(db, MON))!.notes).toBe('Felt strong'));
     });
+  });
+
+  it('fills the screen edge to edge, keeping clear of the status bar and home indicator', async () => {
+    const db = await setup();
+    const metrics = { frame: { x: 0, y: 0, width: 393, height: 852 }, insets: { top: 59, bottom: 34, left: 0, right: 0 } };
+    await renderWithDb(<SafeAreaProvider initialMetrics={metrics}><WorkoutMode date={MON} /></SafeAreaProvider>, db);
+    await screen.findByText('Set 1 of 2');
+    const style = StyleSheet.flatten(screen.getByTestId('workout-screen').props.style);
+    expect(style).toMatchObject({ paddingTop: 59 + 8, paddingBottom: 34 + 8 });
+    // The card is the screen: nothing between it and the sides but its own padding.
+    expect(style.marginHorizontal ?? 0).toBe(0);
+    expect(style.borderRadius ?? 0).toBe(0);
   });
 
   it('ends workout mode from the top of the card', async () => {

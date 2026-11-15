@@ -1,9 +1,9 @@
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import { useState, type ReactNode } from 'react';
+import { useContext, useState, type ReactNode } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type ViewStyle } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaInsetsContext, type EdgeInsets } from 'react-native-safe-area-context';
 
 import { DurationButton } from '@/components/DurationButton';
 import { ExerciseMedia } from '@/components/ExerciseMedia';
@@ -28,6 +28,15 @@ import {
   firstOpenStep, formatSets, groupThousands, nextOpenStep, suggestEntry, workoutSteps, workoutVolume, type Step,
 } from '@/lib/workoutMode';
 import { tint, useTheme } from '@/theme';
+
+const NO_INSETS: EdgeInsets = { top: 0, bottom: 0, left: 0, right: 0 };
+
+/**
+ * The device's safe-area insets (status bar, notch, home indicator). Read from the app's
+ * provider directly: SafeAreaView inside a full-screen modal can miss the top inset and put
+ * the top row under the status bar.
+ */
+const useInsets = () => useContext(SafeAreaInsetsContext) ?? NO_INSETS;
 
 /** Where workout mode is: a set (by id), the finish screen, or null for "the first set not done". */
 type Cursor = number | 'finish' | null;
@@ -60,6 +69,7 @@ export function WorkoutMode({ date }: { date: string }) {
   const t = useTheme();
   const router = useRouter();
   const { data, reload } = useLoad(() => load(db, date), [db, date]);
+  const insets = useInsets();
   const [cursor, setCursor] = useState<Cursor>(null);
   /** A running rest, and the exercise it followed (to say when the next set is a new lift). */
   const [rest, setRest] = useState<{ endsAt: number; afterExerciseId: number } | null>(null);
@@ -99,7 +109,21 @@ export function WorkoutMode({ date }: { date: string }) {
   const top = <TopBar steps={steps} exercises={exercises} current={step?.exercise.id ?? null} onEnd={() => router.back()} />;
   return (
     <KeyboardAvoider scrolls={false}>
-      <SafeAreaView edges={['top', 'bottom']} style={[styles.screen, { backgroundColor: t.bg }]}>
+      <View style={[styles.screen, { backgroundColor: t.bg }]}>
+      {/* The tinted screen is the card, running under the status bar and out to the edges. */}
+      <View
+        testID="workout-screen"
+        style={[
+          styles.screen,
+          {
+            backgroundColor: tint(t.primary, 0.07),
+            paddingTop: insets.top + 8,
+            paddingBottom: insets.bottom + 8,
+            paddingLeft: insets.left + 16,
+            paddingRight: insets.right + 16,
+          },
+        ]}
+      >
         {steps.length === 0 ? (
           <View style={[styles.empty, styles.page, { justifyContent: 'center' }]}>
             <Badge icon={sym('calendar.badge.plus', 'event')} fallback="+" color={t.muted} />
@@ -144,7 +168,8 @@ export function WorkoutMode({ date }: { date: string }) {
             )}
           </View>
         )}
-      </SafeAreaView>
+      </View>
+      </View>
     </KeyboardAvoider>
   );
 }
@@ -269,7 +294,7 @@ function StepView({
   return (
     <Animated.View entering={FadeIn.duration(240)} style={styles.fill}>
       {rest ? (
-        <View style={[styles.hero, { backgroundColor: tint(t.primary, 0.07), borderColor: tint(t.primary, 0.12) }]}>
+        <View style={styles.hero}>
           {top}
           <View style={styles.compactHead}>
             <Thumb exercise={exercise} size={48} />
@@ -410,7 +435,7 @@ function Hero({
   return (
     <Animated.View
       entering={FadeInDown.duration(260)}
-      style={[styles.hero, { backgroundColor: tint(t.primary, 0.07), borderColor: tint(t.primary, 0.12) }]}
+      style={styles.hero}
     >
       {top}
       <View style={styles.heroTop}>
@@ -475,11 +500,12 @@ function FormTipsSheet({
   visible, name, tips, onClose,
 }: { visible: boolean; name: string; tips: readonly string[]; onClose: () => void }) {
   const t = useTheme();
+  const insets = useInsets();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.sheetRoot}>
         <Pressable testID="tips-backdrop" accessible={false} onPress={onClose} style={styles.backdrop} />
-        <SafeAreaView edges={['bottom']} style={[styles.sheet, { backgroundColor: t.card }]}>
+        <View style={[styles.sheet, { backgroundColor: t.card, paddingBottom: insets.bottom + 20 }]}>
           <View style={[styles.grabber, { backgroundColor: t.border }]} />
           <View style={{ gap: 2 }}>
             <Text style={[styles.eyebrow, { color: t.primary }]}>Form tips</Text>
@@ -496,7 +522,7 @@ function FormTipsSheet({
             ))}
           </View>
           <CTA title="Got it" label="Close form tips" variant="secondary" onPress={onClose} />
-        </SafeAreaView>
+        </View>
       </View>
     </Modal>
   );
@@ -725,7 +751,7 @@ function FinishView({
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  page: { flex: 1, paddingHorizontal: 12, paddingTop: 4, paddingBottom: 8, gap: 12 },
+  page: { flex: 1, gap: 12 },
   fill: { flex: 1, minHeight: 0, gap: 12 },
   empty: { alignItems: 'center', gap: 10, paddingVertical: 20 },
   topBar: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -734,7 +760,7 @@ const styles = StyleSheet.create({
   topCount: { fontSize: 12, fontWeight: '700', fontVariant: ['tabular-nums'], minWidth: 30, textAlign: 'right' },
   capsule: { flex: 1, height: 6, borderRadius: 3, overflow: 'hidden' },
   capsuleFill: { height: '100%', borderRadius: 3 },
-  hero: { flex: 1, minHeight: 0, borderRadius: 28, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden', padding: 12, gap: 8 },
+  hero: { flex: 1, minHeight: 0, gap: 10 },
   heroTop: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 4 },
   heroMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   heroMedia: { flex: 1, minHeight: 0, alignItems: 'center', justifyContent: 'center' },
