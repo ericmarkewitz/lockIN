@@ -353,27 +353,27 @@ function StepView({
                 </>
               )}
             </View>
+            <View style={styles.actions}>
+              <RoundAction
+                label={isStrength ? 'Previous set' : 'Previous'}
+                disabled={!onPrevious}
+                onPress={() => onPrevious?.()}
+              >
+                <Icon name={sym('chevron.left', 'chevron_left')} size={18} color={t.text} fallback="‹" />
+              </RoundAction>
+              <CTA
+                title={set.completed ? 'Save' : 'Done'}
+                label={`${set.completed ? 'Save' : 'Done with'} ${subject}`}
+                icon={sym('checkmark', 'check')}
+                onPress={done}
+                style={{ flex: 1 }}
+              />
+              <RoundAction label={`Skip ${subject}`} onPress={onSkip}>
+                <Text style={{ color: t.text, fontWeight: '700', fontSize: 14 }}>Skip</Text>
+              </RoundAction>
+            </View>
           </Hero>
 
-          <View style={styles.actions}>
-            <RoundAction
-              label={isStrength ? 'Previous set' : 'Previous'}
-              disabled={!onPrevious}
-              onPress={() => onPrevious?.()}
-            >
-              <Icon name={sym('chevron.left', 'chevron_left')} size={18} color={t.text} fallback="‹" />
-            </RoundAction>
-            <CTA
-              title={set.completed ? 'Save' : 'Done'}
-              label={`${set.completed ? 'Save' : 'Done with'} ${subject}`}
-              icon={sym('checkmark', 'check')}
-              onPress={done}
-              style={{ flex: 1 }}
-            />
-            <RoundAction label={`Skip ${subject}`} onPress={onSkip}>
-              <Text style={{ color: t.text, fontWeight: '700', fontSize: 14 }}>Skip</Text>
-            </RoundAction>
-          </View>
         </>
       )}
       {formTips && <FormTipsSheet visible={tips} name={exercise.exerciseName} tips={formTips} onClose={() => setTips(false)} />}
@@ -414,8 +414,8 @@ function Hero({
       <View style={styles.heroMedia} onLayout={(e) => setRoom(e.nativeEvent.layout)}>
         {size >= 48 && <ExerciseMedia name={exercise.exerciseName} isCustom={exercise.isCustom} size={size} />}
       </View>
-      {children}
       {upcoming && <UpNext exercise={upcoming} />}
+      {children}
     </Animated.View>
   );
 }
@@ -447,7 +447,7 @@ function RoundAction({
       onPress={onPress}
       style={({ pressed }) => [
         styles.roundAction,
-        { backgroundColor: t.card, borderColor: t.border, opacity: disabled ? 0.35 : 1, transform: [{ scale: pressed ? 0.94 : 1 }] },
+        { backgroundColor: tint(t.card, 0.55), borderColor: tint(t.text, 0.06), opacity: disabled ? 0.35 : 1, transform: [{ scale: pressed ? 0.94 : 1 }] },
       ]}
     >
       {children}
@@ -754,7 +754,7 @@ const styles = StyleSheet.create({
   cta: { height: 60, borderRadius: 30, flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch' },
   ctaRaised: { shadowOpacity: 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 5 },
   ctaText: { fontSize: 18, fontWeight: '800', letterSpacing: -0.2 },
-  actions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
   roundAction: { width: 60, height: 60, borderRadius: 30, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
   upNext: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 16, paddingVertical: 6, paddingHorizontal: 8 },
   thumb: { alignItems: 'center', justifyContent: 'center' },
