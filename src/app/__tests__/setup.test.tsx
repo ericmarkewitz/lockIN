@@ -3,6 +3,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
 
 import { getPlan, isPlanComplete, markPlanComplete } from '@/data/plan';
+import { acceptDisclaimer } from '@/data/settings';
+import { DISCLAIMER_VERSION, DisclaimerProvider } from '@/disclaimer';
 import { DbProvider } from '@/db/DbContext';
 import type { Db } from '@/db/types';
 import { createTestDb } from '@/test/testDb';
@@ -83,13 +85,16 @@ describe('root stack', () => {
   it('labels the back button after the calendar, not the route file', async () => {
     const db = await createTestDb();
     await markPlanComplete(db, '2026-11-01');
+    await acceptDisclaimer(db, DISCLAIMER_VERSION);
     await renderRouter(
       {
         _layout: () => (
           <GestureHandlerRootView style={{ flex: 1 }}>
             <DbProvider db={db}>
               <ThemeProvider>
-                <Screens />
+                <DisclaimerProvider>
+                  <Screens />
+                </DisclaimerProvider>
               </ThemeProvider>
             </DbProvider>
           </GestureHandlerRootView>

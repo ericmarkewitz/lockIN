@@ -2,6 +2,7 @@ import { createTestDb } from '@/test/testDb';
 import { findByName } from '@/test/helpers';
 import { setPlanDay } from '../plan';
 import {
+  acceptDisclaimer, hasAcceptedDisclaimer,
   getAppearance, getDistanceUnit, getRestSeconds, getThemeId, getThemeSettings, getUnits, getWeightUnit,
   REST_OPTIONS, setAppearance, setDistanceUnit, setRestSeconds, setThemeId, setWeightUnit, THEME_IDS,
 } from '../settings';
@@ -172,5 +173,38 @@ describe('rest timer setting', () => {
     const db = await createTestDb();
     await db.runAsync("INSERT INTO settings (key, value) VALUES ('rest_seconds', 'soon')");
     expect(await getRestSeconds(db)).toBe(90);
+  });
+});
+
+describe('disclaimer acceptance', () => {
+  it('starts unaccepted', async () => {
+    expect(await hasAcceptedDisclaimer(await createTestDb(), 1)).toBe(false);
+  });
+
+  it('remembers the accepted version', async () => {
+    const db = await createTestDb();
+    await acceptDisclaimer(db, 1);
+    expect(await hasAcceptedDisclaimer(db, 1)).toBe(true);
+  });
+
+  it('asks again when the disclaimer version is bumped', async () => {
+    const db = await createTestDb();
+    await acceptDisclaimer(db, 1);
+    expect(await hasAcceptedDisclaimer(db, 2)).toBe(false);
+    await acceptDisclaimer(db, 2);
+    expect(await hasAcceptedDisclaimer(db, 2)).toBe(true);
+  });
+
+  it('rejects a version that is not a positive whole number', async () => {
+    const db = await createTestDb();
+    await expect(acceptDisclaimer(db, 0)).rejects.toThrow('Unsupported disclaimer version');
+    await expect(acceptDisclaimer(db, 1.5)).rejects.toThrow('Unsupported disclaimer version');
+    expect(await hasAcceptedDisclaimer(db, 1)).toBe(false);
+  });
+
+  it('treats a corrupt stored version as unaccepted', async () => {
+    const db = await createTestDb();
+    await db.runAsync("INSERT INTO settings (key, value) VALUES ('disclaimer_version', 'yes')");
+    expect(await hasAcceptedDisclaimer(db, 1)).toBe(false);
   });
 });

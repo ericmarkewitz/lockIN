@@ -1,7 +1,7 @@
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { useContext, useState, type ReactNode } from 'react';
-import { Keyboard, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type ViewStyle } from 'react-native';
+import { Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type ViewStyle } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { SafeAreaInsetsContext, type EdgeInsets } from 'react-native-safe-area-context';
 
@@ -12,7 +12,6 @@ import { KeyboardAvoider } from '@/components/KeyboardAvoider';
 import { ExerciseMotionFor } from '@/components/motion/ExerciseMotion';
 import { RestTimer } from '@/components/RestTimer';
 import { UnitPill } from '@/components/UnitPill';
-import { formTipsFor } from '@/data/formTips';
 import { getRestSeconds, type Units } from '@/data/settings';
 import type { WorkoutExercise, WorkoutSet } from '@/data/types';
 import { loadDay, setWorkoutNotes, shownExercises, updateSet, type SetPatch } from '@/data/workouts';
@@ -228,8 +227,6 @@ function StepView({
   const { exercise, set, setIndex } = step;
   const isStrength = exercise.categoryKind === 'strength';
   const subject = isStrength ? `set ${set.setNumber}` : exercise.exerciseName;
-  const [tips, setTips] = useState(false);
-  const formTips = formTipsFor({ name: exercise.exerciseName, isCustom: exercise.isCustom });
 
   // The entry starts from the suggestion; this view is keyed by set, so it resets each set.
   const [initial] = useState(() => suggestEntry(exercise, setIndex, last, units));
@@ -277,20 +274,6 @@ function StepView({
     }
   };
 
-  const tipsButton = formTips && (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Form tips"
-      accessibilityState={{ expanded: tips }}
-      onPress={() => setTips(true)}
-      hitSlop={6}
-      style={({ pressed }) => [styles.tipsToggle, { backgroundColor: tint(t.card, 0.55), opacity: pressed ? 0.7 : 1 }]}
-    >
-      <Icon name={sym('lightbulb.fill', 'lightbulb')} size={13} color={t.primary} fallback="💡" />
-      <Text style={{ color: t.primary, fontWeight: '700', fontSize: 14 }}>Tips</Text>
-    </Pressable>
-  );
-
   return (
     <Animated.View entering={FadeIn.duration(240)} style={styles.fill}>
       {rest ? (
@@ -302,7 +285,6 @@ function StepView({
               <Text style={[styles.eyebrow, { color: t.primary }]}>Exercise {step.exerciseIndex + 1} of {exerciseCount}</Text>
               <Text style={[styles.compactTitle, { color: t.text }]} numberOfLines={1}>{exercise.exerciseName}</Text>
             </View>
-            {tipsButton}
           </View>
           <RestTimer
             endsAt={rest.endsAt}
@@ -319,7 +301,6 @@ function StepView({
             exercise={exercise}
             label={`Exercise ${step.exerciseIndex + 1} of ${exerciseCount}`}
             upcoming={upcoming}
-            tips={tipsButton}
           >
             <View style={styles.entryHead}>
               <Text style={[styles.setLabel, { color: t.text }]}>
@@ -414,19 +395,18 @@ function StepView({
 
         </>
       )}
-      {formTips && <FormTipsSheet visible={tips} name={exercise.exerciseName} tips={formTips} onClose={() => setTips(false)} />}
     </Animated.View>
   );
 }
 
 /**
- * The exercise card: its name, tips and picture, filling whatever height the screen has left.
+ * The exercise card: its name and picture, filling whatever height the screen has left.
  * The figure is sized to the space measured, so a small phone still fits the whole set.
  */
 function Hero({
-  top, exercise, label, upcoming, tips, children,
+  top, exercise, label, upcoming, children,
 }: {
-  top?: ReactNode; exercise: WorkoutExercise; label: string; upcoming?: WorkoutExercise; tips?: ReactNode; children?: ReactNode;
+  top?: ReactNode; exercise: WorkoutExercise; label: string; upcoming?: WorkoutExercise; children?: ReactNode;
 }) {
   const t = useTheme();
   // The figure gets whatever room the name and the set leave; its glow is 1.15× the figure.
@@ -450,7 +430,6 @@ function Hero({
             {exercise.exerciseName}
           </Text>
         </View>
-        {tips}
       </View>
       {/* Tapping the picture puts the number keyboard away; there's nothing else to tap off. */}
       <Pressable
@@ -500,39 +479,6 @@ function RoundAction({
     >
       {children}
     </Pressable>
-  );
-}
-
-/** Form tips in a sheet over the screen, so opening them never pushes Done off it. */
-function FormTipsSheet({
-  visible, name, tips, onClose,
-}: { visible: boolean; name: string; tips: readonly string[]; onClose: () => void }) {
-  const t = useTheme();
-  const insets = useInsets();
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.sheetRoot}>
-        <Pressable testID="tips-backdrop" accessible={false} onPress={onClose} style={styles.backdrop} />
-        <View style={[styles.sheet, { backgroundColor: t.card, paddingBottom: insets.bottom + 20 }]}>
-          <View style={[styles.grabber, { backgroundColor: t.border }]} />
-          <View style={{ gap: 2 }}>
-            <Text style={[styles.eyebrow, { color: t.primary }]}>Form tips</Text>
-            <Text style={[styles.compactTitle, { color: t.text }]}>{name}</Text>
-          </View>
-          <View style={{ gap: 14 }}>
-            {tips.map((tip, i) => (
-              <View key={tip} style={styles.tip}>
-                <View style={[styles.tipNum, { backgroundColor: tint(t.primary, 0.14) }]}>
-                  <Text style={[styles.tipNumText, { color: t.primary }]}>{i + 1}</Text>
-                </View>
-                <Text style={[styles.tipText, { color: t.text }]}>{tip}</Text>
-              </View>
-            ))}
-          </View>
-          <CTA title="Got it" label="Close form tips" variant="secondary" onPress={onClose} />
-        </View>
-      </View>
-    </Modal>
   );
 }
 
@@ -777,15 +723,6 @@ const styles = StyleSheet.create({
   compactTitle: { fontSize: 22, fontWeight: '800', letterSpacing: -0.4 },
   eyebrow: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1.2 },
   title: { fontSize: 30, fontWeight: '900', fontStyle: 'italic', letterSpacing: -1 },
-  tipsToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999 },
-  sheetRoot: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.45)' },
-  sheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, paddingTop: 10, gap: 18 },
-  grabber: { width: 40, height: 5, borderRadius: 3, alignSelf: 'center' },
-  tip: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
-  tipNum: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
-  tipNumText: { fontSize: 12, fontWeight: '800' },
-  tipText: { flex: 1, fontSize: 15, lineHeight: 21 },
   card: { borderRadius: 24, borderWidth: StyleSheet.hairlineWidth, padding: 14 },
   entryHead: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 },
   setLabel: { fontSize: 18, fontWeight: '900', letterSpacing: -0.3 },

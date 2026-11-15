@@ -2,7 +2,6 @@ import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { Keyboard, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { FORM_TIPS } from '@/data/formTips';
 import { setPlanDay } from '@/data/plan';
 import { setRestSeconds, setWeightUnit } from '@/data/settings';
 import { ensureWorkout, getWorkout, updateSet } from '@/data/workouts';
@@ -275,26 +274,10 @@ describe('WorkoutMode', () => {
     dismiss.mockRestore();
   });
 
-  it('hides the form tips button for an exercise without tips', async () => {
+  it('only tracks: it offers no exercise tips or coaching', async () => {
     await open(await setup());
-    expect(screen.queryByLabelText('Form tips')).toBeNull();
-  });
-
-  it('shows form tips on request', async () => {
-    FORM_TIPS['Bench Press'] = ['Pinch your shoulder blades together.'];
-    try {
-      await open(await setup());
-      expect(screen.queryByText(/shoulder blades/i)).toBeNull();
-      await fireEvent.press(screen.getByLabelText('Form tips'));
-      expect(screen.getByText(/shoulder blades/i)).toBeTruthy();
-      expect(screen.getByLabelText('Form tips').props.accessibilityState).toMatchObject({ expanded: true });
-      await fireEvent.press(screen.getByLabelText('Close form tips'));
-      expect(screen.queryByText(/shoulder blades/i)).toBeNull();
-      // The set is still there to log.
-      expect(screen.getByLabelText('Done with set 1')).toBeTruthy();
-    } finally {
-      delete FORM_TIPS['Bench Press'];
-    }
+    expect(screen.queryByLabelText(/tips/i)).toBeNull();
+    expect(screen.queryByText(/tips/i)).toBeNull();
   });
 
   it('logs cardio as one entry with the planned time', async () => {
