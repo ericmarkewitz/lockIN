@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
-import { tint, useTheme } from '@/theme';
+import { accentGradient, tint, useTheme } from '@/theme';
 import { Icon, sym } from './Icon';
 
 /** "1:30". Partial seconds round up, so the timer reads 0:00 only once it's done. */
@@ -127,7 +127,7 @@ export function RestTimer({
           onPress={onSkip}
           style={({ pressed }) => [
             styles.skip,
-            { backgroundColor: t.primary, shadowColor: t.primary, transform: [{ scale: pressed ? 0.97 : 1 }] },
+            { backgroundColor: t.primary, experimental_backgroundImage: accentGradient(t), shadowColor: t.primary, transform: [{ scale: pressed ? 0.97 : 1 }] },
           ]}
         >
           <Text style={[styles.skipText, { color: t.onPrimary }]}>Skip rest</Text>
@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
   tick: { position: 'absolute', width: 3, borderRadius: 1.5 },
   clock: { alignItems: 'center' },
   label: { fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 2 },
-  time: { fontWeight: '800', fontVariant: ['tabular-nums'], letterSpacing: -2 },
+  time: { fontWeight: '900', fontVariant: ['tabular-nums'], letterSpacing: -2 },
   controls: { flexDirection: 'row', alignItems: 'center', gap: 10, alignSelf: 'stretch' },
   adjust: { width: 64, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center' },
   adjustText: { fontSize: 17, fontWeight: '700', fontVariant: ['tabular-nums'] },
@@ -155,6 +155,6 @@ const styles = StyleSheet.create({
     flex: 1, height: 60, borderRadius: 30, flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center',
     shadowOpacity: 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 5,
   },
-  skipText: { fontSize: 17, fontWeight: '800' },
+  skipText: { fontSize: 17, fontWeight: '900' },
   next: { textAlign: 'center', fontWeight: '600', alignSelf: 'stretch' },
 });

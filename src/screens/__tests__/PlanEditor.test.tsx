@@ -15,6 +15,17 @@ const pickTargets = async (field: string, sets: number, reps: number) => {
 };
 
 describe('PlanEditor', () => {
+  it('sums up the week above the days and keeps it in step with edits', async () => {
+    const db = await createTestDb();
+    const squat = await findByName(db, 'Squat');
+    await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: squat, targetSets: 3, targetReps: 5 }] });
+    await setPlanDay(db, 2, { isRest: true, items: [] });
+    await renderWithDb(<PlanEditor onSaved={jest.fn()} />, db);
+    expect(await screen.findByLabelText('Week: 1 training day, 1 rest day')).toBeTruthy();
+    await fireEvent(screen.getByLabelText('Sunday rest day'), 'valueChange', true);
+    expect(await screen.findByLabelText('Week: 1 training day, 2 rest days')).toBeTruthy();
+  });
+
   it('keeps plan inputs above the keyboard', async () => {
     await renderWithDb(<PlanEditor onSaved={jest.fn()} />, await createTestDb());
     expect(await screen.findByTestId('keyboard-avoider')).toBeTruthy();

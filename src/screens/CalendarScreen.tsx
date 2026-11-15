@@ -30,6 +30,7 @@ export function CalendarScreen({ today = todayKey() }: { today?: string }) {
   const byDate = new Map<string, DaySummary>((data ?? []).map((d) => [d.date, d]));
   const open = (date: string) => router.push({ pathname: '/day/[date]', params: { date } });
   const pick = (date: string) => { setAnchor(date); setMode('day'); };
+  const backLabel = mode === 'day' ? 'Back to today' : `Back to this ${mode}`;
 
   return (
     <SafeAreaView testID="calendar-safe-area" style={{ flex: 1, backgroundColor: t.bg }}>
@@ -46,7 +47,7 @@ export function CalendarScreen({ today = todayKey() }: { today?: string }) {
     >
       <View style={styles.topRow}>
         <View>
-          <Text style={[styles.today, { color: t.muted }]}>{periodLabel(today, 'day').toUpperCase()}</Text>
+          <Text style={[styles.today, { color: t.primary }]}>{periodLabel(today, 'day').toUpperCase()}</Text>
           <Text style={[styles.h1, { color: t.text }]}>lock<Text style={{ color: t.primary }}>IN</Text></Text>
         </View>
         <View style={styles.topBtns}>
@@ -70,13 +71,13 @@ export function CalendarScreen({ today = todayKey() }: { today?: string }) {
           {!inPeriod(today, anchor, mode) && (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Go to today"
+              accessibilityLabel={backLabel}
               onPress={() => setAnchor(today)}
               hitSlop={8}
               style={[styles.chip, { backgroundColor: tint(t.primary, 0.12) }]}
             >
               <Icon name={sym('arrow.uturn.backward', 'undo')} size={11} color={t.primary} fallback="‹" />
-              <Text style={{ color: t.primary, fontSize: 12, fontWeight: '700' }}>Back to today</Text>
+              <Text style={{ color: t.primary, fontSize: 12, fontWeight: '700' }}>{backLabel}</Text>
             </Pressable>
           )}
         </View>
@@ -94,13 +95,13 @@ export function CalendarScreen({ today = todayKey() }: { today?: string }) {
 
 const styles = StyleSheet.create({
   // flexGrow lets the month grid stretch to exactly fill the screen.
-  wrap: { flexGrow: 1, padding: 16, gap: 14 },
+  wrap: { flexGrow: 1, padding: 16, paddingTop: 8, gap: 14 },
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
-  topBtns: { flexDirection: 'row', gap: 6 },
-  today: { fontSize: 12, fontWeight: '700', letterSpacing: 0.8 },
-  h1: { fontSize: 34, fontWeight: '900', letterSpacing: -1 },
+  topBtns: { flexDirection: 'row', gap: 8, paddingBottom: 4 },
+  today: { fontSize: 12, fontWeight: '800', letterSpacing: 1.4 },
+  h1: { fontSize: 38, fontWeight: '900', fontStyle: 'italic', letterSpacing: -1.5, lineHeight: 44 },
   navRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   periodCol: { alignItems: 'center', gap: 4 },
-  period: { fontSize: 17, fontWeight: '700' },
+  period: { fontSize: 18, fontWeight: '900', letterSpacing: -0.3 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 3, paddingHorizontal: 10, borderRadius: 999 },
 });
