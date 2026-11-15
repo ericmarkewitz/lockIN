@@ -8,7 +8,11 @@
     "scheme": "lockin",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "bundleIdentifier": "com.ericmarkewitz.lockin",
+      "icon": "./assets/expo.icon",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -52,7 +56,7 @@
     },
     "owner": "ericmarkewitz",
     "runtimeVersion": {
-      "policy": "appVersion"
+      "policy": "fingerprint"
     },
     "updates": {
       "url": "https://u.expo.dev/1bf402ad-d25a-4f4f-99af-804fad06a06e"
