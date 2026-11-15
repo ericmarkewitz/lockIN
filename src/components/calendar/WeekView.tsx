@@ -16,6 +16,7 @@ const BADGED: DayStatus[] = ['completed', 'partial', 'missed'];
 const isTraining = (s: DayStatus) => s !== 'none' && s !== 'rest';
 
 function describe(s: DaySummary | undefined): { title: string; subtitle?: string } {
+  if (s?.beforePlan) return { title: 'Before your plan' };
   if (!s || s.status === 'none') return { title: 'Nothing planned' };
   if (s.status === 'rest') return { title: 'Rest day' };
   return {

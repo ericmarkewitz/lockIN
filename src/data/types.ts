@@ -90,4 +90,6 @@ export type DaySummary = {
   status: DayStatus;
   exerciseCount: number;
   kinds: CategoryKind[];
+  /** A past day from before the first plan was saved. */
+  beforePlan?: true;
 };

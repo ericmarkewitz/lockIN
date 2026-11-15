@@ -63,22 +63,36 @@ export async function isPlanComplete(db: Db): Promise<boolean> {
   return r?.value === '1';
 }
 
-/** Marks setup done. The first call also records `today` as the date the plan started counting. */
+/**
+ * Marks setup done and records the plan as it stands as the one in use from `today`. Called on
+ * every save; a second save on the same day replaces that day's record.
+ */
 export async function markPlanComplete(db: Db, today: string): Promise<void> {
-  await db.runAsync("INSERT OR REPLACE INTO settings (key, value) VALUES ('plan_complete', '1')");
-  await db.runAsync("INSERT OR IGNORE INTO settings (key, value) VALUES ('plan_started', ?)", [today]);
+  const plan = await getPlan(db);
+  await db.withTransactionAsync(async () => {
+    await db.runAsync("INSERT OR REPLACE INTO settings (key, value) VALUES ('plan_complete', '1')");
+    await db.runAsync('DELETE FROM plan_history WHERE effective_from = ?', [today]);
+    for (const d of plan) {
+      await db.runAsync(
+        'INSERT INTO plan_history (effective_from, weekday, is_rest, exercise_count, kinds) VALUES (?, ?, ?, ?, ?)',
+        [today, d.weekday, d.isRest ? 1 : 0, d.items.length, [...new Set(d.items.map((it) => it.categoryKind))].join(',')],
+      );
+    }
+  });
 }
 
-/**
- * The first date the plan can say a day was missed: when the plan was first saved, or the first
- * workout if that is earlier (installs from before the start date was recorded). Null if neither.
- */
-export async function getTrackingStart(db: Db): Promise<string | null> {
-  const r = await db.getFirstAsync<{ start: string | null }>(
-    `SELECT MIN(d) AS start FROM (
-       SELECT value AS d FROM settings WHERE key = 'plan_started'
-       UNION ALL SELECT MIN(date) FROM workouts
-     )`,
+export type PlanSnapshotDay = { effectiveFrom: string; weekday: number; isRest: boolean; exerciseCount: number; kinds: CategoryKind[] };
+
+/** Every recorded plan day, newest first. */
+export async function getPlanHistory(db: Db): Promise<PlanSnapshotDay[]> {
+  const rows = await db.getAllAsync<{ effective_from: string; weekday: number; is_rest: number; exercise_count: number; kinds: string }>(
+    'SELECT * FROM plan_history ORDER BY effective_from DESC',
   );
-  return r?.start ?? null;
+  return rows.map((r) => ({
+    effectiveFrom: r.effective_from,
+    weekday: r.weekday,
+    isRest: !!r.is_rest,
+    exerciseCount: r.exercise_count,
+    kinds: r.kinds ? (r.kinds.split(',') as CategoryKind[]) : [],
+  }));
 }

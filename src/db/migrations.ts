@@ -144,6 +144,41 @@ const MIGRATIONS: ((db: Db) => Promise<void>)[] = [
       ALTER TABLE sets ADD COLUMN distance_unit TEXT CHECK (distance_unit IN ('mi','km'));
     `);
   },
+  // A snapshot of the weekly plan each time it is saved, so past days keep the plan they had.
+  // `kinds` lists the day's category kinds in plan order, comma separated. Existing installs get
+  // one snapshot of the current plan, from when the plan was first saved or the first workout.
+  async (db) => {
+    await db.execAsync(`
+      CREATE TABLE plan_history (
+        effective_from TEXT NOT NULL,
+        weekday INTEGER NOT NULL CHECK (weekday BETWEEN 0 AND 6),
+        is_rest INTEGER NOT NULL,
+        exercise_count INTEGER NOT NULL,
+        kinds TEXT NOT NULL,
+        PRIMARY KEY (effective_from, weekday)
+      );
+    `);
+    const start = await db.getFirstAsync<{ d: string | null }>(
+      `SELECT MIN(d) AS d FROM (
+         SELECT value AS d FROM settings WHERE key = 'plan_started'
+         UNION ALL SELECT MIN(date) FROM workouts
+       )`,
+    );
+    if (!start?.d) return;
+    const days = await db.getAllAsync<{ weekday: number; is_rest: number }>('SELECT weekday, is_rest FROM plan_days');
+    const items = await db.getAllAsync<{ weekday: number; kind: string }>(
+      `SELECT p.weekday, c.kind FROM plan_items p
+       JOIN exercises e ON e.id = p.exercise_id JOIN categories c ON c.id = e.category_id
+       ORDER BY p.weekday, p.position`,
+    );
+    for (const d of days) {
+      const kinds = items.filter((i) => i.weekday === d.weekday).map((i) => i.kind);
+      await db.runAsync(
+        'INSERT INTO plan_history (effective_from, weekday, is_rest, exercise_count, kinds) VALUES (?, ?, ?, ?, ?)',
+        [start.d, d.weekday, d.is_rest, kinds.length, [...new Set(kinds)].join(',')],
+      );
+    }
+  },
 ];
 
 export const LATEST_VERSION = MIGRATIONS.length;
