@@ -4,6 +4,7 @@ import { Suspense, type ReactNode } from 'react';
 import { ActivityIndicator } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+import { DisclaimerProvider, useDisclaimer } from '@/disclaimer';
 import { ThemeProvider, useTheme } from '@/theme';
 
 import { DATABASE_NAME } from "@/db/config";
@@ -18,6 +19,7 @@ function Bridge({ children }: { children: ReactNode }) {
 
 export function Screens() {
   const t = useTheme();
+  const { accepted } = useDisclaimer();
   return (
     <Stack
       screenOptions={{
@@ -31,15 +33,21 @@ export function Screens() {
         contentStyle: { backgroundColor: t.bg },
       }}
     >
-      {/* The title is unseen here but becomes the back button label on every screen pushed from the calendar. */}
-      <Stack.Screen name="index" options={{ headerShown: false, title: 'lockIN' }} />
-      <Stack.Screen name="setup" options={{ headerLargeTitle: true, title: 'Weekly plan' }} />
-      <Stack.Screen name="day/[date]" options={{ title: 'Workout' }} />
-      {/* Full screen with no swipe to dismiss, so a stray swipe mid-set doesn't end the workout; it draws its own End button. */}
-      <Stack.Screen name="workout/[date]" options={{ headerShown: false, presentation: 'fullScreenModal', gestureEnabled: false }} />
-      <Stack.Screen name="export" options={{ headerLargeTitle: true, title: 'Export' }} />
-      <Stack.Screen name="history" options={{ headerLargeTitle: true, title: 'History' }} />
-      <Stack.Screen name="settings" options={{ headerLargeTitle: true, title: 'Settings' }} />
+      {/* Every screen is unreachable, deep links included, until the disclaimer is accepted. */}
+      <Stack.Protected guard={accepted}>
+        {/* The title is unseen here but becomes the back button label on every screen pushed from the calendar. */}
+        <Stack.Screen name="index" options={{ headerShown: false, title: 'lockIN' }} />
+        <Stack.Screen name="setup" options={{ headerLargeTitle: true, title: 'Weekly plan' }} />
+        <Stack.Screen name="day/[date]" options={{ title: 'Workout' }} />
+        {/* Full screen with no swipe to dismiss, so a stray swipe mid-set doesn't end the workout; it draws its own End button. */}
+        <Stack.Screen name="workout/[date]" options={{ headerShown: false, presentation: 'fullScreenModal', gestureEnabled: false }} />
+        <Stack.Screen name="export" options={{ headerLargeTitle: true, title: 'Export' }} />
+        <Stack.Screen name="history" options={{ headerLargeTitle: true, title: 'History' }} />
+        <Stack.Screen name="settings" options={{ headerLargeTitle: true, title: 'Settings' }} />
+      </Stack.Protected>
+      <Stack.Protected guard={!accepted}>
+        <Stack.Screen name="disclaimer" options={{ headerShown: false, gestureEnabled: false }} />
+      </Stack.Protected>
     </Stack>
   );
 }
@@ -51,7 +59,9 @@ export default function RootLayout() {
       <SQLiteProvider databaseName={DATABASE_NAME} onInit={(db) => migrate(db as unknown as Db)} useSuspense>
         <Bridge>
           <ThemeProvider>
-            <Screens />
+            <DisclaimerProvider>
+              <Screens />
+            </DisclaimerProvider>
           </ThemeProvider>
         </Bridge>
       </SQLiteProvider>

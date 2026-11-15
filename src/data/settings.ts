@@ -93,3 +93,14 @@ export async function setAppearance(db: Db, appearance: Appearance): Promise<voi
 export async function getThemeSettings(db: Db): Promise<ThemeSettings> {
   return { themeId: await getThemeId(db), appearance: await getAppearance(db) };
 }
+
+/** True once the user has accepted the disclaimer at version `current` or later. */
+export async function hasAcceptedDisclaimer(db: Db, current: number): Promise<boolean> {
+  const accepted = Number(await readSetting(db, 'disclaimer_version'));
+  return Number.isInteger(accepted) && accepted >= current;
+}
+
+export async function acceptDisclaimer(db: Db, version: number): Promise<void> {
+  if (!Number.isInteger(version) || version < 1) throw new Error(`Unsupported disclaimer version: ${version}`);
+  await writeSetting(db, 'disclaimer_version', String(version));
+}
