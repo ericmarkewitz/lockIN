@@ -21,9 +21,23 @@ jobs:
           uses: actions/setup-node@v7
           with:
             node-version: '26'
-        
+            cache: npm
+
         - name: Install dependencies
           run: npm ci
+
+        # Jest's transform cache and ESLint's cache are keyed by file content, so a stale
+        # restore is safe: each run saves a fresh copy and the next run starts from the newest.
+        - name: Restore Jest and ESLint caches
+          uses: actions/cache@v6
+          with:
+            path: |
+              .jest-cache
+              .expo/cache/eslint
+            key: checks-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.run_id }}
+            restore-keys: |
+              checks-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+              checks-${{ runner.os }}-
 
         - name: Typecheck
           run: npm run type
@@ -32,4 +46,4 @@ jobs:
           run: npm run lint
 
         - name: Test
-          run: npm run test
+          run: npm run test -- --ci --cacheDirectory=.jest-cache
