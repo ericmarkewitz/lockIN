@@ -14,7 +14,7 @@ export function ExerciseMedia({ name, isCustom, size = 160 }: { name: string; is
   const t = useTheme();
   const glow = size * 1.15;
   return (
-    <View style={[styles.frame, { height: size + 40 }]}>
+    <View style={[styles.frame, { width: glow, height: glow }]}>
       <View style={[styles.glow, { width: glow, height: glow, borderRadius: glow / 2, backgroundColor: tint(t.primary, 0.08) }]} />
       <View style={[styles.glow, { width: glow * 0.7, height: glow * 0.7, borderRadius: glow, backgroundColor: tint(t.primary, 0.07) }]} />
       {isCustom ? (

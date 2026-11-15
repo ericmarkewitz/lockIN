@@ -263,6 +263,10 @@ describe('WorkoutMode', () => {
     await fireEvent.press(screen.getByLabelText('Form tips'));
     expect(screen.getByText(/shoulder blades/i)).toBeTruthy();
     expect(screen.getByLabelText('Form tips').props.accessibilityState).toMatchObject({ expanded: true });
+    await fireEvent.press(screen.getByLabelText('Close form tips'));
+    expect(screen.queryByText(/shoulder blades/i)).toBeNull();
+    // The set is still there to log.
+    expect(screen.getByLabelText('Done with set 1')).toBeTruthy();
   });
 
   it('logs cardio as one entry with the planned time', async () => {

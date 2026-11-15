@@ -13,20 +13,21 @@ export function formatRest(ms: number): string {
 }
 
 const TICKS = 60;
-const DIAL = 248;
+const MAX_DIAL = 260;
 
 /** A ring of ticks, lit clockwise from the top for the share of the rest still to go. */
-function Dial({ share, children }: { share: number; children: React.ReactNode }) {
+function Dial({ share, size, children }: { share: number; size: number; children: React.ReactNode }) {
   const t = useTheme();
   const lit = Math.ceil(Math.min(1, Math.max(0, share)) * TICKS);
+  const long = size * 0.065;
   return (
-    <View style={styles.dial}>
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
       <View style={styles.ring} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
-        <View style={[styles.glow, { backgroundColor: tint(t.primary, 0.08) }]} />
+        <View style={[styles.glow, { width: size * 0.78, height: size * 0.78, borderRadius: size, backgroundColor: tint(t.primary, 0.08) }]} />
         {Array.from({ length: TICKS }, (_, i) => {
           // Every fifth tick is longer, like a watch face. Each is centered on the dial before
           // it's turned and pushed out, so short and long ticks share one circle.
-          const h = i % 5 === 0 ? 16 : 11;
+          const h = i % 5 === 0 ? long : long * 0.7;
           return (
             <View
               key={i}
@@ -35,22 +36,24 @@ function Dial({ share, children }: { share: number; children: React.ReactNode })
                 {
                   backgroundColor: i < lit ? t.primary : tint(t.muted, 0.25),
                   height: h,
-                  top: DIAL / 2 - h / 2,
-                  transform: [{ rotate: `${(i * 360) / TICKS}deg` }, { translateY: -(DIAL / 2 - 12) }],
+                  left: size / 2 - 1.5,
+                  top: size / 2 - h / 2,
+                  transform: [{ rotate: `${(i * 360) / TICKS}deg` }, { translateY: -(size / 2 - long * 0.75) }],
                 },
               ]}
             />
           );
         })}
       </View>
-      <View style={styles.center}>{children}</View>
+      {children}
     </View>
   );
 }
 
 /**
  * Counts down to `endsAt` (a wall-clock time, so it stays right while the app is in the
- * background) and buzzes when the rest is over.
+ * background) and buzzes when the rest is over. Fills the height it's given; the dial grows
+ * to fit.
  */
 export function RestTimer({
   endsAt, next, onAdjust, onSkip, onFinish,
@@ -62,6 +65,7 @@ export function RestTimer({
   const [now, setNow] = useState(Date.now);
   // The dial's full circle is the whole rest, so adding time grows it rather than refilling it.
   const [startedAt] = useState(Date.now);
+  const [dial, setDial] = useState(220);
   const finish = useRef(onFinish);
   useEffect(() => { finish.current = onFinish; });
 
@@ -91,7 +95,7 @@ export function RestTimer({
       hitSlop={6}
       style={({ pressed }) => [
         styles.adjust,
-        { backgroundColor: t.card, borderColor: t.border, transform: [{ scale: pressed ? 0.94 : 1 }] },
+        { backgroundColor: t.surface, transform: [{ scale: pressed ? 0.94 : 1 }] },
       ]}
     >
       <Text style={[styles.adjustText, { color: t.text }]}>{text}</Text>
@@ -100,12 +104,21 @@ export function RestTimer({
 
   return (
     <Animated.View entering={FadeIn.duration(220)} style={[styles.wrap, { backgroundColor: t.card, borderColor: t.border }]}>
-      <Dial share={share}>
-        <View accessible accessibilityLabel={`Rest, ${left} left`} accessibilityLiveRegion="polite" style={styles.clock}>
-          <Text style={[styles.label, { color: t.primary }]}>Rest</Text>
-          <Text style={[styles.time, { color: t.text }]}>{left}</Text>
-        </View>
-      </Dial>
+      <View
+        style={styles.room}
+        onLayout={(e) => {
+          const { width, height } = e.nativeEvent.layout;
+          setDial(Math.max(120, Math.min(MAX_DIAL, width, height)));
+        }}
+      >
+        <Dial share={share} size={dial}>
+          <View accessible accessibilityLabel={`Rest, ${left} left`} accessibilityLiveRegion="polite" style={styles.clock}>
+            <Text style={[styles.label, { color: t.primary }]}>Rest</Text>
+            <Text style={[styles.time, { color: t.text, fontSize: Math.round(dial * 0.25) }]}>{left}</Text>
+          </View>
+        </Dial>
+      </View>
+      {next && <Text style={[styles.next, { color: t.muted }]} numberOfLines={1} adjustsFontSizeToFit>{next}</Text>}
       <View style={styles.controls}>
         {adjust('Take away 15 seconds', '−15', -15)}
         <Pressable
@@ -122,33 +135,26 @@ export function RestTimer({
         </Pressable>
         {adjust('Add 15 seconds', '+15', 15)}
       </View>
-      {next && (
-        <View style={[styles.next, { backgroundColor: t.surface }]}>
-          <Text style={[styles.nextText, { color: t.muted }]} numberOfLines={2}>{next}</Text>
-        </View>
-      )}
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { alignItems: 'center', gap: 22, paddingTop: 28, paddingBottom: 20, paddingHorizontal: 16, borderRadius: 28, borderWidth: StyleSheet.hairlineWidth },
-  dial: { width: DIAL, height: DIAL, alignItems: 'center', justifyContent: 'center' },
+  wrap: { flex: 1, minHeight: 0, alignItems: 'center', gap: 14, padding: 16, borderRadius: 28, borderWidth: StyleSheet.hairlineWidth },
+  room: { flex: 1, minHeight: 0, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' },
   ring: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
-  glow: { position: 'absolute', width: DIAL - 56, height: DIAL - 56, borderRadius: DIAL },
-  tick: { position: 'absolute', left: DIAL / 2 - 1.5, width: 3, borderRadius: 1.5 },
-  center: { alignItems: 'center' },
+  glow: { position: 'absolute' },
+  tick: { position: 'absolute', width: 3, borderRadius: 1.5 },
   clock: { alignItems: 'center' },
   label: { fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 2 },
-  time: { fontSize: 64, fontWeight: '800', fontVariant: ['tabular-nums'], letterSpacing: -2 },
-  controls: { flexDirection: 'row', alignItems: 'center', gap: 12, alignSelf: 'stretch' },
-  adjust: { width: 60, height: 52, borderRadius: 26, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
+  time: { fontWeight: '800', fontVariant: ['tabular-nums'], letterSpacing: -2 },
+  controls: { flexDirection: 'row', alignItems: 'center', gap: 10, alignSelf: 'stretch' },
+  adjust: { width: 64, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center' },
   adjustText: { fontSize: 17, fontWeight: '700', fontVariant: ['tabular-nums'] },
   skip: {
-    flex: 1, height: 52, borderRadius: 26, flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center',
-    shadowOpacity: 0.3, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 3,
+    flex: 1, height: 60, borderRadius: 30, flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center',
+    shadowOpacity: 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 5,
   },
-  skipText: { fontSize: 16, fontWeight: '800' },
-  next: { alignSelf: 'stretch', borderRadius: 14, paddingVertical: 10, paddingHorizontal: 14 },
-  nextText: { textAlign: 'center', fontWeight: '600' },
+  skipText: { fontSize: 17, fontWeight: '800' },
+  next: { textAlign: 'center', fontWeight: '600', alignSelf: 'stretch' },
 });

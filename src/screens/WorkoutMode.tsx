@@ -1,13 +1,14 @@
 import * as Haptics from 'expo-haptics';
 import { Stack, useRouter } from 'expo-router';
 import { useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, type ViewStyle } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type ViewStyle } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { DurationButton } from '@/components/DurationButton';
 import { ExerciseMedia } from '@/components/ExerciseMedia';
 import { categoryIcon, Icon, sym, type SymbolName } from '@/components/Icon';
-import { KeyboardAvoider, keyboardScrollProps } from '@/components/KeyboardAvoider';
+import { KeyboardAvoider } from '@/components/KeyboardAvoider';
 import { ExerciseMotionFor } from '@/components/motion/ExerciseMotion';
 import { RestTimer } from '@/components/RestTimer';
 import { UnitPill } from '@/components/UnitPill';
@@ -105,45 +106,40 @@ export function WorkoutMode({ date }: { date: string }) {
   const exercises = [...new Map(steps.map((s) => [s.exercise.id, s.exercise])).values()];
   const upcoming = step && steps.slice(index + 1).find((s) => s.exerciseIndex !== step.exerciseIndex)?.exercise;
 
+  // Everything fits on one screen with Done pinned at the bottom: nothing here scrolls but the
+  // finish screen's summary.
   return (
-    <KeyboardAvoider>
+    <KeyboardAvoider scrolls={false}>
       {header}
-      <ScrollView
-        {...keyboardScrollProps}
-        contentInsetAdjustmentBehavior="automatic"
-        style={{ backgroundColor: t.bg }}
-        contentContainerStyle={styles.wrap}
-      >
+      <SafeAreaView edges={['bottom']} style={[styles.screen, { backgroundColor: t.bg }]}>
         {steps.length === 0 ? (
-          <View style={styles.empty}>
+          <View style={[styles.empty, styles.page, { justifyContent: 'center' }]}>
             <Badge icon={sym('calendar.badge.plus', 'event')} fallback="+" color={t.muted} />
             <Text style={[styles.title, { color: t.text }]}>Nothing planned</Text>
             <Text style={{ color: t.muted, textAlign: 'center' }}>Add exercises to this day, then start workout mode.</Text>
             <CTA title="Back to the day" variant="secondary" onPress={() => router.back()} />
           </View>
         ) : (
-          <>
+          <View style={styles.page}>
             <Progress steps={steps} exercises={exercises} current={step?.exercise.id ?? null} />
             {step ? (
-              <>
-                <StepView
-                  key={step.set.id}
-                  step={step}
-                  exerciseCount={exercises.length}
-                  units={units}
-                  last={last[step.exercise.exerciseId] ?? null}
-                  rest={rest && {
-                    endsAt: rest.endsAt,
-                    newExercise: rest.afterExerciseId !== step.exercise.id,
-                    onAdjust: (s) => setRest({ ...rest, endsAt: Math.max(restUntil(0), rest.endsAt + s * 1000) }),
-                    onEnd: () => setRest(null),
-                  }}
-                  onDone={finishStep}
-                  onSkip={() => move(nextOpenStep(steps, index))}
-                  onPrevious={index > 0 ? () => move(index - 1) : undefined}
-                />
-                {!rest && upcoming && <UpNext exercise={upcoming} />}
-              </>
+              <StepView
+                key={step.set.id}
+                step={step}
+                exerciseCount={exercises.length}
+                units={units}
+                last={last[step.exercise.exerciseId] ?? null}
+                rest={rest && {
+                  endsAt: rest.endsAt,
+                  newExercise: rest.afterExerciseId !== step.exercise.id,
+                  onAdjust: (s) => setRest({ ...rest, endsAt: Math.max(restUntil(0), rest.endsAt + s * 1000) }),
+                  onEnd: () => setRest(null),
+                }}
+                onDone={finishStep}
+                onSkip={() => move(nextOpenStep(steps, index))}
+                onPrevious={index > 0 ? () => move(index - 1) : undefined}
+                upcoming={upcoming ?? undefined}
+              />
             ) : (
               <FinishView
                 steps={steps}
@@ -155,9 +151,9 @@ export function WorkoutMode({ date }: { date: string }) {
                 onFinish={() => router.back()}
               />
             )}
-          </>
+          </View>
         )}
-      </ScrollView>
+      </SafeAreaView>
     </KeyboardAvoider>
   );
 }
@@ -184,12 +180,14 @@ function Progress({ steps, exercises, current }: { steps: Step[]; exercises: Wor
 }
 
 function StepView({
-  step, exerciseCount, units, last, rest, onDone, onSkip, onPrevious,
+  step, exerciseCount, units, last, rest, onDone, onSkip, onPrevious, upcoming,
 }: {
   step: Step; exerciseCount: number; units: Units; last: { sets: WorkoutSet[] } | null;
   /** While resting, the rest takes the place of the set; the set's entry keeps what's typed. */
   rest: { endsAt: number; newExercise: boolean; onAdjust: (seconds: number) => void; onEnd: () => void } | null;
   onDone: (patch: SetPatch) => void; onSkip: () => void; onPrevious?: () => void;
+  /** The next exercise after this one, shown along the bottom of the picture. */
+  upcoming?: WorkoutExercise;
 }) {
   const t = useTheme();
   const { exercise, set, setIndex } = step;
@@ -244,67 +242,51 @@ function StepView({
     }
   };
 
+  const tipsButton = formTips && (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Form tips"
+      accessibilityState={{ expanded: tips }}
+      onPress={() => setTips(true)}
+      hitSlop={6}
+      style={({ pressed }) => [styles.tipsToggle, { backgroundColor: tint(t.primary, 0.12), opacity: pressed ? 0.7 : 1 }]}
+    >
+      <Icon name={sym('lightbulb.fill', 'lightbulb')} size={13} color={t.primary} fallback="💡" />
+      <Text style={{ color: t.primary, fontWeight: '700', fontSize: 14 }}>Tips</Text>
+    </Pressable>
+  );
+
   return (
-    <Animated.View entering={FadeIn.duration(240)} style={{ gap: 16 }}>
-      <View style={[styles.hero, { backgroundColor: tint(t.primary, 0.07), borderColor: tint(t.primary, 0.12) }]}>
-        <View style={styles.heroTop}>
-          <View style={[styles.chip, { backgroundColor: t.card }]}>
-            <Icon name={categoryIcon({ name: exercise.categoryName, kind: exercise.categoryKind })} size={12} color={t.primary} fallback="•" />
-            <Text style={[styles.chipText, { color: t.text }]}>
-              {exercise.categoryName}
-              {exercise.subcategory ? ` · ${exercise.subcategory}` : ''}
-            </Text>
-          </View>
-          <Text style={[styles.eyebrow, { color: t.primary }]}>Exercise {step.exerciseIndex + 1} of {exerciseCount}</Text>
-        </View>
-        <ExerciseMedia name={exercise.exerciseName} isCustom={exercise.isCustom} size={176} />
-      </View>
-
-      <View style={{ gap: 10 }}>
-        <Text style={[styles.title, { color: t.text }]}>{exercise.exerciseName}</Text>
-        {formTips && (
-          <View style={{ gap: 10 }}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Form tips"
-              accessibilityState={{ expanded: tips }}
-              onPress={() => setTips(!tips)}
-              style={({ pressed }) => [
-                styles.tipsToggle,
-                { backgroundColor: tips ? tint(t.primary, 0.14) : t.card, borderColor: tips ? 'transparent' : t.border, opacity: pressed ? 0.7 : 1 },
-              ]}
-            >
-              <Icon name={sym('lightbulb.fill', 'lightbulb')} size={13} color={t.primary} fallback="💡" />
-              <Text style={{ color: t.primary, fontWeight: '700', fontSize: 14 }}>Form tips</Text>
-              <Icon name={tips ? sym('chevron.up', 'expand_less') : sym('chevron.down', 'expand_more')} size={11} color={t.primary} fallback={tips ? '▴' : '▾'} />
-            </Pressable>
-            {tips && (
-              <Animated.View entering={FadeInDown.duration(200)} style={[styles.card, { backgroundColor: t.card, borderColor: t.border, gap: 12 }]}>
-                {formTips.map((tip, i) => (
-                  <View key={tip} style={styles.tip}>
-                    <View style={[styles.tipNum, { backgroundColor: tint(t.primary, 0.14) }]}>
-                      <Text style={[styles.tipNumText, { color: t.primary }]}>{i + 1}</Text>
-                    </View>
-                    <Text style={[styles.tipText, { color: t.text }]}>{tip}</Text>
-                  </View>
-                ))}
-              </Animated.View>
-            )}
-          </View>
-        )}
-      </View>
-
+    <Animated.View entering={FadeIn.duration(240)} style={styles.fill}>
       {rest ? (
-        <RestTimer
-          endsAt={rest.endsAt}
-          next={upNext(rest.newExercise)}
-          onAdjust={rest.onAdjust}
-          onSkip={rest.onEnd}
-          onFinish={rest.onEnd}
-        />
+        <>
+          <View style={styles.compactHead}>
+            <Thumb exercise={exercise} size={48} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.eyebrow, { color: t.primary }]}>Exercise {step.exerciseIndex + 1} of {exerciseCount}</Text>
+              <Text style={[styles.compactTitle, { color: t.text }]} numberOfLines={1}>{exercise.exerciseName}</Text>
+            </View>
+            {tipsButton}
+          </View>
+          <RestTimer
+            endsAt={rest.endsAt}
+            next={upNext(rest.newExercise)}
+            onAdjust={rest.onAdjust}
+            onSkip={rest.onEnd}
+            onFinish={rest.onEnd}
+          />
+        </>
       ) : (
-        <Animated.View entering={FadeInDown.duration(260)} style={{ gap: 14 }}>
-          <View style={[styles.card, { backgroundColor: t.card, borderColor: t.border, gap: 16 }]}>
+        <>
+          <Hero exercise={exercise} label={`Exercise ${step.exerciseIndex + 1} of ${exerciseCount}`} upcoming={upcoming} />
+          <View style={styles.titleRow}>
+            <Text style={[styles.title, { color: t.text }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+              {exercise.exerciseName}
+            </Text>
+            {tipsButton}
+          </View>
+
+          <Animated.View entering={FadeInDown.duration(260)} style={[styles.card, { backgroundColor: t.card, borderColor: t.border, gap: 12 }]}>
             <View style={styles.entryHead}>
               {isStrength ? (
                 <>
@@ -346,68 +328,159 @@ function StepView({
               </>
             ) : (
               <>
-                <View style={{ gap: 6 }}>
-                  <Text style={[styles.fieldLabel, { color: t.muted }]}>Time</Text>
-                  <View style={[styles.field, { backgroundColor: t.surface }]}>
-                    <DurationButton
-                      label="Duration"
-                      title={exercise.exerciseName}
-                      value={durationMin}
-                      target={exercise.targetDurationMin}
-                      onChange={setDurationMin}
-                      style={styles.duration}
-                    />
-                  </View>
+                <View style={[styles.field, { backgroundColor: t.surface }]}>
+                  <Text style={[styles.fieldLabel, styles.inlineLabel, { color: t.muted }]}>Time</Text>
+                  <DurationButton
+                    label="Duration"
+                    title={exercise.exerciseName}
+                    value={durationMin}
+                    target={exercise.targetDurationMin}
+                    onChange={setDurationMin}
+                    style={styles.duration}
+                  />
                 </View>
                 {exercise.categoryKind === 'cardio' && (
-                  <View style={{ gap: 6 }}>
-                    <Text style={[styles.fieldLabel, { color: t.muted }]}>Distance</Text>
-                    <View style={[styles.field, { backgroundColor: t.surface }]}>
-                      <TextInput
-                        accessibilityLabel="Distance"
-                        value={distance}
-                        onChangeText={setDistance}
-                        keyboardType="decimal-pad"
-                        selectTextOnFocus
-                        placeholder="–"
-                        placeholderTextColor={t.muted}
-                        style={[styles.input, { color: t.text }]}
-                      />
-                      <UnitPill label="Distance unit" unit={distanceUnit} onPress={() => setDistanceUnit(otherDistanceUnit(distanceUnit))} />
-                    </View>
+                  <View style={[styles.field, { backgroundColor: t.surface }]}>
+                    <Text style={[styles.fieldLabel, styles.inlineLabel, { color: t.muted }]}>Distance</Text>
+                    <TextInput
+                      accessibilityLabel="Distance"
+                      value={distance}
+                      onChangeText={setDistance}
+                      keyboardType="decimal-pad"
+                      selectTextOnFocus
+                      placeholder="–"
+                      placeholderTextColor={t.muted}
+                      style={[styles.input, { color: t.text }]}
+                    />
+                    <UnitPill label="Distance unit" unit={distanceUnit} onPress={() => setDistanceUnit(otherDistanceUnit(distanceUnit))} />
                   </View>
                 )}
               </>
             )}
-          </View>
+          </Animated.View>
 
-          <CTA
-            title={set.completed ? 'Save' : 'Done'}
-            label={`${set.completed ? 'Save' : 'Done with'} ${subject}`}
-            icon={sym('checkmark', 'check')}
-            onPress={done}
-          />
-          <View style={styles.row}>
-            <Ghost
-              title="Previous"
+          <View style={styles.actions}>
+            <RoundAction
               label={isStrength ? 'Previous set' : 'Previous'}
-              icon={sym('chevron.left', 'chevron_left')}
-              fallback="‹"
               disabled={!onPrevious}
               onPress={() => onPrevious?.()}
+            >
+              <Icon name={sym('chevron.left', 'chevron_left')} size={18} color={t.text} fallback="‹" />
+            </RoundAction>
+            <CTA
+              title={set.completed ? 'Save' : 'Done'}
+              label={`${set.completed ? 'Save' : 'Done with'} ${subject}`}
+              icon={sym('checkmark', 'check')}
+              onPress={done}
+              style={{ flex: 1 }}
             />
-            <Ghost
-              title={isStrength ? 'Skip set' : 'Skip'}
-              label={`Skip ${subject}`}
-              icon={sym('chevron.right', 'chevron_right')}
-              fallback="›"
-              trailing
-              onPress={onSkip}
-            />
+            <RoundAction label={`Skip ${subject}`} onPress={onSkip}>
+              <Text style={{ color: t.text, fontWeight: '700', fontSize: 14 }}>Skip</Text>
+            </RoundAction>
           </View>
-        </Animated.View>
+        </>
       )}
+      {formTips && <FormTipsSheet visible={tips} name={exercise.exerciseName} tips={formTips} onClose={() => setTips(false)} />}
     </Animated.View>
+  );
+}
+
+/**
+ * The exercise's picture, filling whatever height the screen has left. The figure is sized to
+ * the space measured, so a small phone still fits the whole set on one screen.
+ */
+function Hero({ exercise, label, upcoming }: { exercise: WorkoutExercise; label: string; upcoming?: WorkoutExercise }) {
+  const t = useTheme();
+  const [height, setHeight] = useState(0);
+  // Leaves room for the chip row and the up-next line; the glow is 1.15× the figure.
+  const size = height ? Math.min(220, (height - (upcoming ? 96 : 52)) / 1.15) : 160;
+  return (
+    <View
+      onLayout={(e) => setHeight(e.nativeEvent.layout.height)}
+      style={[styles.hero, { backgroundColor: tint(t.primary, 0.07), borderColor: tint(t.primary, 0.12) }]}
+    >
+      <View style={styles.heroTop}>
+        <View style={[styles.chip, { backgroundColor: t.card }]}>
+          <Icon name={categoryIcon({ name: exercise.categoryName, kind: exercise.categoryKind })} size={12} color={t.primary} fallback="•" />
+          <Text style={[styles.chipText, { color: t.text }]} numberOfLines={1}>
+            {exercise.categoryName}
+            {exercise.subcategory ? ` · ${exercise.subcategory}` : ''}
+          </Text>
+        </View>
+        <Text style={[styles.eyebrow, { color: t.primary }]}>{label}</Text>
+      </View>
+      <View style={styles.heroMedia}>
+        {size >= 48 && <ExerciseMedia name={exercise.exerciseName} isCustom={exercise.isCustom} size={size} />}
+      </View>
+      {upcoming && <UpNext exercise={upcoming} />}
+    </View>
+  );
+}
+
+function Thumb({ exercise, size }: { exercise: WorkoutExercise; size: number }) {
+  const t = useTheme();
+  return (
+    <View style={[styles.thumb, { width: size, height: size, borderRadius: size * 0.3, backgroundColor: tint(t.primary, 0.1) }]}>
+      {exercise.isCustom ? (
+        <Text style={{ color: t.primary, fontWeight: '800', fontSize: size * 0.4 }}>{exercise.exerciseName.trim().charAt(0).toUpperCase()}</Text>
+      ) : (
+        <ExerciseMotionFor name={exercise.exerciseName} isCustom={exercise.isCustom} size={size * 0.78} />
+      )}
+    </View>
+  );
+}
+
+/** A round side button beside Done. */
+function RoundAction({
+  label, onPress, disabled, children,
+}: { label: string; onPress: () => void; disabled?: boolean; children: ReactNode }) {
+  const t = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: !!disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.roundAction,
+        { backgroundColor: t.card, borderColor: t.border, opacity: disabled ? 0.35 : 1, transform: [{ scale: pressed ? 0.94 : 1 }] },
+      ]}
+    >
+      {children}
+    </Pressable>
+  );
+}
+
+/** Form tips in a sheet over the screen, so opening them never pushes Done off it. */
+function FormTipsSheet({
+  visible, name, tips, onClose,
+}: { visible: boolean; name: string; tips: readonly string[]; onClose: () => void }) {
+  const t = useTheme();
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={styles.sheetRoot}>
+        <Pressable testID="tips-backdrop" accessible={false} onPress={onClose} style={styles.backdrop} />
+        <SafeAreaView edges={['bottom']} style={[styles.sheet, { backgroundColor: t.card }]}>
+          <View style={[styles.grabber, { backgroundColor: t.border }]} />
+          <View style={{ gap: 2 }}>
+            <Text style={[styles.eyebrow, { color: t.primary }]}>Form tips</Text>
+            <Text style={[styles.compactTitle, { color: t.text }]}>{name}</Text>
+          </View>
+          <View style={{ gap: 14 }}>
+            {tips.map((tip, i) => (
+              <View key={tip} style={styles.tip}>
+                <View style={[styles.tipNum, { backgroundColor: tint(t.primary, 0.14) }]}>
+                  <Text style={[styles.tipNumText, { color: t.primary }]}>{i + 1}</Text>
+                </View>
+                <Text style={[styles.tipText, { color: t.text }]}>{tip}</Text>
+              </View>
+            ))}
+          </View>
+          <CTA title="Got it" label="Close form tips" variant="secondary" onPress={onClose} />
+        </SafeAreaView>
+      </View>
+    </Modal>
   );
 }
 
@@ -503,29 +576,6 @@ function CTA({
   );
 }
 
-/** A quiet text action with a chevron. */
-function Ghost({
-  title, label, icon, fallback, onPress, disabled, trailing,
-}: { title: string; label: string; icon: SymbolName; fallback: string; onPress: () => void; disabled?: boolean; trailing?: boolean }) {
-  const t = useTheme();
-  const chevron = <Icon name={icon} size={13} color={t.muted} fallback={fallback} />;
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ disabled: !!disabled }}
-      disabled={disabled}
-      onPress={onPress}
-      hitSlop={6}
-      style={({ pressed }) => [styles.ghost, { opacity: disabled ? 0.35 : pressed ? 0.6 : 1 }]}
-    >
-      {!trailing && chevron}
-      <Text style={{ color: t.muted, fontWeight: '700', fontSize: 15 }}>{title}</Text>
-      {trailing && chevron}
-    </Pressable>
-  );
-}
-
 function Pill({ icon, fallback, text, color }: { icon: SymbolName; fallback: string; text: string; color: string }) {
   const t = useTheme();
   return (
@@ -546,26 +596,18 @@ function Badge({ icon, fallback, color, size = 72 }: { icon: SymbolName; fallbac
   );
 }
 
-/** What comes after this exercise, with its figure. */
+/** A line along the bottom of the picture naming what comes after this exercise. */
 function UpNext({ exercise }: { exercise: WorkoutExercise }) {
   const t = useTheme();
   const detail = exercise.categoryKind === 'strength'
     ? `${exercise.sets.length} ${exercise.sets.length === 1 ? 'set' : 'sets'}${exercise.targetReps ? ` × ${exercise.targetReps}` : ''}`
     : formatDuration(exercise.targetDurationMin) || exercise.categoryName;
   return (
-    <View accessible accessibilityLabel={`Next: ${exercise.exerciseName}`} style={[styles.card, styles.upNext, { backgroundColor: t.card, borderColor: t.border }]}>
-      <View style={[styles.thumb, { backgroundColor: tint(t.primary, 0.08) }]}>
-        {exercise.isCustom ? (
-          <Text style={{ color: t.primary, fontWeight: '800', fontSize: 18 }}>{exercise.exerciseName.trim().charAt(0).toUpperCase()}</Text>
-        ) : (
-          <ExerciseMotionFor name={exercise.exerciseName} isCustom={exercise.isCustom} size={36} />
-        )}
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={[styles.eyebrow, { color: t.muted }]}>Up next</Text>
-        <Text style={{ color: t.text, fontWeight: '700', fontSize: 16 }}>{exercise.exerciseName}</Text>
-      </View>
-      <Text style={{ color: t.muted, fontWeight: '600' }}>{detail}</Text>
+    <View accessible accessibilityLabel={`Next: ${exercise.exerciseName}`} style={[styles.upNext, { backgroundColor: t.card }]}>
+      <Thumb exercise={exercise} size={32} />
+      <Text style={[styles.eyebrow, { color: t.muted }]}>Next</Text>
+      <Text style={{ color: t.text, fontWeight: '700', flex: 1 }} numberOfLines={1}>{exercise.exerciseName}</Text>
+      <Text style={{ color: t.muted, fontWeight: '600', fontSize: 13 }}>{detail}</Text>
     </View>
   );
 }
@@ -586,116 +628,128 @@ function FinishView({
     { label: exercises.length === 1 ? 'Exercise' : 'Exercises', value: String(exercises.length) },
   ];
   return (
-    <Animated.View entering={FadeInDown.duration(300)} style={{ gap: 16 }}>
-      <View style={styles.empty}>
-        <Badge
-          icon={open ? sym('flag.checkered', 'sports_score') : sym('trophy.fill', 'emoji_events')}
-          fallback={open ? '⚑' : '🏆'}
-          color={open ? t.warn : t.success}
-        />
-        <Text style={[styles.title, { color: t.text, textAlign: 'center' }]}>
-          {open ? `${open} ${open === 1 ? 'set' : 'sets'} not done` : 'Workout complete'}
-        </Text>
-        <Text style={{ color: t.muted, textAlign: 'center' }}>
-          {open ? 'Go back for them now, or finish and log them later.' : 'Every set logged. Nice work.'}
-        </Text>
-      </View>
-      <View style={styles.stats}>
-        {stats.map((s) => (
-          <View key={s.label} accessible accessibilityLabel={`${s.label}: ${s.value}`} style={[styles.stat, { backgroundColor: t.card, borderColor: t.border }]}>
-            <Text style={[styles.statValue, { color: t.text }]} numberOfLines={1} adjustsFontSizeToFit>{s.value}</Text>
-            <Text style={[styles.statLabel, { color: t.muted }]}>{s.label}</Text>
-          </View>
-        ))}
-      </View>
-      <View style={[styles.card, { backgroundColor: t.card, borderColor: t.border, paddingVertical: 6 }]}>
-        {exercises.map((e, i) => {
-          const d = e.sets.filter((s) => s.completed).length;
-          const all = d === e.sets.length;
-          return (
-            <View key={e.id} style={[styles.summaryRow, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: t.border }]}>
-              <View style={[styles.thumbSmall, { backgroundColor: tint(t.primary, 0.08) }]}>
-                {e.isCustom ? (
-                  <Text style={{ color: t.primary, fontWeight: '800' }}>{e.exerciseName.trim().charAt(0).toUpperCase()}</Text>
-                ) : (
-                  <ExerciseMotionFor name={e.exerciseName} isCustom={e.isCustom} size={28} />
-                )}
-              </View>
-              <Text style={{ color: t.text, fontWeight: '600', flex: 1 }}>{e.exerciseName}</Text>
-              <View style={[styles.count, { backgroundColor: all ? tint(t.success, 0.15) : t.surface }]}>
-                <Text style={{ color: all ? t.success : t.muted, fontWeight: '800', fontSize: 12, fontVariant: ['tabular-nums'] }}>
-                  {d}/{e.sets.length}
-                </Text>
-              </View>
+    <Animated.View entering={FadeInDown.duration(300)} style={styles.fill}>
+      <ScrollView style={styles.fill} contentContainerStyle={{ gap: 16, paddingBottom: 4 }} keyboardShouldPersistTaps="handled">
+        <View style={styles.empty}>
+          <Badge
+            icon={open ? sym('flag.checkered', 'sports_score') : sym('trophy.fill', 'emoji_events')}
+            fallback={open ? '⚑' : '🏆'}
+            color={open ? t.warn : t.success}
+          />
+          <Text style={[styles.title, { color: t.text, textAlign: 'center' }]}>
+            {open ? `${open} ${open === 1 ? 'set' : 'sets'} not done` : 'Workout complete'}
+          </Text>
+          <Text style={{ color: t.muted, textAlign: 'center' }}>
+            {open ? 'Go back for them now, or finish and log them later.' : 'Every set logged. Nice work.'}
+          </Text>
+        </View>
+        <View style={styles.stats}>
+          {stats.map((s) => (
+            <View key={s.label} accessible accessibilityLabel={`${s.label}: ${s.value}`} style={[styles.stat, { backgroundColor: t.card, borderColor: t.border }]}>
+              <Text style={[styles.statValue, { color: t.text }]} numberOfLines={1} adjustsFontSizeToFit>{s.value}</Text>
+              <Text style={[styles.statLabel, { color: t.muted }]}>{s.label}</Text>
             </View>
-          );
-        })}
+          ))}
+        </View>
+        <View style={[styles.card, { backgroundColor: t.card, borderColor: t.border, paddingVertical: 6 }]}>
+          {exercises.map((e, i) => {
+            const d = e.sets.filter((s) => s.completed).length;
+            const all = d === e.sets.length;
+            return (
+              <View key={e.id} style={[styles.summaryRow, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: t.border }]}>
+                <View style={[styles.thumbSmall, { backgroundColor: tint(t.primary, 0.08) }]}>
+                  {e.isCustom ? (
+                    <Text style={{ color: t.primary, fontWeight: '800' }}>{e.exerciseName.trim().charAt(0).toUpperCase()}</Text>
+                  ) : (
+                    <ExerciseMotionFor name={e.exerciseName} isCustom={e.isCustom} size={28} />
+                  )}
+                </View>
+                <Text style={{ color: t.text, fontWeight: '600', flex: 1 }}>{e.exerciseName}</Text>
+                <View style={[styles.count, { backgroundColor: all ? tint(t.success, 0.15) : t.surface }]}>
+                  <Text style={{ color: all ? t.success : t.muted, fontWeight: '800', fontSize: 12, fontVariant: ['tabular-nums'] }}>
+                    {d}/{e.sets.length}
+                  </Text>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+        <View style={[styles.card, { backgroundColor: t.card, borderColor: t.border, gap: 8 }]}>
+          <Text style={[styles.fieldLabel, { color: t.muted }]}>Notes</Text>
+          <TextInput
+            accessibilityLabel="Workout notes"
+            defaultValue={notes ?? ''}
+            placeholder="How did it feel?"
+            placeholderTextColor={t.muted}
+            multiline
+            onEndEditing={(e) => onNotes(e.nativeEvent.text)}
+            style={[styles.notes, { color: t.text }]}
+          />
+        </View>
+      </ScrollView>
+      <View style={{ gap: 10 }}>
+        {onSkipped && <CTA title="Go to skipped sets" variant="secondary" icon={sym('arrow.uturn.backward', 'undo')} onPress={onSkipped} />}
+        <CTA title="Finish" label="Finish workout" icon={sym('checkmark', 'check')} onPress={onFinish} />
       </View>
-      {onSkipped && <CTA title="Go to skipped sets" variant="secondary" icon={sym('arrow.uturn.backward', 'undo')} onPress={onSkipped} />}
-      <View style={[styles.card, { backgroundColor: t.card, borderColor: t.border, gap: 8 }]}>
-        <Text style={[styles.fieldLabel, { color: t.muted }]}>Notes</Text>
-        <TextInput
-          accessibilityLabel="Workout notes"
-          defaultValue={notes ?? ''}
-          placeholder="How did it feel?"
-          placeholderTextColor={t.muted}
-          multiline
-          onEndEditing={(e) => onNotes(e.nativeEvent.text)}
-          style={[styles.notes, { color: t.text }]}
-        />
-      </View>
-      <CTA title="Finish" label="Finish workout" icon={sym('checkmark', 'check')} onPress={onFinish} />
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { padding: 16, gap: 16, paddingBottom: 48 },
+  screen: { flex: 1 },
+  page: { flex: 1, padding: 16, paddingBottom: 8, gap: 12 },
+  fill: { flex: 1, minHeight: 0, gap: 12 },
   empty: { alignItems: 'center', gap: 10, paddingVertical: 20 },
   capsules: { flexDirection: 'row', gap: 4 },
   capsule: { flex: 1, height: 6, borderRadius: 3, overflow: 'hidden' },
   capsuleFill: { height: '100%', borderRadius: 3 },
-  hero: { borderRadius: 28, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
-  heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingTop: 14, zIndex: 1 },
+  hero: { flex: 1, minHeight: 0, borderRadius: 28, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden', padding: 12, gap: 8 },
+  heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  heroMedia: { flex: 1, minHeight: 0, alignItems: 'center', justifyContent: 'center' },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  compactHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  compactTitle: { fontSize: 22, fontWeight: '800', letterSpacing: -0.4 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 },
   chipText: { fontSize: 12, fontWeight: '700' },
   eyebrow: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1.2 },
-  title: { fontSize: 30, fontWeight: '800', letterSpacing: -0.6 },
-  tipsToggle: {
-    flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 6,
-    paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: StyleSheet.hairlineWidth,
-  },
+  title: { flex: 1, fontSize: 28, fontWeight: '800', letterSpacing: -0.6 },
+  tipsToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999 },
+  sheetRoot: { flex: 1, justifyContent: 'flex-end' },
+  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.45)' },
+  sheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, paddingTop: 10, gap: 18 },
+  grabber: { width: 40, height: 5, borderRadius: 3, alignSelf: 'center' },
   tip: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
   tipNum: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
   tipNumText: { fontSize: 12, fontWeight: '800' },
   tipText: { flex: 1, fontSize: 15, lineHeight: 21 },
-  card: { borderRadius: 24, borderWidth: StyleSheet.hairlineWidth, padding: 16 },
+  card: { borderRadius: 24, borderWidth: StyleSheet.hairlineWidth, padding: 14 },
   entryHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   setLabel: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
   dots: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   dotOn: { width: 22 },
-  metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: -4 },
+  metaRow: { flexDirection: 'row', gap: 8, marginTop: -4, overflow: 'hidden' },
   pill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, maxWidth: '100%' },
   fieldLabel: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1.2 },
-  stepperHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 22 },
+  stepperHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 20 },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  round: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
+  round: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
   bigInput: {
-    flex: 1, minWidth: 0, textAlign: 'center', fontSize: 52, fontWeight: '800', letterSpacing: -1.5,
-    fontVariant: ['tabular-nums'], paddingVertical: 2,
+    flex: 1, minWidth: 0, textAlign: 'center', fontSize: 44, fontWeight: '800', letterSpacing: -1.5,
+    fontVariant: ['tabular-nums'], paddingVertical: 0,
   },
   divider: { height: StyleSheet.hairlineWidth },
   field: { minHeight: 56, flexDirection: 'row', alignItems: 'center', borderRadius: 16, paddingRight: 12 },
+  inlineLabel: { paddingLeft: 14, width: 86 },
   duration: { flex: 1, minWidth: 0, backgroundColor: 'transparent' },
   input: { flex: 1, minWidth: 0, paddingHorizontal: 12, paddingVertical: 12, fontSize: 22, fontWeight: '700', textAlign: 'center' },
   cta: { height: 60, borderRadius: 30, flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch' },
   ctaRaised: { shadowOpacity: 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 5 },
   ctaText: { fontSize: 18, fontWeight: '800', letterSpacing: -0.2 },
-  row: { flexDirection: 'row', justifyContent: 'space-between' },
-  ghost: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 8, paddingHorizontal: 6 },
-  upNext: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
-  thumb: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  roundAction: { width: 60, height: 60, borderRadius: 30, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
+  upNext: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 16, paddingVertical: 6, paddingHorizontal: 8 },
+  thumb: { alignItems: 'center', justifyContent: 'center' },
   thumbSmall: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   badgeOuter: { alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
   badgeInner: { alignItems: 'center', justifyContent: 'center' },
