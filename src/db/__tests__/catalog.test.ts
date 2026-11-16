@@ -66,7 +66,7 @@ describe('CATALOG', () => {
     ['Lifts', 'Dead Bug', 'Core'], ['Lifts', 'Pallof Press', 'Core'],
     ['Cardio', 'Stair Stepper', undefined], ['Cardio', 'Elliptical', undefined], ['Cardio', 'HIIT', undefined],
     ['Cardio', 'Golf', undefined], ['Mind & Body', 'Mat Pilates', 'Pilates'],
-    ['Mind & Body', 'Reformer Pilates', 'Pilates'],
+    ['Mind & Body', 'Reformer Pilates', 'Pilates'], ['Mind & Body', 'Meditation', 'Mindfulness'],
   ])('includes %s: %s', (category, name, subcategory) => {
     const found = CATALOG.find((c) => c.name === category)!.exercises.find((e) => e.name === name);
     expect(found?.subcategory).toBe(subcategory);

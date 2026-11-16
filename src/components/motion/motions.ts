@@ -476,6 +476,12 @@ export const MOTIONS: Record<string, Motion> = {
     pose: pose({ hip: [24, 52], torso: -135, arm1: [-44, 12], leg1: [97, 92], leg2: [95, 90] }),
     scene: [disc([34, 54], 4)],
   },
+
+  // Mindfulness
+  // Seen from the front: sitting cross-legged, back tall, hands resting on the knees.
+  Meditation: {
+    pose: pose({ hip: [32, 54], torso: 180, arm1: [25, 50], arm2: [-25, -50], leg1: [80, -95], leg2: [-80, 95] }),
+  },
 };
 
 /** The stick figure for a built-in exercise. Custom exercises have none, even if the name matches. */

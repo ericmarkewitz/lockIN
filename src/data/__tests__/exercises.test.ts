@@ -26,7 +26,7 @@ describe('exercises', () => {
     const db = await createTestDb();
     const cats = await listCategoriesWithExercises(db);
     expect(cats.find((c) => c.name === 'Lifts')!.subcategories).toEqual(LIFT_SUBCATEGORIES);
-    expect(cats.find((c) => c.name === 'Mind & Body')!.subcategories).toEqual(['Yoga', 'Pilates', 'Mobility']);
+    expect(cats.find((c) => c.name === 'Mind & Body')!.subcategories).toEqual(['Yoga', 'Pilates', 'Mobility', 'Mindfulness']);
     expect(cats.find((c) => c.name === 'Cardio')!.subcategories).toEqual([]);
   });
 
@@ -34,9 +34,10 @@ describe('exercises', () => {
     const db = await createTestDb();
     const cats = await listCategoriesWithExercises(db);
     const groups = groupBySubcategory(cats.find((c) => c.name === 'Mind & Body')!);
-    expect(groups.map((g) => g.title)).toEqual(['Yoga', 'Pilates', 'Mobility']);
+    expect(groups.map((g) => g.title)).toEqual(['Yoga', 'Pilates', 'Mobility', 'Mindfulness']);
     expect(groups[0].exercises.map((e) => e.name)).toEqual(['Vinyasa', 'Hatha', 'Yin', 'Power Yoga']);
     expect(groups[1].exercises.map((e) => e.name)).toEqual(['Mat Pilates', 'Reformer Pilates']);
+    expect(groups[3].exercises.map((e) => e.name)).toEqual(['Meditation']);
     expect(groups[2].exercises.map((e) => e.name)).toEqual(['Stretching', 'Foam Rolling']);
   });
 

@@ -7,7 +7,7 @@ import type { Category, CategoryKind, Exercise } from './types';
 /** Muscle groups lifts are organized by, in display order. */
 export const LIFT_SUBCATEGORIES = ['Chest', 'Back', 'Shoulders', 'Arms', 'Legs', 'Core'] as const;
 /** What the mind and body category is split into, in display order. */
-export const MINDBODY_SUBCATEGORIES = ['Yoga', 'Pilates', 'Mobility'] as const;
+export const MINDBODY_SUBCATEGORIES = ['Yoga', 'Pilates', 'Mobility', 'Mindfulness'] as const;
 
 /** The subcategories each kind of category offers, in display order; empty if it has none. */
 export const SUBCATEGORIES: Record<CategoryKind, readonly string[]> = {
