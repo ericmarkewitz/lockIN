@@ -48,6 +48,22 @@ describe('exercises', () => {
     expect((await findExercise(db, deadlift.id))!.alsoIn).toEqual(['Legs']);
   });
 
+  it('adds a custom exercise to extra muscle groups too, ignoring repeats and its main group', async () => {
+    const db = await createTestDb();
+    const lifts = (await listCategoriesWithExercises(db)).find((c) => c.name === 'Lifts')!;
+    const ex = await addExercise(db, lifts.id, 'Rack Pull', 'Back', ['Legs', 'Back', 'Arms', 'Legs']);
+    expect(ex).toMatchObject({ subcategory: 'Back', alsoIn: ['Arms', 'Legs'] });
+    expect((await addExercise(db, lifts.id, 'Sandbag Carry')).alsoIn).toEqual([]);
+  });
+
+  it("adds nothing when the name is taken, even with extra muscle groups", async () => {
+    const db = await createTestDb();
+    const lifts = (await listCategoriesWithExercises(db)).find((c) => c.name === 'Lifts')!;
+    const before = await db.getFirstAsync('SELECT COUNT(*) AS n FROM exercise_subcategories');
+    await expect(addExercise(db, lifts.id, 'squat', 'Legs', ['Core'])).rejects.toThrow(/exists/i);
+    expect(await db.getFirstAsync('SELECT COUNT(*) AS n FROM exercise_subcategories')).toEqual(before);
+  });
+
   it('adds a custom exercise to a subcategory, defaulting to none', async () => {
     const db = await createTestDb();
     const lifts = (await listCategoriesWithExercises(db)).find((c) => c.name === 'Lifts')!;

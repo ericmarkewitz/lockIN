@@ -100,6 +100,63 @@ describe('ExercisePicker', () => {
     expect((await findExercise(db, created.id))?.subcategory).toBe('Chest');
   });
 
+  describe('muscle groups for a new lift', () => {
+    const chip = (s: string) => screen.getByLabelText(`Muscle group ${s}`);
+
+    it("starts with the tab's muscle group picked and adds any others tapped", async () => {
+      const { db, onPick } = await open();
+      await fireEvent.press(await screen.findByLabelText('Subcategory Back'));
+      await fireEvent.changeText(screen.getByLabelText('Search exercises'), 'Rack Pull');
+      expect(chip('Back').props.accessibilityState).toMatchObject({ selected: true });
+      expect(chip('Legs').props.accessibilityState).toMatchObject({ selected: false });
+      await fireEvent.press(chip('Legs'));
+      expect(screen.getByText('in Lifts · Back, Legs')).toBeTruthy();
+      await fireEvent.press(screen.getByLabelText('Create Rack Pull'));
+      await waitFor(() => expect(onPick).toHaveBeenCalled());
+      expect(await findExercise(db, onPick.mock.calls[0][0].id)).toMatchObject({ subcategory: 'Back', alsoIn: ['Legs'] });
+    });
+
+    it('makes the first group picked the main one', async () => {
+      const { onPick } = await open();
+      await fireEvent.changeText(await screen.findByLabelText('Search exercises'), 'Sled Push');
+      await fireEvent.press(chip('Legs'));
+      await fireEvent.press(chip('Chest'));
+      expect(screen.getByText('in Lifts · Legs, Chest')).toBeTruthy();
+      await fireEvent.press(screen.getByLabelText('Create Sled Push'));
+      await waitFor(() => expect(onPick).toHaveBeenCalled());
+      expect(onPick.mock.calls[0][0]).toMatchObject({ subcategory: 'Legs', alsoIn: ['Chest'] });
+    });
+
+    it("can drop the tab's group, leaving the lift uncategorized", async () => {
+      const { onPick } = await open();
+      await fireEvent.press(await screen.findByLabelText('Subcategory Chest'));
+      await fireEvent.changeText(screen.getByLabelText('Search exercises'), 'Cable Fly');
+      await fireEvent.press(chip('Chest'));
+      expect(screen.getByText('in Lifts')).toBeTruthy();
+      await fireEvent.press(screen.getByLabelText('Create Cable Fly'));
+      await waitFor(() => expect(onPick).toHaveBeenCalled());
+      expect(onPick.mock.calls[0][0]).toMatchObject({ subcategory: null, alsoIn: [] });
+    });
+
+    it('starts over for the next exercise', async () => {
+      const { onPick } = await open();
+      await fireEvent.changeText(await screen.findByLabelText('Search exercises'), 'Sled Push');
+      await fireEvent.press(chip('Legs'));
+      await fireEvent.press(screen.getByLabelText('Create Sled Push'));
+      await waitFor(() => expect(onPick).toHaveBeenCalled());
+      await fireEvent.changeText(screen.getByLabelText('Search exercises'), 'Sled Drag');
+      expect(chip('Legs').props.accessibilityState).toMatchObject({ selected: false });
+    });
+
+    it('offers no muscle groups outside lifts', async () => {
+      await open();
+      await fireEvent.press(await screen.findByLabelText('Category Cardio'));
+      await fireEvent.changeText(screen.getByLabelText('Search exercises'), 'Pickleball');
+      expect(screen.getByLabelText('Create Pickleball')).toBeTruthy();
+      expect(screen.queryByLabelText('Muscle group Legs')).toBeNull();
+    });
+  });
+
   it('shows a stick figure on built-in exercise cards but not on custom ones', async () => {
     const db = await createTestDb();
     const lifts = (await listCategoriesWithExercises(db)).find((c) => c.name === 'Lifts')!;

@@ -82,6 +82,8 @@ export async function addExercise(
   categoryId: number,
   rawName: string,
   subcategory: string | null = null,
+  /** More muscle groups to list it under; repeats and `subcategory` itself are ignored. */
+  alsoIn: string[] = [],
 ): Promise<Exercise> {
   const name = rawName.trim();
   if (!name) throw new Error('Exercise name is required');
@@ -90,11 +92,17 @@ export async function addExercise(
     [categoryId, name],
   );
   if (dupe) throw new Error(`"${name}" already exists in this category`);
-  const { lastInsertRowId } = await db.runAsync(
-    'INSERT INTO exercises (category_id, name, is_custom, subcategory) VALUES (?, ?, 1, ?)',
-    [categoryId, name, subcategory],
-  );
-  return (await findExercise(db, lastInsertRowId))!;
+  let id = 0;
+  await db.withTransactionAsync(async () => {
+    ({ lastInsertRowId: id } = await db.runAsync(
+      'INSERT INTO exercises (category_id, name, is_custom, subcategory) VALUES (?, ?, 1, ?)',
+      [categoryId, name, subcategory],
+    ));
+    for (const s of new Set(alsoIn.filter((s) => s !== subcategory))) {
+      await db.runAsync('INSERT INTO exercise_subcategories (exercise_id, subcategory) VALUES (?, ?)', [id, s]);
+    }
+  });
+  return (await findExercise(db, id))!;
 }
 
 export type SearchResult = {

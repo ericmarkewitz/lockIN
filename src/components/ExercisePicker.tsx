@@ -68,6 +68,34 @@ function SubTabs({ tabs, value, onChange, t }: {
   );
 }
 
+/** Toggles for the muscle groups a new lift goes under; the first one picked is its main group. */
+function MuscleGroupChips({ options, picked, onToggle, t }: {
+  options: readonly string[]; picked: string[]; onToggle: (s: string) => void; t: Theme;
+}) {
+  return (
+    <View style={styles.chips}>
+      {options.map((s) => {
+        const on = picked.includes(s);
+        return (
+          <Pressable
+            key={s}
+            accessibilityRole="button"
+            accessibilityLabel={`Muscle group ${s}`}
+            accessibilityState={{ selected: on }}
+            onPress={() => onToggle(s)}
+            hitSlop={4}
+            style={[styles.chip, on
+              ? { backgroundColor: t.primary, borderColor: t.primary }
+              : { backgroundColor: t.card, borderColor: t.border }]}
+          >
+            <Text style={[styles.chipLabel, { color: on ? t.onPrimary : t.text }]}>{s}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 const MOTION_SIZE = 64;
 
 function ExerciseCard({ exercise, caption, onPress, t }: { exercise: Exercise; caption?: string; onPress: () => void; t: Theme }) {
@@ -124,6 +152,7 @@ export function ExercisePicker({
   const { data: cats, reload } = useLoad(() => listCategoriesWithExercises(db), [db]);
   const [catId, setCatId] = useState<number | null>(null);
   const [subcategory, setSubcategory] = useState<string | null>(null); // null shows the whole category
+  const [pickedGroups, setPickedGroups] = useState<string[] | null>(null); // null: just the tab's group
   const [query, setQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -131,28 +160,37 @@ export function ExercisePicker({
   const groups = active ? groupBySubcategory(active) : [];
   const shownGroups = subcategory ? groups.filter((g) => g.title === subcategory) : groups;
   const hasOther = groups.some((g) => g.title === OTHER_SUBCATEGORY);
-  const newExerciseGroup = subcategory === OTHER_SUBCATEGORY ? null : subcategory;
+  const tabGroup = subcategory === OTHER_SUBCATEGORY ? null : subcategory;
+  const newGroups = pickedGroups ?? (tabGroup ? [tabGroup] : []);
   const name = query.trim();
   const searching = name.length > 0;
   const results = searching && cats && active ? searchExercises(cats, active.id, name) : null;
 
   const selectCategory = (id: number) => {
     setCatId(id);
-    setSubcategory(null);
+    selectSubcategory(null);
   };
+  const selectSubcategory = (s: string | null) => {
+    setSubcategory(s);
+    setPickedGroups(null);
+  };
+  const toggleGroup = (s: string) =>
+    setPickedGroups(newGroups.includes(s) ? newGroups.filter((g) => g !== s) : [...newGroups, s]);
   const search = (text: string) => {
     setQuery(text);
     setError(null);
   };
   const pick = (e: Exercise) => {
     search('');
+    setPickedGroups(null);
     onPick(e);
   };
 
   const create = async () => {
     if (!active) return;
     try {
-      const ex = await addExercise(db, active.id, name, newExerciseGroup);
+      const [main = null, ...alsoIn] = active.subcategories.length ? newGroups : [];
+      const ex = await addExercise(db, active.id, name, main, alsoIn);
       await reload();
       pick(ex);
     } catch (e) {
@@ -216,7 +254,7 @@ export function ExercisePicker({
           </View>
 
           {cats && <CategoryTabs cats={cats} activeId={active?.id} onSelect={selectCategory} t={t} />}
-          {!searching && subTabs.length > 0 && <SubTabs tabs={subTabs} value={subcategory} onChange={setSubcategory} t={t} />}
+          {!searching && subTabs.length > 0 && <SubTabs tabs={subTabs} value={subcategory} onChange={selectSubcategory} t={t} />}
 
           <ScrollView
             style={{ flex: 1 }}
@@ -242,10 +280,13 @@ export function ExercisePicker({
                     <View style={{ flex: 1 }}>
                       <Text numberOfLines={1} style={[styles.createTitle, { color: t.text }]}>Create “{name}”</Text>
                       <Text style={{ color: t.muted, fontSize: 13 }}>
-                        {`in ${active.name}${newExerciseGroup ? ` · ${newExerciseGroup}` : ''}`}
+                        {`in ${active.name}${newGroups.length && active.subcategories.length ? ` · ${newGroups.join(', ')}` : ''}`}
                       </Text>
                     </View>
                   </Pressable>
+                )}
+                {!results.exact && active.subcategories.length > 0 && (
+                  <MuscleGroupChips options={active.subcategories} picked={newGroups} onToggle={toggleGroup} t={t} />
                 )}
                 {error && <Text style={[styles.error, { color: t.danger }]}>{error}</Text>}
                 {results.here.length > 0 ? (
@@ -324,6 +365,9 @@ const styles = StyleSheet.create({
   plus: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   createTitle: { fontSize: 16, fontWeight: '700' },
   error: { paddingTop: 8 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingTop: 10 },
+  chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: StyleSheet.hairlineWidth },
+  chipLabel: { fontSize: 13, fontWeight: '600' },
   empty: { paddingVertical: 18, textAlign: 'center' },
   emptyBox: { alignItems: 'center', gap: 4, paddingVertical: 36 },
   emptyTitle: { fontSize: 16, fontWeight: '700' },
