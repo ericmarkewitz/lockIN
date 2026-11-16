@@ -13,6 +13,7 @@ const UNDO_V3 = 'ALTER TABLE exercises DROP COLUMN subcategory';
 const UNDO_V5 = 'ALTER TABLE sets DROP COLUMN weight_unit; ALTER TABLE sets DROP COLUMN distance_unit';
 const UNDO_V6 = 'DROP TABLE plan_history';
 const UNDO_V7 = 'DROP TABLE exercise_subcategories';
+const UNDO_V8 = 'ALTER TABLE exercises DROP COLUMN is_hidden';
 
 describe('migrations', () => {
   it('creates the schema and records the version', async () => {
@@ -69,7 +70,7 @@ describe('migrations', () => {
     const db = wrap(raw);
     await migrate(db);
     // Simulate a half-applied earlier run, which can only have the v1 schema.
-    raw.exec(`${UNDO_V7}; ${UNDO_V6}; ${UNDO_V5}; ${UNDO_V3}; ${UNDO_V2}; PRAGMA user_version = 0`);
+    raw.exec(`${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; ${UNDO_V5}; ${UNDO_V3}; ${UNDO_V2}; PRAGMA user_version = 0`);
     await expect(migrate(db)).resolves.toBeUndefined();
     const cats = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM categories');
     expect(cats?.n).toBe(4);
@@ -79,7 +80,7 @@ describe('migrations', () => {
     const raw = new DatabaseSync(':memory:');
     const db = wrap(raw);
     await migrate(db);
-    raw.exec(`${UNDO_V7}; ${UNDO_V6}; ${UNDO_V5}; ${UNDO_V3}; ${UNDO_V2}; PRAGMA user_version = 1`);
+    raw.exec(`${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; ${UNDO_V5}; ${UNDO_V3}; ${UNDO_V2}; PRAGMA user_version = 1`);
     await db.runAsync("INSERT INTO workouts (date, notes) VALUES ('2026-11-02', 'kept')");
 
     await migrate(db);
@@ -97,7 +98,7 @@ describe('migrations', () => {
       const raw = new DatabaseSync(':memory:');
       const db = wrap(raw);
       await migrate(db);
-      raw.exec(`${UNDO_V7}; ${UNDO_V6}; ${UNDO_V5}; ${UNDO_V3}; PRAGMA user_version = 2`);
+      raw.exec(`${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; ${UNDO_V5}; ${UNDO_V3}; PRAGMA user_version = 2`);
       // A v2 install only has the v1 seed; drop what syncCatalog has added since.
       const seeded = SEED_V1.flatMap((c) => c.exercises);
       await db.runAsync(`DELETE FROM exercises WHERE name NOT IN (${seeded.map(() => '?').join(', ')})`, seeded);
@@ -160,7 +161,7 @@ describe('migrations', () => {
       // Put the catalog back the way v3 left it.
       raw.exec(`DELETE FROM exercises WHERE name IN ('Ski Touring', 'Cross-Country Skiing', 'Snowshoeing', 'Climbing');
         UPDATE exercises SET name = 'Skiing' WHERE name = 'Downhill Skiing';
-        ${UNDO_V7}; ${UNDO_V6}; ${UNDO_V5};
+        ${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; ${UNDO_V5};
         PRAGMA user_version = 3`);
       await prepare(db);
       await migrate(db);
@@ -221,7 +222,7 @@ describe('migrations', () => {
       const raw = new DatabaseSync(':memory:');
       const db = wrap(raw);
       await migrate(db);
-      raw.exec(`${UNDO_V7}; ${UNDO_V6}; ${UNDO_V5}; PRAGMA user_version = 4`);
+      raw.exec(`${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; ${UNDO_V5}; PRAGMA user_version = 4`);
       await prepare(db);
       await migrate(db);
       return db;
@@ -261,7 +262,7 @@ describe('migrations', () => {
       const raw = new DatabaseSync(':memory:');
       const db = wrap(raw);
       await migrate(db);
-      raw.exec(`${UNDO_V7}; ${UNDO_V6}; PRAGMA user_version = 5`);
+      raw.exec(`${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; PRAGMA user_version = 5`);
       const bench = (await db.getFirstAsync<{ id: number }>("SELECT id FROM exercises WHERE name = 'Bench Press'"))!.id;
       await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: bench, targetSets: 3 }] });
       await db.runAsync("UPDATE settings SET value = '1' WHERE key = 'plan_complete'");
@@ -317,11 +318,24 @@ describe('migrations', () => {
       const raw = new DatabaseSync(':memory:');
       const db = wrap(raw);
       await migrate(db);
-      raw.exec(`${UNDO_V7}; PRAGMA user_version = 6`);
+      raw.exec(`${UNDO_V8}; ${UNDO_V7}; PRAGMA user_version = 6`);
       await migrate(db);
       expect(
         await db.getFirstAsync("SELECT subcategory FROM exercise_subcategories WHERE exercise_id = ?", [await deadliftId(db)]),
       ).toEqual({ subcategory: 'Legs' });
+    });
+  });
+
+  describe('v8 can hide a removed exercise', () => {
+    it('keeps every existing exercise shown', async () => {
+      const raw = new DatabaseSync(':memory:');
+      const db = wrap(raw);
+      await migrate(db);
+      raw.exec(`${UNDO_V8}; PRAGMA user_version = 7`);
+      await db.runAsync("INSERT INTO exercises (category_id, name, is_custom) VALUES (1, 'Sled Push', 1)");
+      await migrate(db);
+      expect(await db.getFirstAsync('SELECT COUNT(*) AS n FROM exercises WHERE is_hidden != 0')).toEqual({ n: 0 });
+      expect(await db.getFirstAsync("SELECT is_hidden FROM exercises WHERE name = 'Sled Push'")).toEqual({ is_hidden: 0 });
     });
   });
 });

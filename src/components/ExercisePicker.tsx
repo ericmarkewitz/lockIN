@@ -6,10 +6,12 @@ import type { Category, Exercise } from '@/data/types';
 import { useDb } from '@/db/DbContext';
 import { useLoad } from '@/hooks/useLoad';
 import { tint, useTheme, type Theme } from '@/theme';
+import { EditExerciseSheet } from './EditExerciseSheet';
 import { categoryIcon, Icon, sym } from './Icon';
 import { keyboardAvoidance } from './KeyboardAvoider';
 import { ExerciseMotion } from './motion/ExerciseMotion';
 import { motionFor } from './motion/motions';
+import { MuscleGroupChips, toggled } from './MuscleGroupChips';
 
 /** The top level: one equal-width tab per category, icon over name. */
 function CategoryTabs({ cats, activeId, onSelect, t }: {
@@ -68,43 +70,21 @@ function SubTabs({ tabs, value, onChange, t }: {
   );
 }
 
-/** Toggles for the muscle groups a new lift goes under; the first one picked is its main group. */
-function MuscleGroupChips({ options, picked, onToggle, t }: {
-  options: readonly string[]; picked: string[]; onToggle: (s: string) => void; t: Theme;
-}) {
-  return (
-    <View style={styles.chips}>
-      {options.map((s) => {
-        const on = picked.includes(s);
-        return (
-          <Pressable
-            key={s}
-            accessibilityRole="button"
-            accessibilityLabel={`Muscle group ${s}`}
-            accessibilityState={{ selected: on }}
-            onPress={() => onToggle(s)}
-            hitSlop={4}
-            style={[styles.chip, on
-              ? { backgroundColor: t.primary, borderColor: t.primary }
-              : { backgroundColor: t.card, borderColor: t.border }]}
-          >
-            <Text style={[styles.chipLabel, { color: on ? t.onPrimary : t.text }]}>{s}</Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
-
 const MOTION_SIZE = 64;
 
-function ExerciseCard({ exercise, caption, onPress, t }: { exercise: Exercise; caption?: string; onPress: () => void; t: Theme }) {
+function ExerciseCard({ exercise, caption, onPress, onEdit, t }: {
+  exercise: Exercise; caption?: string; onPress: () => void; onEdit?: () => void; t: Theme;
+}) {
   const motion = motionFor(exercise);
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`Add ${exercise.name}`}
+      accessibilityHint={onEdit ? 'Hold to edit' : undefined}
+      accessibilityActions={onEdit ? [{ name: 'longpress', label: 'Edit' }] : undefined}
+      onAccessibilityAction={onEdit ? (e) => e.nativeEvent.actionName === 'longpress' && onEdit() : undefined}
       onPress={onPress}
+      onLongPress={onEdit}
       style={({ pressed }) => [
         styles.card,
         { borderColor: t.border, backgroundColor: t.card, opacity: pressed ? 0.7 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] },
@@ -125,12 +105,22 @@ function ExerciseCard({ exercise, caption, onPress, t }: { exercise: Exercise; c
   );
 }
 
-function Grid({ exercises, caption, onPick, t }: {
-  exercises: Exercise[]; caption?: (e: Exercise) => string | undefined; onPick: (e: Exercise) => void; t: Theme;
+function Grid({ exercises, caption, onPick, onEdit, t }: {
+  exercises: Exercise[]; caption?: (e: Exercise) => string | undefined;
+  onPick: (e: Exercise) => void; onEdit: (e: Exercise) => void; t: Theme;
 }) {
   return (
     <View testID="exercise-grid" style={styles.grid}>
-      {exercises.map((e) => <ExerciseCard key={e.id} exercise={e} caption={caption?.(e)} onPress={() => onPick(e)} t={t} />)}
+      {exercises.map((e) => (
+        <ExerciseCard
+          key={e.id}
+          exercise={e}
+          caption={caption ? caption(e) : e.isCustom ? 'Hold to edit' : undefined}
+          onPress={() => onPick(e)}
+          onEdit={e.isCustom ? () => onEdit(e) : undefined}
+          t={t}
+        />
+      ))}
     </View>
   );
 }
@@ -145,8 +135,14 @@ function SectionHeader({ title, count, t }: { title: string; count?: number; t: 
 }
 
 export function ExercisePicker({
-  visible, onPick, onClose,
-}: { visible: boolean; onPick: (e: Exercise) => void; onClose: () => void }) {
+  visible, onPick, onClose, onEdited, onRemoved,
+}: {
+  visible: boolean; onPick: (e: Exercise) => void; onClose: () => void;
+  /** A custom exercise was renamed or regrouped from the picker. */
+  onEdited?: (e: Exercise) => void;
+  /** A custom exercise was removed from the picker. */
+  onRemoved?: (id: number) => void;
+}) {
   const db = useDb();
   const t = useTheme();
   const { data: cats, reload } = useLoad(() => listCategoriesWithExercises(db), [db]);
@@ -155,6 +151,7 @@ export function ExercisePicker({
   const [pickedGroups, setPickedGroups] = useState<string[] | null>(null); // null: just the tab's group
   const [query, setQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<Exercise | null>(null);
 
   const active = cats?.find((c) => c.id === (catId ?? cats?.[0]?.id));
   const groups = active ? groupBySubcategory(active) : [];
@@ -174,8 +171,17 @@ export function ExercisePicker({
     setSubcategory(s);
     setPickedGroups(null);
   };
-  const toggleGroup = (s: string) =>
-    setPickedGroups(newGroups.includes(s) ? newGroups.filter((g) => g !== s) : [...newGroups, s]);
+  const toggleGroup = (s: string) => setPickedGroups(toggled(newGroups, s));
+  const edited = async (e: Exercise) => {
+    setEditing(null);
+    await reload();
+    onEdited?.(e);
+  };
+  const removed = async (id: number) => {
+    setEditing(null);
+    await reload();
+    onRemoved?.(id);
+  };
   const search = (text: string) => {
     setQuery(text);
     setError(null);
@@ -292,7 +298,7 @@ export function ExercisePicker({
                 {results.here.length > 0 ? (
                   <>
                     <SectionHeader title={active.name} count={results.here.length} t={t} />
-                    <Grid exercises={results.here} caption={(e) => e.subcategory ?? undefined} onPick={pick} t={t} />
+                    <Grid exercises={results.here} caption={(e) => e.subcategory ?? undefined} onPick={pick} onEdit={setEditing} t={t} />
                   </>
                 ) : (
                   <Text style={[styles.empty, { color: t.muted }]}>No matches in {active.name}.</Text>
@@ -300,7 +306,7 @@ export function ExercisePicker({
                 {results.elsewhere.length > 0 && (
                   <>
                     <SectionHeader title="Other categories" count={results.elsewhere.length} t={t} />
-                    <Grid exercises={results.elsewhere} caption={(e) => e.categoryName} onPick={pick} t={t} />
+                    <Grid exercises={results.elsewhere} caption={(e) => e.categoryName} onPick={pick} onEdit={setEditing} t={t} />
                   </>
                 )}
               </>
@@ -311,7 +317,7 @@ export function ExercisePicker({
                 {shownGroups.map((g) => (
                   <View key={g.title ?? 'all'}>
                     {g.title && !subcategory && <SectionHeader title={g.title} count={g.exercises.length} t={t} />}
-                    <Grid exercises={g.exercises} onPick={pick} t={t} />
+                    <Grid exercises={g.exercises} onPick={pick} onEdit={setEditing} t={t} />
                   </View>
                 ))}
                 {subcategory && !shownGroups.length && (
@@ -325,6 +331,15 @@ export function ExercisePicker({
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
+      {editing && (
+        <EditExerciseSheet
+          exercise={editing}
+          subcategories={cats?.find((c) => c.id === editing.categoryId)?.subcategories ?? []}
+          onSaved={edited}
+          onRemoved={removed}
+          onClose={() => setEditing(null)}
+        />
+      )}
     </Modal>
   );
 }
@@ -365,9 +380,6 @@ const styles = StyleSheet.create({
   plus: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   createTitle: { fontSize: 16, fontWeight: '700' },
   error: { paddingTop: 8 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingTop: 10 },
-  chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: StyleSheet.hairlineWidth },
-  chipLabel: { fontSize: 13, fontWeight: '600' },
   empty: { paddingVertical: 18, textAlign: 'center' },
   emptyBox: { alignItems: 'center', gap: 4, paddingVertical: 36 },
   emptyTitle: { fontSize: 16, fontWeight: '700' },

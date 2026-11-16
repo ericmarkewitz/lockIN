@@ -188,6 +188,10 @@ const MIGRATIONS: ((db: Db) => Promise<void>)[] = [
         PRIMARY KEY (exercise_id, subcategory)
       );
     `);
+  },  // A removed custom exercise that was already logged is hidden instead of deleted, so the
+  // workouts it was logged in keep it. Hidden exercises are left out of the exercise list.
+  async (db) => {
+    await db.execAsync('ALTER TABLE exercises ADD COLUMN is_hidden INTEGER NOT NULL DEFAULT 0');
   },
 ];
 

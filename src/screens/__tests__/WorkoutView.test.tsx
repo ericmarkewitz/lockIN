@@ -3,7 +3,8 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react-
 
 import { setDistanceUnit, setWeightUnit } from '@/data/settings';
 import { setPlanDay } from '@/data/plan';
-import { getWorkout, setRestDay, updateSet, ensureWorkout } from '@/data/workouts';
+import { addExercise, listCategoriesWithExercises } from '@/data/exercises';
+import { addExerciseToWorkout, getWorkout, setRestDay, updateSet, ensureWorkout } from '@/data/workouts';
 import { findByName } from '@/test/helpers';
 import { renderWithDb } from '@/test/render';
 import { createTestDb } from '@/test/testDb';
@@ -382,6 +383,23 @@ describe('WorkoutView', () => {
     await fireEvent.press(await screen.findByLabelText('Add Hiking'));
     expect(await screen.findByText('Hiking')).toBeTruthy();
     expect((await getWorkout(db, MON))!.exercises.map((e) => e.exerciseName)).toContain('Hiking');
+  });
+
+  it('shows a custom exercise by its new name after it is edited from the picker', async () => {
+    const db = await setup();
+    const lifts = (await listCategoriesWithExercises(db)).find((c) => c.name === 'Lifts')!;
+    const ex = await addExercise(db, lifts.id, 'Rak Pull', 'Back');
+    const w = await ensureWorkout(db, MON);
+    await addExerciseToWorkout(db, w.id, ex.id, { targetSets: 1 });
+    await renderWithDb(<WorkoutView date={MON} />, db);
+    expect(await screen.findByText('Rak Pull')).toBeTruthy();
+
+    await fireEvent.press(screen.getByLabelText('Add exercise'));
+    await fireEvent(await screen.findByLabelText('Add Rak Pull'), 'longPress');
+    await fireEvent.changeText(screen.getByLabelText('Exercise name'), 'Rack Pull');
+    await fireEvent.press(screen.getByLabelText('Save exercise'));
+
+    expect(await screen.findByTestId('exercise-Rack Pull')).toBeTruthy();
   });
 
   describe('workout mode', () => {

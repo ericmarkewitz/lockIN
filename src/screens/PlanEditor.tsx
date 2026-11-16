@@ -142,6 +142,13 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
     setPickerFor(null);
   };
 
+  // Keep unsaved days in step with exercises edited or removed in the picker.
+  const patchItems = (fn: (items: Draft[]) => Draft[]) =>
+    setDays((ds) => ds && ds.map((d) => ({ ...d, items: fn(d.items) })));
+  const renameDrafts = (e: Exercise) =>
+    patchItems((items) => items.map((i) => (i.exerciseId === e.id ? { ...i, name: e.name } : i)));
+  const dropDrafts = (id: number) => patchItems((items) => items.filter((i) => i.exerciseId !== id));
+
   const save = async () => {
     setSaving(true);
     try {
@@ -284,6 +291,8 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
         visible={pickerFor !== null}
         onClose={() => setPickerFor(null)}
         onPick={(e) => pickerFor !== null && addExercise(pickerFor, e)}
+        onEdited={renameDrafts}
+        onRemoved={dropDrafts}
       />
     </KeyboardAvoider>
   );

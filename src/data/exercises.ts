@@ -1,4 +1,7 @@
 import type { Db } from '@/db/types';
+import { LOGGED_SET } from './logged';
+import { isPlanComplete, markPlanComplete } from './plan';
+import { refreshUntouchedWorkouts } from './workouts';
 import type { Category, CategoryKind, Exercise } from './types';
 
 /** Muscle groups lifts are organized by, in display order. */
@@ -69,7 +72,7 @@ export async function listCategoriesWithExercises(db: Db): Promise<Category[]> {
     'SELECT id, name, kind FROM categories ORDER BY id',
   );
   const alsoIn = await loadAlsoIn(db);
-  const exercises = (await db.getAllAsync<Row>(`${SELECT} ORDER BY e.id`)).map((r) => toExercise(r, alsoIn.get(r.id) ?? []));
+  const exercises = (await db.getAllAsync<Row>(`${SELECT} WHERE e.is_hidden = 0 ORDER BY e.id`)).map((r) => toExercise(r, alsoIn.get(r.id) ?? []));
   return cats.map((c) => ({
     ...c,
     subcategories: c.kind === 'strength' ? LIFT_SUBCATEGORIES : [],
@@ -77,6 +80,32 @@ export async function listCategoriesWithExercises(db: Db): Promise<Category[]> {
   }));
 }
 
+/** Sets an exercise's extra muscle groups, dropping repeats and its own `subcategory`. */
+async function setAlsoIn(db: Db, id: number, subcategory: string | null, alsoIn: string[]) {
+  await db.runAsync('DELETE FROM exercise_subcategories WHERE exercise_id = ?', [id]);
+  for (const s of new Set(alsoIn.filter((s) => s !== subcategory))) {
+    await db.runAsync('INSERT INTO exercise_subcategories (exercise_id, subcategory) VALUES (?, ?)', [id, s]);
+  }
+}
+
+const sameName = (db: Db, categoryId: number, name: string) =>
+  db.getFirstAsync<{ id: number; is_hidden: number }>(
+    'SELECT id, is_hidden FROM exercises WHERE category_id = ? AND name = ? COLLATE NOCASE',
+    [categoryId, name],
+  );
+
+/** A custom exercise, or an error saying why it can't be changed. */
+async function customExercise(db: Db, id: number): Promise<Exercise> {
+  const ex = await findExercise(db, id);
+  if (!ex) throw new Error('Exercise not found');
+  if (!ex.isCustom) throw new Error("Built-in exercises can't be changed");
+  return ex;
+}
+
+/**
+ * Adds a custom exercise. If one of that name was removed but kept for its logged workouts, it
+ * comes back instead, with the name and muscle groups given here.
+ */
 export async function addExercise(
   db: Db,
   categoryId: number,
@@ -87,22 +116,84 @@ export async function addExercise(
 ): Promise<Exercise> {
   const name = rawName.trim();
   if (!name) throw new Error('Exercise name is required');
-  const dupe = await db.getFirstAsync(
-    'SELECT id FROM exercises WHERE category_id = ? AND name = ? COLLATE NOCASE',
-    [categoryId, name],
-  );
-  if (dupe) throw new Error(`"${name}" already exists in this category`);
-  let id = 0;
+  const dupe = await sameName(db, categoryId, name);
+  if (dupe && !dupe.is_hidden) throw new Error(`"${name}" already exists in this category`);
+  let id = dupe?.id ?? 0;
   await db.withTransactionAsync(async () => {
-    ({ lastInsertRowId: id } = await db.runAsync(
-      'INSERT INTO exercises (category_id, name, is_custom, subcategory) VALUES (?, ?, 1, ?)',
-      [categoryId, name, subcategory],
-    ));
-    for (const s of new Set(alsoIn.filter((s) => s !== subcategory))) {
-      await db.runAsync('INSERT INTO exercise_subcategories (exercise_id, subcategory) VALUES (?, ?)', [id, s]);
+    if (dupe) {
+      await db.runAsync('UPDATE exercises SET name = ?, subcategory = ?, is_hidden = 0 WHERE id = ?', [name, subcategory, id]);
+    } else {
+      ({ lastInsertRowId: id } = await db.runAsync(
+        'INSERT INTO exercises (category_id, name, is_custom, subcategory) VALUES (?, ?, 1, ?)',
+        [categoryId, name, subcategory],
+      ));
     }
+    await setAlsoIn(db, id, subcategory, alsoIn);
   });
   return (await findExercise(db, id))!;
+}
+
+export type ExerciseEdit = { name: string; subcategory: string | null; alsoIn: string[] };
+
+/** Renames a custom exercise and sets its muscle groups. Workouts it was logged in show the new name. */
+export async function updateExercise(db: Db, id: number, edit: ExerciseEdit): Promise<Exercise> {
+  const ex = await customExercise(db, id);
+  const name = edit.name.trim();
+  if (!name) throw new Error('Exercise name is required');
+  const dupe = await sameName(db, ex.categoryId, name);
+  if (dupe && dupe.id !== id) {
+    throw new Error(dupe.is_hidden
+      ? `You removed an exercise called "${name}". Create it again from search to bring it back.`
+      : `"${name}" already exists in this category`);
+  }
+  await db.withTransactionAsync(async () => {
+    await db.runAsync('UPDATE exercises SET name = ?, subcategory = ? WHERE id = ?', [name, edit.subcategory, id]);
+    await setAlsoIn(db, id, edit.subcategory, edit.alsoIn);
+  });
+  return (await findExercise(db, id))!;
+}
+
+export type ExerciseUsage = {
+  /** Weekdays (0 = Sunday) the weekly plan has it on, ascending. */
+  plannedWeekdays: number[];
+  /** Workouts with at least one set of it logged. */
+  loggedWorkouts: number;
+};
+
+export async function getExerciseUsage(db: Db, id: number): Promise<ExerciseUsage> {
+  const days = await db.getAllAsync<{ weekday: number }>(
+    'SELECT DISTINCT weekday FROM plan_items WHERE exercise_id = ? ORDER BY weekday',
+    [id],
+  );
+  const logged = await db.getFirstAsync<{ n: number }>(
+    `SELECT COUNT(DISTINCT we.workout_id) AS n FROM workout_exercises we
+     JOIN sets s ON s.workout_exercise_id = we.id WHERE we.exercise_id = ? AND ${LOGGED_SET}`,
+    [id],
+  );
+  return { plannedWeekdays: days.map((d) => d.weekday), loggedWorkouts: logged?.n ?? 0 };
+}
+
+/**
+ * Removes a custom exercise from the exercise list and the weekly plan. Upcoming workouts with
+ * nothing logged or changed by hand follow the new plan. If a workout still has the exercise it
+ * is hidden rather than deleted, so that workout keeps it; otherwise it is deleted.
+ */
+export async function removeExercise(db: Db, id: number, today: string): Promise<'deleted' | 'hidden'> {
+  await customExercise(db, id);
+  const planned = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM plan_items WHERE exercise_id = ?', [id]);
+  if (planned?.n) {
+    // Gaps left in `position` are harmless: items are only ever ordered by it.
+    await db.runAsync('DELETE FROM plan_items WHERE exercise_id = ?', [id]);
+    if (await isPlanComplete(db)) await markPlanComplete(db, today);
+    await refreshUntouchedWorkouts(db, today);
+  }
+  const used = await db.getFirstAsync('SELECT 1 FROM workout_exercises WHERE exercise_id = ?', [id]);
+  if (used) {
+    await db.runAsync('UPDATE exercises SET is_hidden = 1 WHERE id = ?', [id]);
+    return 'hidden';
+  }
+  await db.runAsync('DELETE FROM exercises WHERE id = ?', [id]);
+  return 'deleted';
 }
 
 export type SearchResult = {

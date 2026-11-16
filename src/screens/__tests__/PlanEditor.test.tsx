@@ -1,5 +1,6 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react-native';
 
+import { addExercise, listCategoriesWithExercises } from '@/data/exercises';
 import { getPlan, isPlanComplete, setPlanDay } from '@/data/plan';
 import { setDistanceUnit } from '@/data/settings';
 import { findByName } from '@/test/helpers';
@@ -147,6 +148,34 @@ describe('PlanEditor', () => {
     await fireEvent.changeText(await screen.findByLabelText('Search exercises'), 'Sled Push');
     await fireEvent.press(screen.getByLabelText('Create Sled Push'));
     expect(await screen.findByText('Sled Push')).toBeTruthy();
+  });
+
+  it('follows a custom exercise edited or removed from the picker', async () => {
+    const db = await createTestDb();
+    const lifts = (await listCategoriesWithExercises(db)).find((c) => c.name === 'Lifts')!;
+    await addExercise(db, lifts.id, 'Rak Pull', 'Back');
+    await addExercise(db, lifts.id, 'Sled Push', 'Legs');
+    await renderWithDb(<PlanEditor onSaved={jest.fn()} />, db);
+    await fireEvent.press(await screen.findByLabelText('Add exercise to Monday'));
+    await fireEvent.press(await screen.findByLabelText('Add Rak Pull'));
+    await fireEvent.press(screen.getByLabelText('Add exercise to Monday'));
+    await fireEvent.press(await screen.findByLabelText('Add Sled Push'));
+
+    await fireEvent.press(screen.getByLabelText('Add exercise to Tuesday'));
+    await fireEvent(await screen.findByLabelText('Add Rak Pull'), 'longPress');
+    await fireEvent.changeText(screen.getByLabelText('Exercise name'), 'Rack Pull');
+    await fireEvent.press(screen.getByLabelText('Save exercise'));
+    await fireEvent(await screen.findByLabelText('Add Sled Push'), 'longPress');
+    await fireEvent.press(screen.getByLabelText('Remove exercise'));
+    await fireEvent.press(screen.getByLabelText('Remove'));
+    await waitFor(() => expect(screen.queryByLabelText('Exercise name')).toBeNull());
+    await fireEvent.press(screen.getAllByLabelText('Cancel')[0]);
+
+    expect(await screen.findByLabelText('Remove Rack Pull from Monday')).toBeTruthy();
+    expect(screen.queryByLabelText('Remove Sled Push from Monday')).toBeNull();
+    await fireEvent.press(screen.getByText('Save plan'));
+    await waitFor(async () =>
+      expect((await getPlan(db)).find((d) => d.weekday === 1)!.items.map((i) => i.exerciseName)).toEqual(['Rack Pull']));
   });
 
   it('removes an exercise from a day', async () => {
