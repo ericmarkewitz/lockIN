@@ -60,6 +60,20 @@ export async function setRestSeconds(db: Db, seconds: number): Promise<void> {
   await writeSetting(db, 'rest_seconds', String(seconds));
 }
 
+/** How far back the Stats charts look. The lifetime totals ignore it. */
+export const STATS_RANGES = ['1m', '3m', '6m', '1y', 'all'] as const;
+export type StatsRange = (typeof STATS_RANGES)[number];
+
+export async function getStatsRange(db: Db): Promise<StatsRange> {
+  const value = await readSetting(db, 'stats_range');
+  return STATS_RANGES.find((r) => r === value) ?? '3m';
+}
+
+export async function setStatsRange(db: Db, range: StatsRange): Promise<void> {
+  if (!STATS_RANGES.includes(range)) throw new Error(`Unsupported stats range: ${range}`);
+  await writeSetting(db, 'stats_range', range);
+}
+
 /** Color themes, in the order the picker shows them. Cobalt is the app's original palette. */
 export const THEME_IDS = ['cobalt', 'volt', 'ember', 'midnight', 'mono', 'tide', 'trophy', 'sakura', 'trail'] as const;
 export type ThemeId = (typeof THEME_IDS)[number];

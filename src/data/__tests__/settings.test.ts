@@ -4,7 +4,7 @@ import { setPlanDay } from '../plan';
 import {
   acceptDisclaimer, hasAcceptedDisclaimer,
   getAppearance, getDistanceUnit, getRestSeconds, getThemeId, getThemeSettings, getUnits, getWeightUnit,
-  REST_OPTIONS, setAppearance, setDistanceUnit, setRestSeconds, setThemeId, setWeightUnit, THEME_IDS,
+  REST_OPTIONS, getStatsRange, setStatsRange, STATS_RANGES, setAppearance, setDistanceUnit, setRestSeconds, setThemeId, setWeightUnit, THEME_IDS,
 } from '../settings';
 import { ensureWorkout, getWorkout, updateSet } from '../workouts';
 
@@ -206,5 +206,26 @@ describe('disclaimer acceptance', () => {
     const db = await createTestDb();
     await db.runAsync("INSERT INTO settings (key, value) VALUES ('disclaimer_version', 'yes')");
     expect(await hasAcceptedDisclaimer(db, 1)).toBe(false);
+  });
+});
+
+describe('stats range setting', () => {
+  it('defaults to three months', async () => {
+    expect(await getStatsRange(await createTestDb())).toBe('3m');
+  });
+
+  it('persists every range', async () => {
+    const db = await createTestDb();
+    for (const r of STATS_RANGES) {
+      await setStatsRange(db, r);
+      expect(await getStatsRange(db)).toBe(r);
+    }
+  });
+
+  it('rejects an unknown range and falls back from a bad stored value', async () => {
+    const db = await createTestDb();
+    await expect(setStatsRange(db, '2w' as never)).rejects.toThrow('Unsupported stats range');
+    await db.runAsync("INSERT INTO settings (key, value) VALUES ('stats_range', 'forever')");
+    expect(await getStatsRange(db)).toBe('3m');
   });
 });
