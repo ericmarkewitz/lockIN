@@ -39,6 +39,15 @@ describe('exercises', () => {
     expect(cats.find((c) => c.name === 'Cardio')!.exercises[0].subcategory).toBeNull();
   });
 
+  it('returns the extra muscle groups with each exercise', async () => {
+    const db = await createTestDb();
+    const lifts = (await listCategoriesWithExercises(db)).find((c) => c.name === 'Lifts')!;
+    const deadlift = lifts.exercises.find((e) => e.name === 'Deadlift')!;
+    expect(deadlift.alsoIn).toEqual(['Legs']);
+    expect(lifts.exercises.find((e) => e.name === 'Squat')!.alsoIn).toEqual([]);
+    expect((await findExercise(db, deadlift.id))!.alsoIn).toEqual(['Legs']);
+  });
+
   it('adds a custom exercise to a subcategory, defaulting to none', async () => {
     const db = await createTestDb();
     const lifts = (await listCategoriesWithExercises(db)).find((c) => c.name === 'Lifts')!;
@@ -58,9 +67,28 @@ describe('exercises', () => {
 
       expect(groups.map((g) => g.title)).toEqual(['Chest', 'Back', 'Shoulders', 'Arms', 'Legs', 'Other']);
       expect(groups[0].exercises.map((e) => e.name)).toEqual(
-        ['Bench Press', 'Incline Bench Press', 'Close-Grip Bench Press', 'Pec Fly', 'Push-up'],
+        ['Bench Press', 'Incline Bench Press', 'Close-Grip Bench Press', 'Pec Fly', 'Push-up', 'Lat Pullover'],
       );
       expect(groups[5].exercises.map((e) => e.name)).toEqual(['Sandbag Carry']);
+    });
+
+    it('lists an exercise under each of its muscle groups', async () => {
+      const db = await createTestDb();
+      const lifts = (await listCategoriesWithExercises(db)).find((c) => c.name === 'Lifts')!;
+      const groups = groupBySubcategory(lifts);
+      const titlesWith = (name: string) => groups.filter((g) => g.exercises.some((e) => e.name === name)).map((g) => g.title);
+      expect(titlesWith('Deadlift')).toEqual(['Back', 'Legs']);
+      expect(titlesWith('Squat')).toEqual(['Legs']);
+    });
+
+    it('files a lift with no main group under Other as well as its extra groups', async () => {
+      const db = await createTestDb();
+      const lifts = (await listCategoriesWithExercises(db)).find((c) => c.name === 'Lifts')!;
+      const ex = await addExercise(db, lifts.id, 'Sandbag Carry');
+      await db.runAsync("INSERT INTO exercise_subcategories (exercise_id, subcategory) VALUES (?, 'Arms')", [ex.id]);
+      const groups = groupBySubcategory((await listCategoriesWithExercises(db)).find((c) => c.name === 'Lifts')!);
+      const titlesWith = groups.filter((g) => g.exercises.some((e) => e.name === 'Sandbag Carry')).map((g) => g.title);
+      expect(titlesWith).toEqual(['Arms', 'Other']);
     });
 
     it('has no Other group when every lift is categorized', async () => {
@@ -95,9 +123,10 @@ describe('exercises', () => {
       const db = await createTestDb();
       const cats = await listCategoriesWithExercises(db);
       const lifts = cats.find((c) => c.name === 'Lifts')!;
-      expect(names(searchExercises(cats, lifts.id, 'legs').here)).toEqual(
-        CATALOG[0].exercises.filter((e) => e.subcategory === 'Legs').map((e) => e.name),
+      expect(names(searchExercises(cats, lifts.id, 'legs').here).sort()).toEqual(
+        CATALOG[0].exercises.filter((e) => e.subcategory === 'Legs' || e.also?.includes('Legs')).map((e) => e.name).sort(),
       );
+      expect(names(searchExercises(cats, lifts.id, 'legs').here)).toContain('Deadlift');
     });
 
     it('reports whether the query is already an exercise in the active category', async () => {

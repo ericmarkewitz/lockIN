@@ -10,6 +10,8 @@ export type Exercise = {
   categoryName: string;
   categoryKind: CategoryKind;
   subcategory: string | null;
+  /** More subcategories the exercise is listed under, besides its own. */
+  alsoIn: string[];
 };
 
 export type Category = {

@@ -40,6 +40,15 @@ describe('ExercisePicker', () => {
     expect(screen.getByLabelText('Add Squat')).toBeTruthy();
   });
 
+  it('shows an exercise under each muscle group it works', async () => {
+    await open();
+    expect(await screen.findAllByLabelText('Add Deadlift')).toHaveLength(2); // under Back and under Legs
+    await fireEvent.press(screen.getByLabelText('Subcategory Legs'));
+    expect(screen.getByLabelText('Add Deadlift')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Subcategory Chest'));
+    expect(screen.queryByLabelText('Add Deadlift')).toBeNull();
+  });
+
   it('says so when a muscle group has no exercises yet', async () => {
     const db = await createTestDb();
     await db.runAsync("DELETE FROM exercises WHERE subcategory = 'Core'");

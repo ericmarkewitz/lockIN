@@ -4,7 +4,8 @@ import type { Db } from './types';
 /**
  * Adds the categories and exercises in the catalog that the database doesn't have yet. It only
  * ever adds: existing rows, and anything people logged against them, are left as they are. A
- * name the user already has in that category (built-in or custom, any case) is skipped.
+ * name the user already has in that category (built-in or custom, any case) is skipped, and a
+ * built-in's extra muscle groups (`also`) are never given to a custom exercise.
  */
 export async function syncCatalog(db: Db, catalog: CatalogCategory[] = CATALOG): Promise<void> {
   await db.withTransactionAsync(async () => {
@@ -18,6 +19,13 @@ export async function syncCatalog(db: Db, catalog: CatalogCategory[] = CATALOG):
              (SELECT 1 FROM exercises WHERE category_id = ? AND name = ? COLLATE NOCASE)`,
           [row!.id, ex.name, ex.subcategory ?? null, row!.id, ex.name],
         );
+        for (const sub of ex.also ?? []) {
+          await db.runAsync(
+            `INSERT OR IGNORE INTO exercise_subcategories (exercise_id, subcategory)
+             SELECT id, ? FROM exercises WHERE category_id = ? AND name = ? AND is_custom = 0`,
+            [sub, row!.id, ex.name],
+          );
+        }
       }
     }
   });
