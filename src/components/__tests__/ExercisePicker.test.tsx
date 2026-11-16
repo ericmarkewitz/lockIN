@@ -167,6 +167,54 @@ describe('ExercisePicker', () => {
     });
   });
 
+  describe('yoga and mobility', () => {
+    const chip = (s: string) => screen.getByLabelText(`Type ${s}`);
+    const openYogaMobility = async (db?: Db) => {
+      const r = await open(db);
+      await fireEvent.press(await screen.findByLabelText('Category Yoga & Mobility'));
+      return r;
+    };
+
+    it('are one category, split into Yoga and Mobility', async () => {
+      await openYogaMobility();
+      expect(screen.queryByLabelText('Category Yoga')).toBeNull();
+      expect(screen.queryByLabelText('Category Mobility')).toBeNull();
+      expect(screen.getByRole('header', { name: 'Yoga' })).toBeTruthy();
+      expect(screen.getByRole('header', { name: 'Mobility' })).toBeTruthy();
+      await fireEvent.press(screen.getByLabelText('Subcategory Mobility'));
+      expect(screen.getByLabelText('Add Stretching')).toBeTruthy();
+      expect(screen.queryByLabelText('Add Vinyasa')).toBeNull();
+    });
+
+    it('files a new exercise under the tab it was created from', async () => {
+      const { db, onPick } = await openYogaMobility();
+      await fireEvent.press(screen.getByLabelText('Subcategory Mobility'));
+      await fireEvent.changeText(screen.getByLabelText('Search exercises'), 'Band Work');
+      expect(chip('Mobility').props.accessibilityState).toMatchObject({ selected: true });
+      expect(chip('Yoga').props.accessibilityState).toMatchObject({ selected: false });
+      expect(screen.queryByLabelText('Muscle group Legs')).toBeNull();
+      await fireEvent.press(screen.getByLabelText('Create Band Work'));
+      await waitFor(() => expect(onPick).toHaveBeenCalled());
+      expect(await findExercise(db, onPick.mock.calls[0][0].id)).toMatchObject({ subcategory: 'Mobility', alsoIn: [] });
+    });
+
+    it('moves a custom exercise between yoga and mobility when edited', async () => {
+      const db = await createTestDb();
+      const cat = (await listCategoriesWithExercises(db)).find((c) => c.name === 'Yoga & Mobility')!;
+      const ex = await addExercise(db, cat.id, 'Kundalini', 'Mobility');
+      const onEdited = jest.fn();
+      await renderWithDb(<ExercisePicker visible onPick={jest.fn()} onClose={jest.fn()} onEdited={onEdited} />, db);
+      await fireEvent.press(await screen.findByLabelText('Category Yoga & Mobility'));
+      await fireEvent(screen.getByLabelText('Add Kundalini'), 'longPress');
+      expect(screen.getByText('Types · the first is its main one')).toBeTruthy();
+      await fireEvent.press(chip('Mobility'));
+      await fireEvent.press(chip('Yoga'));
+      await fireEvent.press(screen.getByLabelText('Save exercise'));
+      await waitFor(() => expect(onEdited).toHaveBeenCalled());
+      expect(await findExercise(db, ex.id)).toMatchObject({ subcategory: 'Yoga', alsoIn: [] });
+    });
+  });
+
   describe('editing a custom exercise', () => {
     const hold = async (name: string) => fireEvent(screen.getAllByLabelText(`Add ${name}`)[0], 'longPress');
     const chip = (s: string) => screen.getByLabelText(`Muscle group ${s}`);

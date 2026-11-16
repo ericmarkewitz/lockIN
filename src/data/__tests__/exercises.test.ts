@@ -6,7 +6,7 @@ describe('exercises', () => {
   it('groups exercises under categories', async () => {
     const db = await createTestDb();
     const cats = await listCategoriesWithExercises(db);
-    expect(cats.map((c) => c.name)).toEqual(expect.arrayContaining(['Lifts', 'Cardio', 'Yoga']));
+    expect(cats.map((c) => c.name)).toEqual(expect.arrayContaining(['Lifts', 'Cardio', 'Yoga & Mobility']));
     const cardio = cats.find((c) => c.name === 'Cardio')!;
     expect(cardio.kind).toBe('cardio');
     expect(cardio.exercises.map((e) => e.name)).toContain('Running');
@@ -22,13 +22,21 @@ describe('exercises', () => {
     expect((await findExercise(db, ex.id))?.categoryKind).toBe('strength');
   });
 
-  it('offers muscle groups as subcategories for lifts only', async () => {
+  it('offers muscle groups for lifts, yoga and mobility for mind-body, and none for cardio', async () => {
     const db = await createTestDb();
     const cats = await listCategoriesWithExercises(db);
     expect(cats.find((c) => c.name === 'Lifts')!.subcategories).toEqual(LIFT_SUBCATEGORIES);
-    for (const name of ['Cardio', 'Yoga', 'Mobility']) {
-      expect(cats.find((c) => c.name === name)!.subcategories).toEqual([]);
-    }
+    expect(cats.find((c) => c.name === 'Yoga & Mobility')!.subcategories).toEqual(['Yoga', 'Mobility']);
+    expect(cats.find((c) => c.name === 'Cardio')!.subcategories).toEqual([]);
+  });
+
+  it('groups yoga and mobility exercises apart', async () => {
+    const db = await createTestDb();
+    const cats = await listCategoriesWithExercises(db);
+    const groups = groupBySubcategory(cats.find((c) => c.name === 'Yoga & Mobility')!);
+    expect(groups.map((g) => g.title)).toEqual(['Yoga', 'Mobility']);
+    expect(groups[0].exercises.map((e) => e.name)).toEqual(['Vinyasa', 'Hatha', 'Yin', 'Power Yoga']);
+    expect(groups[1].exercises.map((e) => e.name)).toEqual(['Stretching', 'Foam Rolling']);
   });
 
   it('returns the subcategory with each exercise', async () => {

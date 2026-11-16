@@ -6,6 +6,16 @@ import type { Category, CategoryKind, Exercise } from './types';
 
 /** Muscle groups lifts are organized by, in display order. */
 export const LIFT_SUBCATEGORIES = ['Chest', 'Back', 'Shoulders', 'Arms', 'Legs', 'Core'] as const;
+/** What the yoga and mobility category is split into, in display order. */
+export const MINDBODY_SUBCATEGORIES = ['Yoga', 'Mobility'] as const;
+
+/** The subcategories each kind of category offers, in display order; empty if it has none. */
+export const SUBCATEGORIES: Record<CategoryKind, readonly string[]> = {
+  strength: LIFT_SUBCATEGORIES,
+  cardio: [],
+  mindbody: MINDBODY_SUBCATEGORIES,
+};
+const SUBCATEGORY_ORDER: readonly string[] = Object.values(SUBCATEGORIES).flat();
 
 /** Heading for a category's exercises that aren't in one of its subcategories. */
 export const OTHER_SUBCATEGORY = 'Other';
@@ -50,8 +60,8 @@ async function loadAlsoIn(db: Db, exerciseId?: number): Promise<Map<number, stri
     exerciseId === undefined ? [] : [exerciseId],
   );
   const order = (s: string) => {
-    const i = (LIFT_SUBCATEGORIES as readonly string[]).indexOf(s);
-    return i === -1 ? LIFT_SUBCATEGORIES.length : i;
+    const i = SUBCATEGORY_ORDER.indexOf(s);
+    return i === -1 ? SUBCATEGORY_ORDER.length : i;
   };
   const map = new Map<number, string[]>();
   for (const r of rows) map.set(r.exercise_id, [...(map.get(r.exercise_id) ?? []), r.subcategory]);
@@ -75,7 +85,7 @@ export async function listCategoriesWithExercises(db: Db): Promise<Category[]> {
   const exercises = (await db.getAllAsync<Row>(`${SELECT} WHERE e.is_hidden = 0 ORDER BY e.id`)).map((r) => toExercise(r, alsoIn.get(r.id) ?? []));
   return cats.map((c) => ({
     ...c,
-    subcategories: c.kind === 'strength' ? LIFT_SUBCATEGORIES : [],
+    subcategories: SUBCATEGORIES[c.kind],
     exercises: exercises.filter((e) => e.categoryId === c.id),
   }));
 }
@@ -205,7 +215,7 @@ export type SearchResult = {
   exact: boolean;
 };
 
-/** Case-insensitive match on an exercise's name or muscle group, split by the category being browsed. */
+/** Case-insensitive match on an exercise's name or subcategory (e.g. a muscle group), split by the category being browsed. */
 export function searchExercises(categories: Category[], activeId: number, query: string): SearchResult {
   const q = query.trim().toLowerCase();
   const matches = (e: Exercise) =>

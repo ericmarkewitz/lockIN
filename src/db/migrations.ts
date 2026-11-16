@@ -193,6 +193,39 @@ const MIGRATIONS: ((db: Db) => Promise<void>)[] = [
   async (db) => {
     await db.execAsync('ALTER TABLE exercises ADD COLUMN is_hidden INTEGER NOT NULL DEFAULT 0');
   },
+  // Puts Yoga and Mobility in one category, 'Yoga & Mobility', with each as a subcategory. The
+  // Yoga row is renamed so it keeps its place; Mobility's exercises move into it and keep their
+  // ids, so logged workouts and the plan still point at them. An exercise both had (any case) is
+  // merged into the Yoga one, which is then also listed under Mobility.
+  async (db) => {
+    const id = async (name: string) =>
+      (await db.getFirstAsync<{ id: number }>('SELECT id FROM categories WHERE name = ?', [name]))?.id;
+    const yoga = await id('Yoga');
+    const mobility = await id('Mobility');
+    if (yoga === undefined || mobility === undefined) return;
+    await db.runAsync("UPDATE categories SET name = 'Yoga & Mobility' WHERE id = ?", [yoga]);
+    await db.runAsync("UPDATE exercises SET subcategory = 'Yoga' WHERE category_id = ?", [yoga]);
+    const moving = await db.getAllAsync<{ id: number; name: string; is_hidden: number }>(
+      'SELECT id, name, is_hidden FROM exercises WHERE category_id = ?',
+      [mobility],
+    );
+    for (const ex of moving) {
+      const twin = await db.getFirstAsync<{ id: number }>(
+        'SELECT id FROM exercises WHERE category_id = ? AND name = ? COLLATE NOCASE',
+        [yoga, ex.name],
+      );
+      if (!twin) {
+        await db.runAsync("UPDATE exercises SET category_id = ?, subcategory = 'Mobility' WHERE id = ?", [yoga, ex.id]);
+        continue;
+      }
+      await db.runAsync('UPDATE workout_exercises SET exercise_id = ? WHERE exercise_id = ?', [twin.id, ex.id]);
+      await db.runAsync('UPDATE plan_items SET exercise_id = ? WHERE exercise_id = ?', [twin.id, ex.id]);
+      await db.runAsync("INSERT OR IGNORE INTO exercise_subcategories (exercise_id, subcategory) VALUES (?, 'Mobility')", [twin.id]);
+      if (!ex.is_hidden) await db.runAsync('UPDATE exercises SET is_hidden = 0 WHERE id = ?', [twin.id]);
+      await db.runAsync('DELETE FROM exercises WHERE id = ?', [ex.id]);
+    }
+    await db.runAsync('DELETE FROM categories WHERE id = ?', [mobility]);
+  },
 ];
 
 export const LATEST_VERSION = MIGRATIONS.length;

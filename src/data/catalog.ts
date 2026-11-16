@@ -1,11 +1,12 @@
-import { LIFT_SUBCATEGORIES } from './exercises';
+import { LIFT_SUBCATEGORIES, MINDBODY_SUBCATEGORIES } from './exercises';
 import type { CategoryKind } from './types';
 
 export type LiftSubcategory = (typeof LIFT_SUBCATEGORIES)[number];
+export type MindBodySubcategory = (typeof MINDBODY_SUBCATEGORIES)[number];
 export type CatalogExercise = {
   name: string;
-  /** The muscle group a lift is filed under; it labels the lift everywhere it is shown. */
-  subcategory?: LiftSubcategory;
+  /** The subcategory (a lift's muscle group, or yoga or mobility) it is filed under; it labels the exercise everywhere it is shown. */
+  subcategory?: LiftSubcategory | MindBodySubcategory;
   /** More muscle groups the lift works, so the picker lists it under those too. */
   also?: LiftSubcategory[];
 };
@@ -15,6 +16,9 @@ const plain = (...names: string[]): CatalogExercise[] => names.map((name) => ({ 
 /** Lifts in one muscle group. Write `['Deadlift', 'Legs']` for a lift that also works other groups. */
 const lifts = (subcategory: LiftSubcategory, ...names: (string | [string, ...LiftSubcategory[]])[]): CatalogExercise[] =>
   names.map((n) => (typeof n === 'string' ? { name: n, subcategory } : { name: n[0], subcategory, also: n.slice(1) as LiftSubcategory[] }));
+/** Yoga or mobility exercises. */
+const mindBody = (subcategory: MindBodySubcategory, ...names: string[]): CatalogExercise[] =>
+  names.map((name) => ({ name, subcategory }));
 
 /**
  * Every built-in category and exercise. `syncCatalog` adds whatever is missing on each launch,
@@ -54,6 +58,12 @@ export const CATALOG: CatalogCategory[] = [
       'Ski Touring', 'Cross-Country Skiing', 'Snowshoeing', 'Climbing',
     ),
   },
-  { name: 'Yoga', kind: 'mindbody', exercises: plain('Vinyasa', 'Hatha', 'Yin', 'Power Yoga') },
-  { name: 'Mobility', kind: 'mindbody', exercises: plain('Stretching', 'Foam Rolling') },
+  {
+    name: 'Yoga & Mobility',
+    kind: 'mindbody',
+    exercises: [
+      ...mindBody('Yoga', 'Vinyasa', 'Hatha', 'Yin', 'Power Yoga'),
+      ...mindBody('Mobility', 'Stretching', 'Foam Rolling'),
+    ],
+  },
 ];
