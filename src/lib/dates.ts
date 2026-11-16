@@ -32,6 +32,19 @@ export function startOfWeek(key: DateKey): DateKey {
   return addDays(key, -((weekdayOf(key) + 6) % 7));
 }
 
+export function startOfMonth(key: DateKey): DateKey {
+  return `${key.slice(0, 7)}-01`;
+}
+
+/** Calendar months later (or earlier, for negative `n`), clamped to the last day of a shorter month. */
+export function addMonths(key: DateKey, n: number): DateKey {
+  const [y, m, d] = key.split('-').map(Number);
+  const target = new Date(y, m - 1 + n, 1);
+  const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  target.setDate(Math.min(d, lastDay));
+  return toDateKey(target);
+}
+
 export function weekDates(key: DateKey): DateKey[] {
   const start = startOfWeek(key);
   return Array.from({ length: 7 }, (_, i) => addDays(start, i));

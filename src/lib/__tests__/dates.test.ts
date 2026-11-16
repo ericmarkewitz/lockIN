@@ -1,8 +1,10 @@
 import {
   addDays,
+  addMonths,
   datesInRange,
   monthGrid,
   parseDateKey,
+  startOfMonth,
   startOfWeek,
   toDateKey,
   weekdayOf,
@@ -40,6 +42,22 @@ describe('dates', () => {
     expect(startOfWeek('2026-11-01')).toBe('2026-10-26'); // Sunday -> previous Monday
     expect(startOfWeek('2026-11-02')).toBe('2026-11-02');
     expect(startOfWeek('2026-11-04')).toBe('2026-11-02');
+  });
+
+  it('finds the first of the month', () => {
+    expect(startOfMonth('2026-11-15')).toBe('2026-11-01');
+    expect(startOfMonth('2026-11-01')).toBe('2026-11-01');
+  });
+
+  it('adds months across year boundaries', () => {
+    expect(addMonths('2026-11-15', -1)).toBe('2026-10-15');
+    expect(addMonths('2026-01-10', -1)).toBe('2025-12-10');
+    expect(addMonths('2026-11-15', 2)).toBe('2027-01-15');
+  });
+
+  it('clamps to the last day of a shorter month', () => {
+    expect(addMonths('2026-03-31', -1)).toBe('2026-02-28');
+    expect(addMonths('2028-03-31', -1)).toBe('2028-02-29');
   });
 
   it('lists the 7 dates of a week, Monday first', () => {

@@ -15,8 +15,10 @@ import { formatDistance, toDisplayWeight } from '@/lib/units';
 import { formatDuration } from '@/lib/duration';
 import { tint, useTheme } from '@/theme';
 import { KindIcon } from '@/components/calendar/KindIcon';
+import { LiftProgress, recentTrend } from '@/components/history/LiftProgress';
+import { StatsPanel } from '@/components/history/StatsPanel';
 
-type Tab = 'workouts' | 'exercises';
+type Tab = 'stats' | 'workouts' | 'exercises';
 
 const dayLabel = (date: string) => `${DAY_NAMES[parseDateKey(date).getDay()].slice(0, 3)} ${date}`;
 
@@ -47,7 +49,7 @@ export function HistoryScreen() {
   const db = useDb();
   const t = useTheme();
   const router = useRouter();
-  const [tab, setTab] = useState<Tab>('workouts');
+  const [tab, setTab] = useState<Tab>('stats');
   const [exercise, setExercise] = useState<LoggedExercise | null>(null);
 
   const workouts = useLoad(() => listLoggedWorkouts(db), [db]);
@@ -61,10 +63,12 @@ export function HistoryScreen() {
   return (
     <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: t.bg }} contentContainerStyle={styles.wrap}>
       <Segmented<Tab>
-        options={[{ value: 'workouts', label: 'Workouts' }, { value: 'exercises', label: 'Exercises' }]}
+        options={[{ value: 'stats', label: 'Stats' }, { value: 'workouts', label: 'Workouts' }, { value: 'exercises', label: 'Exercises' }]}
         value={tab}
         onChange={(v) => { setTab(v); setExercise(null); }}
       />
+
+      {tab === 'stats' && <StatsPanel unit={units.weight} />}
 
       {tab === 'workouts' && workouts.data && (
         workouts.data.length ? workouts.data.map((w) => (
@@ -108,6 +112,9 @@ export function HistoryScreen() {
         <View style={{ gap: 12 }}>
           <Button title="‹ Exercises" label="Back to exercises" variant="secondary" onPress={() => setExercise(null)} style={styles.back} />
           <Text style={[styles.h2, { color: t.text }]}>{exercise.name}</Text>
+          {exercise.kind === 'strength' && sessions.data && (
+            <LiftProgress name={exercise.name} points={recentTrend(sessions.data)} unit={units.weight} />
+          )}
           {(sessions.data ?? []).map((s) => (
             <Card key={s.date} style={styles.row}>
               <DateBlock date={s.date} />
