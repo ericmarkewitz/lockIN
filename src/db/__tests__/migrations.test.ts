@@ -15,6 +15,9 @@ const UNDO_V5 = 'ALTER TABLE sets DROP COLUMN weight_unit; ALTER TABLE sets DROP
 const UNDO_V6 = 'DROP TABLE plan_history';
 const UNDO_V7 = 'DROP TABLE exercise_subcategories';
 const UNDO_V8 = 'ALTER TABLE exercises DROP COLUMN is_hidden';
+const UNDO_V12 = `UPDATE categories SET name = 'Yoga & Mobility' WHERE name = 'Mind & Body';
+  UPDATE exercises SET name = 'Pilates', subcategory = 'Yoga' WHERE name = 'Mat Pilates' AND is_custom = 0;
+  DELETE FROM exercises WHERE name = 'Reformer Pilates' AND is_custom = 0`;
 const UNDO_V10 = `UPDATE exercises SET name = 'Dumbbell Curl' WHERE name = 'Bicep Curl' AND is_custom = 0;
   UPDATE exercises SET name = 'Barbell Row' WHERE name = 'Bent-Over Row' AND is_custom = 0`;
 
@@ -39,7 +42,7 @@ describe('migrations', () => {
     expect(n?.n).toBeGreaterThan(0);
   });
 
-  it('seeds Lifts, Cardio and Yoga & Mobility categories with subcategories', async () => {
+  it('seeds Lifts, Cardio and Mind & Body categories with subcategories', async () => {
     const db = await createTestDb();
     const rows = await db.getAllAsync<{ cat: string; name: string }>(
       'SELECT c.name AS cat, e.name FROM exercises e JOIN categories c ON c.id = e.category_id',
@@ -47,7 +50,7 @@ describe('migrations', () => {
     const by = (c: string) => rows.filter((r) => r.cat === c).map((r) => r.name);
     expect(by('Lifts')).toEqual(expect.arrayContaining(['Bench Press', 'Squat', 'Deadlift']));
     expect(by('Cardio')).toEqual(expect.arrayContaining(['Running', 'Biking', 'Hiking', 'Downhill Skiing']));
-    expect(by('Yoga & Mobility')).toEqual(expect.arrayContaining(['Vinyasa', 'Stretching']));
+    expect(by('Mind & Body')).toEqual(expect.arrayContaining(['Vinyasa', 'Stretching']));
   });
 
   it('seeds all 7 plan days as non-rest and enforces foreign keys', async () => {
@@ -73,7 +76,7 @@ describe('migrations', () => {
     const db = wrap(raw);
     await migrate(db);
     // Simulate a half-applied earlier run, which can only have the v1 schema.
-    raw.exec(`${UNDO_V10}; ${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; ${UNDO_V5}; ${UNDO_V3}; ${UNDO_V2}; PRAGMA user_version = 0`);
+    raw.exec(`${UNDO_V12}; ${UNDO_V10}; ${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; ${UNDO_V5}; ${UNDO_V3}; ${UNDO_V2}; PRAGMA user_version = 0`);
     await expect(migrate(db)).resolves.toBeUndefined();
     const cats = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM categories');
     expect(cats?.n).toBe(3);
@@ -83,7 +86,7 @@ describe('migrations', () => {
     const raw = new DatabaseSync(':memory:');
     const db = wrap(raw);
     await migrate(db);
-    raw.exec(`${UNDO_V10}; ${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; ${UNDO_V5}; ${UNDO_V3}; ${UNDO_V2}; PRAGMA user_version = 1`);
+    raw.exec(`${UNDO_V12}; ${UNDO_V10}; ${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; ${UNDO_V5}; ${UNDO_V3}; ${UNDO_V2}; PRAGMA user_version = 1`);
     await db.runAsync("INSERT INTO workouts (date, notes) VALUES ('2026-11-02', 'kept')");
 
     await migrate(db);
@@ -101,7 +104,7 @@ describe('migrations', () => {
       const raw = new DatabaseSync(':memory:');
       const db = wrap(raw);
       await migrate(db);
-      raw.exec(`${UNDO_V10}; ${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; ${UNDO_V5}; ${UNDO_V3}; PRAGMA user_version = 2`);
+      raw.exec(`${UNDO_V12}; ${UNDO_V10}; ${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; ${UNDO_V5}; ${UNDO_V3}; PRAGMA user_version = 2`);
       // A v2 install only has the v1 seed; drop what syncCatalog has added since.
       const seeded = SEED_V1.flatMap((c) => c.exercises);
       await db.runAsync(`DELETE FROM exercises WHERE name NOT IN (${seeded.map(() => '?').join(', ')})`, seeded);
@@ -225,7 +228,7 @@ describe('migrations', () => {
       const raw = new DatabaseSync(':memory:');
       const db = wrap(raw);
       await migrate(db);
-      raw.exec(`${UNDO_V10}; ${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; ${UNDO_V5}; PRAGMA user_version = 4`);
+      raw.exec(`${UNDO_V12}; ${UNDO_V10}; ${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; ${UNDO_V5}; PRAGMA user_version = 4`);
       await prepare(db);
       await migrate(db);
       return db;
@@ -265,7 +268,7 @@ describe('migrations', () => {
       const raw = new DatabaseSync(':memory:');
       const db = wrap(raw);
       await migrate(db);
-      raw.exec(`${UNDO_V10}; ${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; PRAGMA user_version = 5`);
+      raw.exec(`${UNDO_V12}; ${UNDO_V10}; ${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; PRAGMA user_version = 5`);
       const bench = (await db.getFirstAsync<{ id: number }>("SELECT id FROM exercises WHERE name = 'Bench Press'"))!.id;
       await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: bench, targetSets: 3 }] });
       await db.runAsync("UPDATE settings SET value = '1' WHERE key = 'plan_complete'");
@@ -321,7 +324,7 @@ describe('migrations', () => {
       const raw = new DatabaseSync(':memory:');
       const db = wrap(raw);
       await migrate(db);
-      raw.exec(`${UNDO_V10}; ${UNDO_V8}; ${UNDO_V7}; PRAGMA user_version = 6`);
+      raw.exec(`${UNDO_V12}; ${UNDO_V10}; ${UNDO_V8}; ${UNDO_V7}; PRAGMA user_version = 6`);
       await migrate(db);
       expect(
         await db.getFirstAsync("SELECT subcategory FROM exercise_subcategories WHERE exercise_id = ?", [await deadliftId(db)]),
@@ -348,7 +351,7 @@ describe('migrations', () => {
       const raw = new DatabaseSync(':memory:');
       const db = wrap(raw);
       await migrate(db);
-      raw.exec(`
+      raw.exec(`${UNDO_V12};
         UPDATE categories SET name = 'Yoga' WHERE name = 'Yoga & Mobility';
         INSERT INTO categories (name, kind) VALUES ('Mobility', 'mindbody');
         UPDATE exercises SET category_id = (SELECT id FROM categories WHERE name = 'Mobility')
@@ -389,9 +392,9 @@ describe('migrations', () => {
         await addCustom(d, 'Mobility', 'Band Work');
       });
       const cats = (await db.getAllAsync<{ name: string }>("SELECT name FROM categories WHERE kind = 'mindbody'")).map((c) => c.name);
-      expect(cats).toEqual(['Yoga & Mobility']);
+      expect(cats).toEqual(['Mind & Body']);
       const rows = await mindBody(db);
-      expect(rows.every((r) => r.cat === 'Yoga & Mobility')).toBe(true);
+      expect(rows.every((r) => r.cat === 'Mind & Body')).toBe(true);
       const sub = (name: string) => rows.find((r) => r.name === name)?.subcategory;
       expect(sub('Vinyasa')).toBe('Yoga');
       expect(sub('Kundalini')).toBe('Yoga');
@@ -401,9 +404,9 @@ describe('migrations', () => {
     });
 
     it('keeps the category where Yoga was in the list', async () => {
-      const yogaId = await catId(await createTestDb(), 'Yoga & Mobility');
+      const yogaId = await catId(await createTestDb(), 'Mind & Body');
       const db = await upgradeFromV8(async () => {});
-      expect(await catId(db, 'Yoga & Mobility')).toBe(yogaId);
+      expect(await catId(db, 'Mind & Body')).toBe(yogaId);
     });
 
     it('keeps logged sets and planned items on their exercise', async () => {
@@ -417,7 +420,7 @@ describe('migrations', () => {
       expect(await db.getFirstAsync(
         `SELECT c.name AS cat, e.name, s.duration_min FROM sets s JOIN workout_exercises we ON we.id = s.workout_exercise_id
          JOIN exercises e ON e.id = we.exercise_id JOIN categories c ON c.id = e.category_id`,
-      )).toEqual({ cat: 'Yoga & Mobility', name: 'Foam Rolling', duration_min: 20 });
+      )).toEqual({ cat: 'Mind & Body', name: 'Foam Rolling', duration_min: 20 });
       expect(await db.getFirstAsync(
         'SELECT e.name, e.subcategory FROM plan_items p JOIN exercises e ON e.id = p.exercise_id',
       )).toEqual({ name: 'Stretching', subcategory: 'Mobility' });
@@ -430,7 +433,7 @@ describe('migrations', () => {
         await log(d, 'Mobility', 'Stretching', '2026-11-03');
       });
       const rows = (await mindBody(db)).filter((r) => r.name.toLowerCase() === 'stretching');
-      expect(rows).toEqual([{ cat: 'Yoga & Mobility', name: 'stretching', subcategory: 'Yoga', is_custom: 1 }]);
+      expect(rows).toEqual([{ cat: 'Mind & Body', name: 'stretching', subcategory: 'Yoga', is_custom: 1 }]);
       const logged = await db.getAllAsync<{ date: string; name: string }>(
         `SELECT w.date, e.name FROM workout_exercises we JOIN workouts w ON w.id = we.workout_id
          JOIN exercises e ON e.id = we.exercise_id ORDER BY w.date`,
@@ -448,7 +451,7 @@ describe('migrations', () => {
       const raw = new DatabaseSync(':memory:');
       const db = wrap(raw);
       await migrate(db);
-      raw.exec(`${UNDO_V10}; PRAGMA user_version = 9`);
+      raw.exec(`${UNDO_V12}; ${UNDO_V10}; PRAGMA user_version = 9`);
       await prepare(db);
       await migrate(db);
       return db;
@@ -507,7 +510,7 @@ describe('migrations', () => {
       const raw = new DatabaseSync(':memory:');
       const db = wrap(raw);
       await migrate(db);
-      raw.exec('PRAGMA user_version = 10');
+      raw.exec(`${UNDO_V12}; PRAGMA user_version = 10`);
       await syncCatalog(db, [
         { name: 'Yoga', kind: 'mindbody', exercises: ['Vinyasa', 'Hatha', 'Yin', 'Power Yoga'].map((name) => ({ name })) },
         { name: 'Mobility', kind: 'mindbody', exercises: ['Stretching', 'Foam Rolling'].map((name) => ({ name })) },
@@ -535,13 +538,13 @@ describe('migrations', () => {
          JOIN categories c ON c.id = e.category_id WHERE c.kind = 'mindbody' ORDER BY e.id`,
       );
 
-    it('leaves one Yoga & Mobility category with one of each built-in', async () => {
+    it('leaves one Mind & Body category with one of each built-in', async () => {
       const db = await upgradeAfterOldBuild(async () => {});
       const cats = await db.getAllAsync<{ name: string }>("SELECT name FROM categories WHERE kind = 'mindbody'");
-      expect(cats).toEqual([{ name: 'Yoga & Mobility' }]);
+      expect(cats).toEqual([{ name: 'Mind & Body' }]);
       const names = (await mindBody(db)).map((r) => r.name);
       expect(new Set(names).size).toBe(names.length);
-      expect(names).toEqual(expect.arrayContaining(['Vinyasa', 'Stretching', 'Pilates']));
+      expect(names).toEqual(expect.arrayContaining(['Vinyasa', 'Stretching', 'Mat Pilates']));
     });
 
     it('moves sets and plan items logged against a re-added copy onto the original', async () => {
@@ -558,7 +561,7 @@ describe('migrations', () => {
       expect(logged).toEqual([{ date: '2026-11-01', exercise_id: original }, { date: '2026-11-02', exercise_id: original }]);
       expect(await db.getFirstAsync(
         'SELECT c.name AS cat, e.name FROM plan_items p JOIN exercises e ON e.id = p.exercise_id JOIN categories c ON c.id = e.category_id',
-      )).toEqual({ cat: 'Yoga & Mobility', name: 'Yin' });
+      )).toEqual({ cat: 'Mind & Body', name: 'Yin' });
     });
 
     it('keeps a custom exercise added in the old build, filed under the subcategory it came from', async () => {
@@ -568,17 +571,72 @@ describe('migrations', () => {
         );
       });
       expect((await mindBody(db)).find((r) => r.name === 'Band Work')).toEqual(
-        { cat: 'Yoga & Mobility', name: 'Band Work', subcategory: 'Mobility', is_custom: 1 },
+        { cat: 'Mind & Body', name: 'Band Work', subcategory: 'Mobility', is_custom: 1 },
       );
     });
 
     it('changes nothing on an install that never ran an older build', async () => {
       const db = await createTestDb();
+      await db.execAsync(`${UNDO_V12}; PRAGMA user_version = 11`);
+      await migrate(db);
       const before = await mindBody(db);
       const raw = db as unknown as Db;
-      await raw.execAsync('PRAGMA user_version = 10');
+      await raw.execAsync(`${UNDO_V12}; PRAGMA user_version = 10`);
       await migrate(raw);
       expect(await mindBody(db)).toEqual(before);
+    });
+  });
+
+  describe('v12 renames Yoga & Mobility to Mind & Body and gives Pilates its own subcategory', () => {
+    /** Upgrades from v11, where Pilates was one exercise filed under Yoga. */
+    async function upgradeFromV11(prepare: (db: Db) => Promise<void>) {
+      const raw = new DatabaseSync(':memory:');
+      const db = wrap(raw);
+      await migrate(db);
+      raw.exec(`${UNDO_V12}; PRAGMA user_version = 11`);
+      await prepare(db);
+      await migrate(db);
+      return db;
+    }
+    const catId = async (db: Db, name: string) =>
+      (await db.getFirstAsync<{ id: number }>('SELECT id FROM categories WHERE name = ?', [name]))?.id;
+    const mindBody = (db: Db) =>
+      db.getAllAsync<{ id: number; cat: string; name: string; subcategory: string | null; is_custom: number }>(
+        `SELECT e.id, c.name AS cat, e.name, e.subcategory, e.is_custom FROM exercises e
+         JOIN categories c ON c.id = e.category_id WHERE c.kind = 'mindbody' ORDER BY e.id`,
+      );
+
+    it('renames the category in place, keeping its id', async () => {
+      let before: number | undefined;
+      const db = await upgradeFromV11(async (d) => { before = await catId(d, 'Yoga & Mobility'); });
+      expect(before).toBeDefined();
+      expect(await catId(db, 'Yoga & Mobility')).toBeUndefined();
+      expect(await catId(db, 'Mind & Body')).toBe(before);
+    });
+
+    it('turns Pilates into Mat Pilates under Pilates, keeping its logged sets, and adds Reformer Pilates', async () => {
+      let pilatesId = 0;
+      const db = await upgradeFromV11(async (d) => {
+        pilatesId = (await d.getFirstAsync<{ id: number }>("SELECT id FROM exercises WHERE name = 'Pilates'"))!.id;
+        const { lastInsertRowId: workoutId } = await d.runAsync("INSERT INTO workouts (date) VALUES ('2026-11-03')");
+        await d.runAsync('INSERT INTO workout_exercises (workout_id, exercise_id, position) VALUES (?, ?, 0)', [workoutId, pilatesId]);
+      });
+      const rows = await mindBody(db);
+      expect(rows.find((r) => r.id === pilatesId)).toMatchObject({ cat: 'Mind & Body', name: 'Mat Pilates', subcategory: 'Pilates' });
+      expect(rows.map((r) => r.name)).not.toContain('Pilates');
+      expect(rows.find((r) => r.name === 'Reformer Pilates')).toMatchObject({ subcategory: 'Pilates', is_custom: 0 });
+      expect(await db.getFirstAsync('SELECT exercise_id FROM workout_exercises')).toEqual({ exercise_id: pilatesId });
+    });
+
+    it("leaves a user's custom Mat Pilates alone", async () => {
+      const db = await upgradeFromV11(async (d) => {
+        await d.runAsync(
+          "INSERT INTO exercises (category_id, name, is_custom) VALUES ((SELECT id FROM categories WHERE name = 'Yoga & Mobility'), 'mat pilates', 1)",
+        );
+      });
+      const rows = await mindBody(db);
+      expect(rows.filter((r) => r.name.toLowerCase() === 'mat pilates')).toEqual([expect.objectContaining({ name: 'mat pilates', is_custom: 1 })]);
+      expect(rows.find((r) => r.name === 'Pilates')).toMatchObject({ is_custom: 0 });
     });
   });
 });

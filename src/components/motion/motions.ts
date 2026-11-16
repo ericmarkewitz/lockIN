@@ -455,9 +455,15 @@ export const MOTIONS: Record<string, Motion> = {
     pose: pose({ hip: [28, 44], torso: 160, arm1: [140, 145], leg1: [75, -15], leg2: [72, -18] }),
   },
 
+  // Pilates
   // The hundred: on the back, head and shoulders curled up, legs long at 45 degrees, arms reaching.
-  Pilates: {
+  'Mat Pilates': {
     pose: pose({ hip: [32, 56], torso: -110, arm1: [95, 95], leg1: [135, 135], leg2: [133, 133] }),
+  },
+  // Footwork on the reformer: lying on the carriage, feet on the footbar, pressing out.
+  'Reformer Pilates': {
+    pose: pose({ hip: [26, 48], torso: -90, arm1: [90, 90], leg1: [115, 65], leg2: [113, 67] }),
+    scene: [line([2, 54], [34, 54], 3), line([2, 57], [58, 57], 2), line([49, 45], [49, 57], 2)],
   },
 
   // Mobility

@@ -9,7 +9,7 @@ import { Eyebrow, useRaised } from '../ui';
 import { KindIcon } from './KindIcon';
 import { statusColor, statusLabel } from './status';
 
-const KIND_LABEL: Record<CategoryKind, string> = { strength: 'Lifts', cardio: 'Cardio', mindbody: 'Yoga & Mobility' };
+const KIND_LABEL: Record<CategoryKind, string> = { strength: 'Lifts', cardio: 'Cardio', mindbody: 'Mind & Body' };
 const SHORT_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const CTA: Partial<Record<DayStatus, string>> = { planned: 'Start workout', partial: 'Continue', completed: 'View workout' };
 /** Statuses worth a badge: the rest read fine from the title alone. */

@@ -271,6 +271,21 @@ const MIGRATIONS: ((db: Db) => Promise<void>)[] = [
       await db.runAsync('DELETE FROM categories WHERE id = ?', [stray.id]);
     }
   },
+  // Renames Yoga & Mobility to Mind & Body, keeping its id, now that it also holds Pilates. The
+  // built-in Pilates becomes Mat Pilates in the new Pilates subcategory, so what was logged against
+  // it stays put; syncCatalog adds Reformer Pilates. A name the user already has is left to them.
+  async (db) => {
+    await db.runAsync(
+      `UPDATE categories SET name = 'Mind & Body'
+       WHERE name = 'Yoga & Mobility' AND NOT EXISTS (SELECT 1 FROM categories WHERE name = 'Mind & Body')`,
+    );
+    const cat = "(SELECT id FROM categories WHERE name = 'Mind & Body')";
+    await db.runAsync(
+      `UPDATE exercises SET name = 'Mat Pilates', subcategory = 'Pilates'
+       WHERE is_custom = 0 AND name = 'Pilates' AND category_id = ${cat}
+         AND NOT EXISTS (SELECT 1 FROM exercises WHERE name = 'Mat Pilates' COLLATE NOCASE AND category_id = ${cat})`,
+    );
+  },
 ];
 
 export const LATEST_VERSION = MIGRATIONS.length;

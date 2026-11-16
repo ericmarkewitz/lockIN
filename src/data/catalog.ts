@@ -5,7 +5,7 @@ export type LiftSubcategory = (typeof LIFT_SUBCATEGORIES)[number];
 export type MindBodySubcategory = (typeof MINDBODY_SUBCATEGORIES)[number];
 export type CatalogExercise = {
   name: string;
-  /** The subcategory (a lift's muscle group, or yoga or mobility) it is filed under; it labels the exercise everywhere it is shown. */
+  /** The subcategory (a lift's muscle group, or yoga, pilates or mobility) it is filed under; it labels the exercise everywhere it is shown. */
   subcategory?: LiftSubcategory | MindBodySubcategory;
   /** More muscle groups the lift works, so the picker lists it under those too. */
   also?: LiftSubcategory[];
@@ -16,7 +16,7 @@ const plain = (...names: string[]): CatalogExercise[] => names.map((name) => ({ 
 /** Lifts in one muscle group. Write `['Deadlift', 'Legs']` for a lift that also works other groups. */
 const lifts = (subcategory: LiftSubcategory, ...names: (string | [string, ...LiftSubcategory[]])[]): CatalogExercise[] =>
   names.map((n) => (typeof n === 'string' ? { name: n, subcategory } : { name: n[0], subcategory, also: n.slice(1) as LiftSubcategory[] }));
-/** Yoga or mobility exercises. */
+/** Yoga, pilates or mobility exercises. */
 const mindBody = (subcategory: MindBodySubcategory, ...names: string[]): CatalogExercise[] =>
   names.map((name) => ({ name, subcategory }));
 
@@ -61,10 +61,11 @@ export const CATALOG: CatalogCategory[] = [
     ),
   },
   {
-    name: 'Yoga & Mobility',
+    name: 'Mind & Body',
     kind: 'mindbody',
     exercises: [
-      ...mindBody('Yoga', 'Vinyasa', 'Hatha', 'Yin', 'Power Yoga', 'Pilates'),
+      ...mindBody('Yoga', 'Vinyasa', 'Hatha', 'Yin', 'Power Yoga'),
+      ...mindBody('Pilates', 'Mat Pilates', 'Reformer Pilates'),
       ...mindBody('Mobility', 'Stretching', 'Foam Rolling'),
     ],
   },

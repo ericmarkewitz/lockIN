@@ -31,11 +31,12 @@ describe('CATALOG', () => {
     }
   });
 
-  it('keeps yoga and mobility in one category, as subcategories', () => {
+  it('keeps yoga, pilates and mobility in one category, as subcategories', () => {
     const mindBody = CATALOG.filter((c) => c.kind === 'mindbody');
-    expect(mindBody.map((c) => c.name)).toEqual(['Yoga & Mobility']);
+    expect(mindBody.map((c) => c.name)).toEqual(['Mind & Body']);
     const sub = (name: string) => mindBody[0].exercises.find((e) => e.name === name)?.subcategory;
     expect(sub('Vinyasa')).toBe('Yoga');
+    expect(sub('Mat Pilates')).toBe('Pilates');
     expect(sub('Stretching')).toBe('Mobility');
   });
 
@@ -64,7 +65,8 @@ describe('CATALOG', () => {
     ['Lifts', 'Straight-Leg Sit-up', 'Core'], ['Lifts', 'Ab Wheel Rollout', 'Core'], ['Lifts', 'Bird Dog', 'Core'],
     ['Lifts', 'Dead Bug', 'Core'], ['Lifts', 'Pallof Press', 'Core'],
     ['Cardio', 'Stair Stepper', undefined], ['Cardio', 'Elliptical', undefined], ['Cardio', 'HIIT', undefined],
-    ['Cardio', 'Golf', undefined], ['Yoga & Mobility', 'Pilates', 'Yoga'],
+    ['Cardio', 'Golf', undefined], ['Mind & Body', 'Mat Pilates', 'Pilates'],
+    ['Mind & Body', 'Reformer Pilates', 'Pilates'],
   ])('includes %s: %s', (category, name, subcategory) => {
     const found = CATALOG.find((c) => c.name === category)!.exercises.find((e) => e.name === name);
     expect(found?.subcategory).toBe(subcategory);
