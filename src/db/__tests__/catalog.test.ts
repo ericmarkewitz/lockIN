@@ -30,7 +30,36 @@ describe('CATALOG', () => {
       }
     }
   });
+
+  it('only gives lifts extra muscle groups, each known, distinct and not the main one', () => {
+    for (const c of CATALOG) {
+      for (const e of c.exercises) {
+        if (!e.also) continue;
+        expect(c.kind).toBe('strength');
+        expect(e.also.length).toBeGreaterThan(0);
+        expect(new Set(e.also).size).toBe(e.also.length);
+        expect(e.also).not.toContain(e.subcategory);
+        for (const s of e.also) expect(LIFT_SUBCATEGORIES).toContain(s);
+      }
+    }
+  });
+
+  it('files a deadlift under legs as well as back', () => {
+    const deadlift = CATALOG[0].exercises.find((e) => e.name === 'Deadlift')!;
+    expect(deadlift.subcategory).toBe('Back');
+    expect(deadlift.also).toContain('Legs');
+  });
 });
+
+const extraGroups = (db: Db) =>
+  db.getAllAsync<{ name: string; subcategory: string; is_custom: number }>(
+    `SELECT e.name, s.subcategory, e.is_custom FROM exercise_subcategories s
+     JOIN exercises e ON e.id = s.exercise_id ORDER BY e.id, s.subcategory`,
+  );
+
+/** The shipped catalog with extra muscle groups set on one built-in. */
+const withAlso = (name: string, also: LiftSubcategory[]): CatalogCategory[] =>
+  CATALOG.map((c) => ({ ...c, exercises: c.exercises.map((e) => (e.name === name ? { ...e, also } : e)) }));
 
 describe('syncCatalog', () => {
   it('leaves a fresh install with exactly the catalog as built-ins, in their subcategories', async () => {
@@ -76,11 +105,38 @@ describe('syncCatalog', () => {
     ]);
   });
 
+  it('gives a fresh install exactly the catalog\'s extra muscle groups', async () => {
+    const db = await createTestDb();
+    const expected = CATALOG.flatMap((c) => c.exercises.flatMap((e) => (e.also ?? []).map((s) => [e.name, s])));
+    expect((await extraGroups(db)).map((r) => [r.name, r.subcategory]).sort()).toEqual(expected.sort());
+  });
+
+  it('adds a muscle group new to the catalog to a built-in already installed', async () => {
+    const db = await createTestDb();
+    await syncCatalog(db, withAlso('Squat', ['Core']));
+    expect((await extraGroups(db)).filter((r) => r.name === 'Squat')).toEqual([
+      { name: 'Squat', subcategory: 'Core', is_custom: 0 },
+    ]);
+  });
+
+  it("doesn't add muscle groups to a custom exercise with a built-in's name", async () => {
+    const db = await createTestDb();
+    await db.runAsync(
+      "INSERT INTO exercises (category_id, name, is_custom) VALUES ((SELECT id FROM categories WHERE name = 'Lifts'), 'sled drag', 1)",
+    );
+    await syncCatalog(db, withExtra('Lifts', 'Sled Drag', 'Legs').map((c) => ({
+      ...c, exercises: c.exercises.map((e) => (e.name === 'Sled Drag' ? { ...e, also: ['Back' as const] } : e)),
+    })));
+    expect((await extraGroups(db)).filter((r) => r.name.toLowerCase() === 'sled drag')).toEqual([]);
+  });
+
   it('is idempotent', async () => {
     const db = await createTestDb();
     const before = await builtIns(db);
+    const groupsBefore = await extraGroups(db);
     await syncCatalog(db);
     await syncCatalog(db);
     expect(await builtIns(db)).toEqual(before);
+    expect(await extraGroups(db)).toEqual(groupsBefore);
   });
 });

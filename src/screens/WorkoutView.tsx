@@ -195,7 +195,7 @@ export function WorkoutView({ date }: { date: string }) {
           </View>
         </>
       )}
-      <ExercisePicker visible={picking} onClose={() => setPicking(false)} onPick={addEx} />
+      <ExercisePicker visible={picking} onClose={() => setPicking(false)} onPick={addEx} onEdited={reload} onRemoved={reload} />
       {removal && (
         <ConfirmDialog
           title={removal.title}

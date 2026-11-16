@@ -6,10 +6,12 @@ import type { Category, Exercise } from '@/data/types';
 import { useDb } from '@/db/DbContext';
 import { useLoad } from '@/hooks/useLoad';
 import { tint, useTheme, type Theme } from '@/theme';
+import { EditExerciseSheet } from './EditExerciseSheet';
 import { categoryIcon, Icon, sym } from './Icon';
 import { keyboardAvoidance } from './KeyboardAvoider';
 import { ExerciseMotion } from './motion/ExerciseMotion';
 import { motionFor } from './motion/motions';
+import { MuscleGroupChips, toggled } from './MuscleGroupChips';
 
 /** The top level: one equal-width tab per category, icon over name. */
 function CategoryTabs({ cats, activeId, onSelect, t }: {
@@ -70,13 +72,19 @@ function SubTabs({ tabs, value, onChange, t }: {
 
 const MOTION_SIZE = 64;
 
-function ExerciseCard({ exercise, caption, onPress, t }: { exercise: Exercise; caption?: string; onPress: () => void; t: Theme }) {
+function ExerciseCard({ exercise, caption, onPress, onEdit, t }: {
+  exercise: Exercise; caption?: string; onPress: () => void; onEdit?: () => void; t: Theme;
+}) {
   const motion = motionFor(exercise);
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`Add ${exercise.name}`}
+      accessibilityHint={onEdit ? 'Hold to edit' : undefined}
+      accessibilityActions={onEdit ? [{ name: 'longpress', label: 'Edit' }] : undefined}
+      onAccessibilityAction={onEdit ? (e) => e.nativeEvent.actionName === 'longpress' && onEdit() : undefined}
       onPress={onPress}
+      onLongPress={onEdit}
       style={({ pressed }) => [
         styles.card,
         { borderColor: t.border, backgroundColor: t.card, opacity: pressed ? 0.7 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] },
@@ -97,12 +105,22 @@ function ExerciseCard({ exercise, caption, onPress, t }: { exercise: Exercise; c
   );
 }
 
-function Grid({ exercises, caption, onPick, t }: {
-  exercises: Exercise[]; caption?: (e: Exercise) => string | undefined; onPick: (e: Exercise) => void; t: Theme;
+function Grid({ exercises, caption, onPick, onEdit, t }: {
+  exercises: Exercise[]; caption?: (e: Exercise) => string | undefined;
+  onPick: (e: Exercise) => void; onEdit: (e: Exercise) => void; t: Theme;
 }) {
   return (
     <View testID="exercise-grid" style={styles.grid}>
-      {exercises.map((e) => <ExerciseCard key={e.id} exercise={e} caption={caption?.(e)} onPress={() => onPick(e)} t={t} />)}
+      {exercises.map((e) => (
+        <ExerciseCard
+          key={e.id}
+          exercise={e}
+          caption={caption ? caption(e) : e.isCustom ? 'Hold to edit' : undefined}
+          onPress={() => onPick(e)}
+          onEdit={e.isCustom ? () => onEdit(e) : undefined}
+          t={t}
+        />
+      ))}
     </View>
   );
 }
@@ -117,28 +135,52 @@ function SectionHeader({ title, count, t }: { title: string; count?: number; t: 
 }
 
 export function ExercisePicker({
-  visible, onPick, onClose,
-}: { visible: boolean; onPick: (e: Exercise) => void; onClose: () => void }) {
+  visible, onPick, onClose, onEdited, onRemoved,
+}: {
+  visible: boolean; onPick: (e: Exercise) => void; onClose: () => void;
+  /** A custom exercise was renamed or regrouped from the picker. */
+  onEdited?: (e: Exercise) => void;
+  /** A custom exercise was removed from the picker. */
+  onRemoved?: (id: number) => void;
+}) {
   const db = useDb();
   const t = useTheme();
   const { data: cats, reload } = useLoad(() => listCategoriesWithExercises(db), [db]);
   const [catId, setCatId] = useState<number | null>(null);
   const [subcategory, setSubcategory] = useState<string | null>(null); // null shows the whole category
+  const [pickedGroups, setPickedGroups] = useState<string[] | null>(null); // null: just the tab's group
   const [query, setQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<Exercise | null>(null);
 
   const active = cats?.find((c) => c.id === (catId ?? cats?.[0]?.id));
   const groups = active ? groupBySubcategory(active) : [];
   const shownGroups = subcategory ? groups.filter((g) => g.title === subcategory) : groups;
   const hasOther = groups.some((g) => g.title === OTHER_SUBCATEGORY);
-  const newExerciseGroup = subcategory === OTHER_SUBCATEGORY ? null : subcategory;
+  const tabGroup = subcategory === OTHER_SUBCATEGORY ? null : subcategory;
+  const newGroups = pickedGroups ?? (tabGroup ? [tabGroup] : []);
   const name = query.trim();
   const searching = name.length > 0;
   const results = searching && cats && active ? searchExercises(cats, active.id, name) : null;
 
   const selectCategory = (id: number) => {
     setCatId(id);
-    setSubcategory(null);
+    selectSubcategory(null);
+  };
+  const selectSubcategory = (s: string | null) => {
+    setSubcategory(s);
+    setPickedGroups(null);
+  };
+  const toggleGroup = (s: string) => setPickedGroups(toggled(newGroups, s));
+  const edited = async (e: Exercise) => {
+    setEditing(null);
+    await reload();
+    onEdited?.(e);
+  };
+  const removed = async (id: number) => {
+    setEditing(null);
+    await reload();
+    onRemoved?.(id);
   };
   const search = (text: string) => {
     setQuery(text);
@@ -146,13 +188,15 @@ export function ExercisePicker({
   };
   const pick = (e: Exercise) => {
     search('');
+    setPickedGroups(null);
     onPick(e);
   };
 
   const create = async () => {
     if (!active) return;
     try {
-      const ex = await addExercise(db, active.id, name, newExerciseGroup);
+      const [main = null, ...alsoIn] = active.subcategories.length ? newGroups : [];
+      const ex = await addExercise(db, active.id, name, main, alsoIn);
       await reload();
       pick(ex);
     } catch (e) {
@@ -216,7 +260,7 @@ export function ExercisePicker({
           </View>
 
           {cats && <CategoryTabs cats={cats} activeId={active?.id} onSelect={selectCategory} t={t} />}
-          {!searching && subTabs.length > 0 && <SubTabs tabs={subTabs} value={subcategory} onChange={setSubcategory} t={t} />}
+          {!searching && subTabs.length > 0 && <SubTabs tabs={subTabs} value={subcategory} onChange={selectSubcategory} t={t} />}
 
           <ScrollView
             style={{ flex: 1 }}
@@ -242,16 +286,19 @@ export function ExercisePicker({
                     <View style={{ flex: 1 }}>
                       <Text numberOfLines={1} style={[styles.createTitle, { color: t.text }]}>Create “{name}”</Text>
                       <Text style={{ color: t.muted, fontSize: 13 }}>
-                        {`in ${active.name}${newExerciseGroup ? ` · ${newExerciseGroup}` : ''}`}
+                        {`in ${active.name}${newGroups.length && active.subcategories.length ? ` · ${newGroups.join(', ')}` : ''}`}
                       </Text>
                     </View>
                   </Pressable>
+                )}
+                {!results.exact && active.subcategories.length > 0 && (
+                  <MuscleGroupChips options={active.subcategories} picked={newGroups} onToggle={toggleGroup} t={t} />
                 )}
                 {error && <Text style={[styles.error, { color: t.danger }]}>{error}</Text>}
                 {results.here.length > 0 ? (
                   <>
                     <SectionHeader title={active.name} count={results.here.length} t={t} />
-                    <Grid exercises={results.here} caption={(e) => e.subcategory ?? undefined} onPick={pick} t={t} />
+                    <Grid exercises={results.here} caption={(e) => e.subcategory ?? undefined} onPick={pick} onEdit={setEditing} t={t} />
                   </>
                 ) : (
                   <Text style={[styles.empty, { color: t.muted }]}>No matches in {active.name}.</Text>
@@ -259,7 +306,7 @@ export function ExercisePicker({
                 {results.elsewhere.length > 0 && (
                   <>
                     <SectionHeader title="Other categories" count={results.elsewhere.length} t={t} />
-                    <Grid exercises={results.elsewhere} caption={(e) => e.categoryName} onPick={pick} t={t} />
+                    <Grid exercises={results.elsewhere} caption={(e) => e.categoryName} onPick={pick} onEdit={setEditing} t={t} />
                   </>
                 )}
               </>
@@ -270,7 +317,7 @@ export function ExercisePicker({
                 {shownGroups.map((g) => (
                   <View key={g.title ?? 'all'}>
                     {g.title && !subcategory && <SectionHeader title={g.title} count={g.exercises.length} t={t} />}
-                    <Grid exercises={g.exercises} onPick={pick} t={t} />
+                    <Grid exercises={g.exercises} onPick={pick} onEdit={setEditing} t={t} />
                   </View>
                 ))}
                 {subcategory && !shownGroups.length && (
@@ -284,6 +331,15 @@ export function ExercisePicker({
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
+      {editing && (
+        <EditExerciseSheet
+          exercise={editing}
+          subcategories={cats?.find((c) => c.id === editing.categoryId)?.subcategories ?? []}
+          onSaved={edited}
+          onRemoved={removed}
+          onClose={() => setEditing(null)}
+        />
+      )}
     </Modal>
   );
 }

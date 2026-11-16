@@ -178,6 +178,20 @@ const MIGRATIONS: ((db: Db) => Promise<void>)[] = [
         [start.d, d.weekday, d.is_rest, kinds.length, [...new Set(kinds)].join(',')],
       );
     }
+  },  // Extra muscle groups an exercise works besides its own `subcategory`, so a deadlift is listed
+  // under Legs as well as Back. syncCatalog fills in the built-ins' groups after migrating.
+  async (db) => {
+    await db.execAsync(`
+      CREATE TABLE exercise_subcategories (
+        exercise_id INTEGER NOT NULL REFERENCES exercises(id) ON DELETE CASCADE,
+        subcategory TEXT NOT NULL,
+        PRIMARY KEY (exercise_id, subcategory)
+      );
+    `);
+  },  // A removed custom exercise that was already logged is hidden instead of deleted, so the
+  // workouts it was logged in keep it. Hidden exercises are left out of the exercise list.
+  async (db) => {
+    await db.execAsync('ALTER TABLE exercises ADD COLUMN is_hidden INTEGER NOT NULL DEFAULT 0');
   },
 ];
 
