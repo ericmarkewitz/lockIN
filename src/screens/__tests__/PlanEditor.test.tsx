@@ -144,9 +144,9 @@ describe('PlanEditor', () => {
     const db = await createTestDb();
     await renderWithDb(<PlanEditor onSaved={jest.fn()} />, db);
     await fireEvent.press(await screen.findByLabelText('Add exercise to Friday'));
-    await fireEvent.changeText(await screen.findByLabelText('Search exercises'), 'Hip Thrust');
-    await fireEvent.press(screen.getByLabelText('Create Hip Thrust'));
-    expect(await screen.findByText('Hip Thrust')).toBeTruthy();
+    await fireEvent.changeText(await screen.findByLabelText('Search exercises'), 'Sled Push');
+    await fireEvent.press(screen.getByLabelText('Create Sled Push'));
+    expect(await screen.findByText('Sled Push')).toBeTruthy();
   });
 
   it('removes an exercise from a day', async () => {

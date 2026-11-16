@@ -1,5 +1,6 @@
 import { LIFT_SUBCATEGORIES, addExercise, findExercise, groupBySubcategory, listCategoriesWithExercises, searchExercises } from '../exercises';
 import { createTestDb } from '@/test/testDb';
+import { CATALOG } from '../catalog';
 
 describe('exercises', () => {
   it('groups exercises under categories', async () => {
@@ -15,8 +16,8 @@ describe('exercises', () => {
     const db = await createTestDb();
     const cats = await listCategoriesWithExercises(db);
     const lifts = cats.find((c) => c.name === 'Lifts')!;
-    const ex = await addExercise(db, lifts.id, '  Hip Thrust ');
-    expect(ex.name).toBe('Hip Thrust');
+    const ex = await addExercise(db, lifts.id, '  Sled Push ');
+    expect(ex.name).toBe('Sled Push');
     expect(ex.isCustom).toBe(true);
     expect((await findExercise(db, ex.id))?.categoryKind).toBe('strength');
   });
@@ -42,21 +43,24 @@ describe('exercises', () => {
     const db = await createTestDb();
     const lifts = (await listCategoriesWithExercises(db)).find((c) => c.name === 'Lifts')!;
     expect((await addExercise(db, lifts.id, 'Cable Fly', 'Chest')).subcategory).toBe('Chest');
-    expect((await addExercise(db, lifts.id, 'Farmer Carry')).subcategory).toBeNull();
+    expect((await addExercise(db, lifts.id, 'Sandbag Carry')).subcategory).toBeNull();
   });
 
   describe('groupBySubcategory', () => {
     it('orders groups by subcategory, skips empty ones and puts uncategorized lifts last', async () => {
       const db = await createTestDb();
       const lifts = (await listCategoriesWithExercises(db)).find((c) => c.name === 'Lifts')!;
-      await addExercise(db, lifts.id, 'Farmer Carry');
+      await addExercise(db, lifts.id, 'Sandbag Carry');
+      await db.runAsync("DELETE FROM exercises WHERE subcategory = 'Core'");
       const reloaded = (await listCategoriesWithExercises(db)).find((c) => c.name === 'Lifts')!;
 
       const groups = groupBySubcategory(reloaded);
 
       expect(groups.map((g) => g.title)).toEqual(['Chest', 'Back', 'Shoulders', 'Arms', 'Legs', 'Other']);
-      expect(groups[0].exercises.map((e) => e.name)).toEqual(['Bench Press', 'Incline Bench Press']);
-      expect(groups[5].exercises.map((e) => e.name)).toEqual(['Farmer Carry']);
+      expect(groups[0].exercises.map((e) => e.name)).toEqual(
+        ['Bench Press', 'Incline Bench Press', 'Close-Grip Bench Press', 'Pec Fly', 'Push-up'],
+      );
+      expect(groups[5].exercises.map((e) => e.name)).toEqual(['Sandbag Carry']);
     });
 
     it('has no Other group when every lift is categorized', async () => {
@@ -80,7 +84,9 @@ describe('exercises', () => {
       const cats = await listCategoriesWithExercises(db);
       const lifts = cats.find((c) => c.name === 'Lifts')!;
       const r = searchExercises(cats, lifts.id, '  PRESS ');
-      expect(names(r.here)).toEqual(['Bench Press', 'Incline Bench Press', 'Overhead Press', 'Leg Press']);
+      expect(names(r.here)).toEqual([
+        'Bench Press', 'Incline Bench Press', 'Overhead Press', 'Leg Press', 'Close-Grip Bench Press', 'Arnold Press',
+      ]);
       expect(r.elsewhere).toEqual([]);
       expect(names(searchExercises(cats, lifts.id, 'run').elsewhere)).toEqual(['Running']);
     });
@@ -90,7 +96,7 @@ describe('exercises', () => {
       const cats = await listCategoriesWithExercises(db);
       const lifts = cats.find((c) => c.name === 'Lifts')!;
       expect(names(searchExercises(cats, lifts.id, 'legs').here)).toEqual(
-        ['Squat', 'Front Squat', 'Romanian Deadlift', 'Leg Press', 'Lunge'],
+        CATALOG[0].exercises.filter((e) => e.subcategory === 'Legs').map((e) => e.name),
       );
     });
 

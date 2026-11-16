@@ -41,7 +41,9 @@ describe('ExercisePicker', () => {
   });
 
   it('says so when a muscle group has no exercises yet', async () => {
-    await open();
+    const db = await createTestDb();
+    await db.runAsync("DELETE FROM exercises WHERE subcategory = 'Core'");
+    await open(db);
     await fireEvent.press(await screen.findByLabelText('Subcategory Core'));
     expect(screen.getByText('No Core exercises yet.')).toBeTruthy();
   });
@@ -53,10 +55,10 @@ describe('ExercisePicker', () => {
     screen.unmount();
 
     const lifts = (await listCategoriesWithExercises(db)).find((c) => c.name === 'Lifts')!;
-    await addExercise(db, lifts.id, 'Farmer Carry');
+    await addExercise(db, lifts.id, 'Sandbag Carry');
     await open(db);
     await fireEvent.press(await screen.findByLabelText('Subcategory Other'));
-    expect(screen.getByLabelText('Add Farmer Carry')).toBeTruthy();
+    expect(screen.getByLabelText('Add Sandbag Carry')).toBeTruthy();
     expect(screen.queryByLabelText('Add Bench Press')).toBeNull();
   });
 
@@ -92,11 +94,11 @@ describe('ExercisePicker', () => {
   it('shows a stick figure on built-in exercise cards but not on custom ones', async () => {
     const db = await createTestDb();
     const lifts = (await listCategoriesWithExercises(db)).find((c) => c.name === 'Lifts')!;
-    await addExercise(db, lifts.id, 'Farmer Carry');
+    await addExercise(db, lifts.id, 'Sandbag Carry');
     await open(db);
     expect(await screen.findByTestId('motion-Bench Press', { includeHiddenElements: true })).toBeTruthy();
-    expect(screen.getByLabelText('Add Farmer Carry')).toBeTruthy();
-    expect(screen.queryByTestId('motion-Farmer Carry', { includeHiddenElements: true })).toBeNull();
+    expect(screen.getByLabelText('Add Sandbag Carry')).toBeTruthy();
+    expect(screen.queryByTestId('motion-Sandbag Carry', { includeHiddenElements: true })).toBeNull();
   });
 
   it('adds an exercise when its card is tapped', async () => {
@@ -115,7 +117,7 @@ describe('ExercisePicker', () => {
   it.each(['Show all exercises', 'Subcategory Other'])('leaves a custom lift uncategorized when created from %s', async (chip) => {
     const db = await createTestDb();
     const lifts = (await listCategoriesWithExercises(db)).find((c) => c.name === 'Lifts')!;
-    await addExercise(db, lifts.id, 'Farmer Carry');
+    await addExercise(db, lifts.id, 'Sandbag Carry');
     const { onPick } = await open(db);
     await fireEvent.press(await screen.findByLabelText(chip));
     await fireEvent.changeText(screen.getByLabelText('Search exercises'), 'Sled Push');
