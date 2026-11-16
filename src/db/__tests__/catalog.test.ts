@@ -49,11 +49,11 @@ describe('syncCatalog', () => {
   it('adds an exercise new to the catalog to an existing database, after the ones already there', async () => {
     const db = await createTestDb();
     const before = await builtIns(db);
-    await syncCatalog(db, withExtra('Lifts', 'Hip Thrust', 'Legs'));
+    await syncCatalog(db, withExtra('Lifts', 'Sled Push', 'Legs'));
     const after = await builtIns(db);
     expect(after.slice(0, before.length)).toEqual(before);
     expect(after.slice(before.length)).toEqual([
-      { cat: 'Lifts', kind: 'strength', name: 'Hip Thrust', subcategory: 'Legs', is_custom: 0 },
+      { cat: 'Lifts', kind: 'strength', name: 'Sled Push', subcategory: 'Legs', is_custom: 0 },
     ]);
   });
 

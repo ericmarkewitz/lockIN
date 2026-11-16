@@ -108,6 +108,159 @@ export const MOTIONS: Record<string, Motion> = {
     gear: dumbbells,
   },
 
+  'Close-Grip Bench Press': {
+    // Bench press with the elbows tucked in toward the ribs.
+    pose: pose({ hip: [22, 44], torso: 90, arm1: [215, 180], leg1: [-70, -10], leg2: [-65, -5] }),
+    scene: [line([8, 48], [42, 48], 3), line([12, 48], [12, FLOOR_Y]), line([38, 48], [38, FLOOR_Y])],
+    gear: [disc(at('hand1'), 4)],
+  },
+  // Seen from the front: a cable crossover, arms wide with a soft bend, cables from high pulleys.
+  'Pec Fly': {
+    pose: pose({ hip: [32, 34], torso: 180, arm1: [100, 125], arm2: [-100, -125], leg1: [10, 3], leg2: [-10, -3] }),
+    scene: [line([62, 2], at('hand1'), 1), line([2, 2], at('hand2'), 1)],
+    gear: [disc(at('hand1'), 1.8), disc(at('hand2'), 1.8)],
+  },
+  // Top of the push-up: body in one straight line, hands under the shoulders.
+  'Push-up': {
+    pose: pose({ hip: [25, 48.2], torso: 117, arm1: [0, 0], leg1: [-63, -63], leg2: [-62, -62] }),
+  },
+  'Seated Cable Row': {
+    pose: pose({ hip: [18, 52], torso: 180, arm1: [-20, 90], leg1: [80, 95], leg2: [78, 97] }),
+    scene: [
+      line([6, 56], [26, 56], 3), line([43.5, 48], [43.5, 58], 2), // seat, footplate
+      line([58, 20], [58, FLOOR_Y], 2), line(at('hand1'), [58, 44.5], 1), // stack, cable
+    ],
+    gear: [line(at('hand1', 0, -2), at('hand1', 0, 2), 2)],
+  },
+  // Chest down on an incline bench, rowing the dumbbells up beside it.
+  'Chest-Supported Row': {
+    pose: pose({ hip: [24, 42], torso: 135, arm1: [-35, 10], leg1: [-30, -60], leg2: [-26, -56] }),
+    scene: [line([26.5, 44.5], [38, 33], 3), line([32, 39], [32, FLOOR_Y]), line([24, FLOOR_Y], [40, FLOOR_Y], 2)],
+    gear: [disc(at('hand1'), 3)],
+  },
+  // On a flat bench, arms long overhead, the dumbbell lowered behind the head.
+  'Lat Pullover': {
+    pose: pose({ hip: [22, 44], torso: 90, arm1: [130, 130], leg1: [-70, -10], leg2: [-65, -5] }),
+    scene: [line([8, 48], [42, 48], 3), line([12, 48], [12, FLOOR_Y]), line([38, 48], [38, FLOOR_Y])],
+    gear: [disc(at('hand1'), 3.5)],
+  },
+  // Seen from the front: dumbbells at the chin, palms in, elbows tucked, before rotating up.
+  'Arnold Press': {
+    pose: pose({ hip: [32, 34], torso: 180, arm1: [30, 172], arm2: [-30, -172], leg1: [10, 3], leg2: [-10, -3] }),
+    gear: dumbbells,
+  },
+  // Hinged over, raising the dumbbells out wide toward the ceiling.
+  'Rear Delt Fly': {
+    pose: pose({ hip: [24, 36], torso: 105, arm1: [170, 160], leg1: [20, -5], leg2: [16, -8] }),
+    gear: [disc(at('hand1'), 3)],
+  },
+  // Rope pulled back to the face from a pulley at head height, elbows high.
+  'Face Pull': {
+    pose: pose({ ...STAND, arm1: [-100, 155] }),
+    scene: [line([58, 0], [58, FLOOR_Y], 2), line([58, 10], at('hand1'), 1)],
+    gear: [disc(at('hand1'), 1.8)],
+  },
+  // Overhead cable extension: facing away from a high pulley, leaning in, pressing the rope out overhead.
+  'Tricep Extension': {
+    pose: pose({ hip: [30, 35], torso: 165, arm1: [140, 140], leg1: [20, 0], leg2: [-15, -5] }),
+    scene: [line([4, 0], [4, FLOOR_Y], 2), line([4, 4], at('hand1'), 1)],
+    gear: [disc(at('hand1'), 1.8)],
+  },
+  // On a flat bench, upper arms still, lowering the bar toward the forehead.
+  'Skull Crusher': {
+    pose: pose({ hip: [22, 44], torso: 90, arm1: [170, 80], leg1: [-70, -10], leg2: [-65, -5] }),
+    scene: [line([8, 48], [42, 48], 3), line([12, 48], [12, FLOOR_Y]), line([38, 48], [38, FLOOR_Y])],
+    gear: [line(at('hand1', 0, -2.5), at('hand1', 0, 2.5), 2)],
+  },
+  // Seated, the backs of the upper arms on the sloped pad, curling up.
+  'Preacher Curl': {
+    pose: pose({ hip: [24, 46], torso: 170, arm1: [40, 160], leg1: [90, 0], leg2: [88, 2] }),
+    scene: [
+      line([16, 49], [30, 49], 3), line([23, 49], [23, FLOOR_Y]), // seat
+      line([26, 33], [34, 42], 4), line([31, 40], [31, FLOOR_Y]), // pad
+    ],
+    gear: [disc(at('hand1'), 2.5)],
+  },
+  // Standing, curling a handle up from a low pulley in front.
+  'Cable Curl': {
+    pose: pose({ ...STAND, arm1: [5, 150] }),
+    scene: [line([50, 50], [50, FLOOR_Y], 2), line([50, 51], at('hand1'), 1)],
+    gear: [line(at('hand1', -3), at('hand1', 3), 2)],
+  },
+  // Squatting with a dumbbell held upright at the chest.
+  'Goblet Squat': {
+    pose: pose({ hip: [27, 46], torso: 160, arm1: [30, 150], leg1: [80, -20], leg2: [76, -24] }),
+    gear: [disc(at('hand1'), 3.5)],
+  },
+  // Front foot on the floor, rear foot up on a bench behind, dropping the back knee.
+  'Bulgarian Split Squat': {
+    pose: pose({ hip: [30, 44], torso: 180, arm1: [2, 0], arm2: [-2, 0], leg1: [75, 0], leg2: [-20, -100] }),
+    scene: [line([3, 55], [17, 55], 3), line([8, 55], [8, FLOOR_Y])],
+    gear: dumbbells,
+  },
+  // Hinging on one leg, the other leg reaching back in line with the torso.
+  'Single-Leg Romanian Deadlift': {
+    pose: pose({ hip: [28, 35], torso: 95, arm1: [0, 0], leg1: [-95, -95], leg2: [0, 0] }),
+    gear: [disc(at('hand1'), 3)],
+  },
+  // Stepping up onto a box, dumbbells at the sides.
+  'Step-up': {
+    pose: pose({ hip: [28, 36], torso: 178, arm1: [2, 0], arm2: [-2, 0], leg1: [85, 5], leg2: [-15, -15] }),
+    scene: [line([35, 49], [50, 49], 2), line([35, 49], [35, FLOOR_Y], 2), line([50, 49], [50, FLOOR_Y], 2)],
+    gear: dumbbells,
+  },
+  // Shoulders on a bench, hips driven up under a barbell, shins vertical.
+  'Hip Thrust': {
+    pose: pose({ hip: [32, 47], torso: -90, arm1: [70, 140], leg1: [90, 0], leg2: [88, 2] }),
+    scene: [line([2, 51], [18, 51], 3), line([10, 51], [10, FLOOR_Y])],
+    gear: [disc(at('hip', 0, -4), 4.5)],
+  },
+  // On the back on the floor, knees bent, hips lifted.
+  'Glute Bridge': {
+    pose: pose({ hip: [30, 46.5], torso: -70, arm1: [70, 70], leg1: [92, -10], leg2: [90, -12] }),
+  },
+  // Face down on the machine, curling the roller up toward the glutes.
+  'Hamstring Curl': {
+    pose: pose({ hip: [26, 46], torso: 90, arm1: [90, 0], leg1: [-90, 160], leg2: [-90, 155] }),
+    scene: [line([10, 50], [46, 50], 3), line([16, 50], [16, FLOOR_Y]), line([40, 50], [40, FLOOR_Y])],
+    gear: [disc(at('foot1'), 2.5)],
+  },
+  // Seated on the machine, straightening the knees against the roller.
+  'Leg Extension': {
+    pose: pose({ hip: [24, 46], torso: 175, arm1: [10, 10], leg1: [90, 80], leg2: [88, 82] }),
+    scene: [line([14, 49], [38, 49], 3), line([19, 49], [17, 30], 3), line([28, 49], [28, FLOOR_Y])],
+    gear: [disc(at('foot1', 0, -2), 2.5)],
+  },
+  // Up on the toes, heels lifted, dumbbells at the sides.
+  'Standing Calf Raise': {
+    pose: pose({ hip: [32, 32], torso: 180, arm1: [2, 0], arm2: [-2, 0], leg1: [2, 0], leg2: [-2, 0] }),
+    gear: [...dumbbells, line(at('foot1'), at('foot1', 3, 3), 2), line(at('foot2'), at('foot2', 3, 3), 2)],
+  },
+  // Seated, a pad across the knees, pushing up onto the toes.
+  'Seated Calf Raise': {
+    pose: pose({ hip: [22, 44], torso: 180, arm1: [40, 70], leg1: [90, 0], leg2: [88, 0] }),
+    scene: [line([12, 47], [28, 47], 3), line([20, 47], [20, FLOOR_Y])],
+    gear: [line(at('knee1', -4, -2.5), at('knee1', 4, -2.5), 3), line(at('foot1'), at('foot1', 3, 3), 2)],
+  },
+  // Back against a wall, feet out in front, heels down and toes pulled up.
+  'Tibialis Raise': {
+    pose: pose({ hip: [14, 34], torso: 180, arm1: [0, 0], leg1: [20, 20], leg2: [18, 18] }),
+    scene: [line([8, 0], [8, FLOOR_Y], 2)],
+    gear: [line(at('foot1', 0, 2.5), at('foot1', 5, -1.5), 2), line(at('foot2', 0, 2.5), at('foot2', 5, -1.5), 2)],
+  },
+
+  // Core
+  // Forearm plank, body straight, a plate across the back.
+  'Weighted Plank': {
+    pose: pose({ hip: [30.4, 53.6], torso: 103, arm1: [0, 90], leg1: [-77, -77], leg2: [-77, -77] }),
+    gear: [line(at('hip', 2, -4.2), at('hip', 13, -6.7), 3)],
+  },
+  // Seen from the front: walking tall with a heavy weight hanging in each hand.
+  'Farmer Carry': {
+    pose: pose({ hip: [32, 34], torso: 180, arm1: [22, 8], arm2: [-22, -8], leg1: [12, 3], leg2: [-6, -2] }),
+    gear: [disc(at('hand1', 0, 4), 3.5), disc(at('hand2', 0, 4), 3.5)],
+  },
+
   // Cardio
   Running: {
     pose: pose({ hip: [32, 35], torso: 168, arm1: [40, 130], arm2: [-40, 60], leg1: [-30, -80], leg2: [40, -10] }),

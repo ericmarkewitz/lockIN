@@ -69,7 +69,7 @@ type SeedCategory = { name: string; kind: 'strength' | 'cardio' | 'mindbody'; ex
  * The catalog migration 1 seeded. Frozen: the current one is `CATALOG` (`src/data/catalog.ts`),
  * which `syncCatalog` brings every install up to after the migrations run.
  */
-const SEED_V1: SeedCategory[] = [
+export const SEED_V1: SeedCategory[] = [
   {
     name: 'Lifts',
     kind: 'strength',

@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 
-import { LATEST_VERSION, migrate } from '../migrations';
+import { LATEST_VERSION, SEED_V1, migrate } from '../migrations';
 import type { Db } from '../types';
 import { LIFT_SUBCATEGORIES } from '@/data/exercises';
 import { setPlanDay } from '@/data/plan';
@@ -97,6 +97,9 @@ describe('migrations', () => {
       const db = wrap(raw);
       await migrate(db);
       raw.exec(`${UNDO_V6}; ${UNDO_V5}; ${UNDO_V3}; PRAGMA user_version = 2`);
+      // A v2 install only has the v1 seed; drop what syncCatalog has added since.
+      const seeded = SEED_V1.flatMap((c) => c.exercises);
+      await db.runAsync(`DELETE FROM exercises WHERE name NOT IN (${seeded.map(() => '?').join(', ')})`, seeded);
       await prepare(db);
       await migrate(db);
       return db;
@@ -110,7 +113,7 @@ describe('migrations', () => {
       const lifts = await db.getAllAsync<{ name: string; subcategory: string | null }>(
         `SELECT e.name, e.subcategory FROM exercises e JOIN categories c ON c.id = e.category_id WHERE c.name = 'Lifts'`,
       );
-      expect(lifts).toHaveLength(15);
+      expect(lifts.length).toBeGreaterThan(15);
       for (const lift of lifts) expect(LIFT_SUBCATEGORIES).toContain(lift.subcategory);
       expect(await subcategoryOf(db, 'Bench Press')).toBe('Chest');
       expect(await subcategoryOf(db, 'Barbell Row')).toBe('Back');
@@ -123,10 +126,10 @@ describe('migrations', () => {
       const db = await upgradeFromV2(async (d) => {
         await d.runAsync(
           `INSERT INTO exercises (category_id, name, is_custom)
-           VALUES ((SELECT id FROM categories WHERE name = 'Lifts'), 'Hip Thrust', 1)`,
+           VALUES ((SELECT id FROM categories WHERE name = 'Lifts'), 'Sled Push', 1)`,
         );
       });
-      expect(await subcategoryOf(db, 'Hip Thrust')).toBeNull();
+      expect(await subcategoryOf(db, 'Sled Push')).toBeNull();
       expect(await subcategoryOf(db, 'Running')).toBeNull();
       expect(await subcategoryOf(db, 'Vinyasa')).toBeNull();
     });

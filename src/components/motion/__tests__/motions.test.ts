@@ -20,7 +20,7 @@ describe('motions', () => {
 
   it('has none for custom exercises, even when the name matches a built-in', () => {
     expect(motionFor(exercise('Squat', true))).toBeNull();
-    expect(motionFor(exercise('Farmer Carry', true))).toBeNull();
+    expect(motionFor(exercise('Sandbag Carry', true))).toBeNull();
   });
 
   it.each(Object.keys(MOTIONS))('keeps %s on the canvas', (name) => {
