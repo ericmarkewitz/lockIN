@@ -34,7 +34,7 @@ const plate = [disc(at('hand1'), 5)];
 const dumbbells = [disc(at('hand1'), 3), disc(at('hand2'), 3)];
 const handleBar = line(at('hand1', -6), at('hand1', 6), 2);
 
-/** Keyed by the seeded exercise names in `src/db/migrations.ts`. */
+/** Keyed by the built-in exercise names in `CATALOG` (`src/data/catalog.ts`). */
 export const MOTIONS: Record<string, Motion> = {
   // Lifts
   'Bench Press': {
@@ -70,7 +70,7 @@ export const MOTIONS: Record<string, Motion> = {
     pose: pose({ hip: [32, 35.5], torso: 180, arm1: [125, 155], arm2: [-125, -155], leg1: [10, 3], leg2: [-10, -3] }),
     gear: [line(at('hand2', -7), at('hand1', 7), 2), disc(at('hand2', -7), 3), disc(at('hand1', 7), 3)],
   },
-  'Barbell Row': {
+  'Bent-Over Row': {
     pose: pose({ hip: [26, 36], torso: 110, arm1: [-60, 20], leg1: [20, -5], leg2: [16, -8] }),
     gear: plate,
   },
@@ -84,7 +84,7 @@ export const MOTIONS: Record<string, Motion> = {
     scene: [line([16, 46], [34, 46], 3), line([25, 46], [25, FLOOR_Y]), line([32, 0], at('hand1'), 1)],
     gear: [handleBar],
   },
-  'Dumbbell Curl': {
+  'Bicep Curl': {
     pose: pose({ ...STAND, arm1: [5, 165], arm2: [0, 160] }),
     gear: dumbbells,
   },
@@ -248,8 +248,85 @@ export const MOTIONS: Record<string, Motion> = {
     scene: [line([8, 0], [8, FLOOR_Y], 2)],
     gear: [line(at('foot1', 0, 2.5), at('foot1', 5, -1.5), 2), line(at('foot2', 0, 2.5), at('foot2', 5, -1.5), 2)],
   },
+  // Leaning back into the sled's pad, feet forward on the platform, sinking into the squat.
+  'Hack Squat': {
+    pose: pose({ hip: [26, 43], torso: 200, arm1: [60, 170], leg1: [70, -5], leg2: [66, -8] }),
+    scene: [line([26, FLOOR_Y], [9.6, 14], 1), line([23.6, 41], [18.2, 26], 3)],
+  },
+  // Chest down on an incline bench, arms hanging straight, squeezing the shoulder blades together.
+  'Kelso Shrug': {
+    pose: pose({ hip: [24, 42], torso: 135, arm1: [0, 0], leg1: [-30, -60], leg2: [-26, -56] }),
+    scene: [line([26.5, 44.5], [38, 33], 3), line([32, 39], [32, FLOOR_Y]), line([24, FLOOR_Y], [40, FLOOR_Y], 2)],
+    gear: [disc(at('hand1'), 3)],
+  },
+  // Lowered between parallel bars, elbows bent back, knees bent so the feet stay up.
+  Dip: {
+    pose: pose({ hip: [30, 40], torso: 175, arm1: [-40, 0], leg1: [5, -80], leg2: [8, -75] }),
+    scene: [line([16, 40], [38, 40], 2), line([36, 40], [36, FLOOR_Y])],
+  },
+  // Seated against the back pad, pressing the handles straight out in front.
+  'Chest Press': {
+    pose: pose({ hip: [24, 46], torso: 180, arm1: [90, 90], leg1: [90, 0], leg2: [88, 2] }),
+    scene: [line([14, 49], [30, 49], 3), line([20.5, 48], [20.5, 27], 3), line([24, 49], [24, FLOOR_Y])],
+    gear: [line(at('hand1', 0, -2.5), at('hand1', 0, 2.5), 2)],
+  },
+  // Seated on an upright bench, pressing the weight overhead.
+  'Seated Shoulder Press': {
+    pose: pose({ hip: [26, 46], torso: 180, arm1: [150, 175], leg1: [90, 0], leg2: [88, 2] }),
+    scene: [line([16, 49], [32, 49], 3), line([22.5, 49], [21.5, 26], 3), line([26, 49], [26, FLOOR_Y])],
+    gear: [disc(at('hand1'), 3)],
+  },
+  // Lying back on an incline bench, upper arms hanging straight down, curling up.
+  'Incline Curl': {
+    pose: pose({ hip: [22, 46], torso: 125, arm1: [0, 120], leg1: [-80, 0], leg2: [-75, 5] }),
+    scene: [line([21, 50], [40, 36.7], 3), line([10, 50], [21, 50], 3), line([16, 50], [16, FLOOR_Y]), line([32, 42.3], [32, FLOOR_Y])],
+    gear: [disc(at('hand1'), 3)],
+  },
+  // Standing, curling with the palms facing in, the weight held upright.
+  'Hammer Curl': {
+    pose: pose({ ...STAND, arm1: [0, 120], arm2: [0, 0] }),
+    gear: [line(at('hand1', 0, -3), at('hand1', 0, 3), 3), disc(at('hand2'), 3)],
+  },
 
   // Core
+  // Sitting leaned back, feet off the floor, turning a plate to one side.
+  'Russian Twist': {
+    pose: pose({ hip: [28, 56], torso: 210, arm1: [100, 100], leg1: [120, 80], leg2: [118, 78] }),
+    gear: [disc(at('hand1'), 3.5)],
+  },
+  // On the back, knees bent, curling the shoulders up off the floor, reaching for the knees.
+  Crunch: {
+    pose: pose({ hip: [28, 56], torso: -110, arm1: [100, 100], leg1: [140, 20], leg2: [138, 18] }),
+  },
+  // Kneeling under a high pulley, rope held at the forehead, crunching down.
+  'Cable Crunch': {
+    pose: pose({ hip: [24, 46], torso: 100, arm1: [160, 120], leg1: [0, -90], leg2: [2, -88] }),
+    scene: [line([58, 0], [58, FLOOR_Y], 2), line([58, 6], at('hand1'), 1)],
+    gear: [disc(at('hand1'), 1.8)],
+  },
+  // Legs straight along the floor, sitting up with the arms reaching forward.
+  'Straight-Leg Sit-up': {
+    pose: pose({ hip: [22, 56], torso: 220, arm1: [100, 100], leg1: [90, 90], leg2: [90, 90] }),
+  },
+  // Kneeling, rolling the wheel out in front until the body is long.
+  'Ab Wheel Rollout': {
+    pose: pose({ hip: [24, 49.5], torso: 100, arm1: [60, 60], leg1: [-45, -90], leg2: [-43, -90] }),
+    gear: [disc(at('hand1'), 3.5, true)],
+  },
+  // On hands and knees, reaching one arm forward and the opposite leg back.
+  'Bird Dog': {
+    pose: pose({ hip: [28, 47], torso: 112, arm1: [105, 105], arm2: [0, 0], leg1: [-80, -80], leg2: [0, -90] }),
+  },
+  // On the back, one arm up and one leg bent at 90 degrees, the other arm and leg reaching out long.
+  'Dead Bug': {
+    pose: pose({ hip: [25, 55], torso: 90, arm1: [110, 110], arm2: [180, 180], leg1: [-78, -78], leg2: [180, -90] }),
+  },
+  // Seen from the front: holding a cable handle at the chest against the pull from the side.
+  'Pallof Press': {
+    pose: pose({ hip: [32, 34], torso: 180, arm1: [40, -60], arm2: [-40, 60], leg1: [10, 3], leg2: [-10, -3] }),
+    scene: [line([58, 0], [58, FLOOR_Y], 2), line([58, 29], at('hand1'), 1)],
+    gear: [disc(at('hand1'), 1.8)],
+  },
   // Forearm plank, body straight, a plate across the back.
   'Weighted Plank': {
     pose: pose({ hip: [30.4, 53.6], torso: 103, arm1: [0, 90], leg1: [-77, -77], leg2: [-77, -77] }),
@@ -335,6 +412,30 @@ export const MOTIONS: Record<string, Motion> = {
     scene: [line([50.5, 0], [50.5, CANVAS], 2)],
     gear: [disc(at('hand1', 1, 0), 1.8), disc(at('hand2', 1, 0), 1.8), disc(at('foot1', 1, 1), 1.8), disc(at('foot2', 1, 1), 1.8)],
   },
+  // Climbing the steps, near knee high, a hand on the rail.
+  'Stair Stepper': {
+    pose: pose({ hip: [28, 36], torso: 170, arm1: [30, 80], arm2: [20, 70], leg1: [85, 5], leg2: [-15, -15] }),
+    scene: [
+      line([36, 49], [48, 49], 2), line([48, 49], [48, 39], 2), line([48, 39], [60, 39], 2), line([36, 49], [36, FLOOR_Y], 2),
+      line([38, 32.5], [62, 21.5], 1.5),
+    ],
+  },
+  // Upright on the pedals mid-stride, hands on the moving handles.
+  Elliptical: {
+    pose: pose({ hip: [28, 30], torso: 175, arm1: [40, 110], arm2: [10, 90], leg1: [20, -5], leg2: [-15, -5] }),
+    scene: [line([52, FLOOR_Y], at('hand1'), 2), line([14, 56], [52, 56], 2)],
+    gear: [line(at('foot1', -3, 1.5), at('foot1', 4, 1.5), 2), line(at('foot2', -3, 1.5), at('foot2', 4, 1.5), 2)],
+  },
+  // Seen from the front: in the air mid jumping jack, arms and legs out wide.
+  HIIT: {
+    pose: pose({ hip: [32, 34], torso: 180, arm1: [150, 160], arm2: [-150, -160], leg1: [25, 20], leg2: [-25, -20] }),
+  },
+  // Addressing the ball: hinged at the hips, arms hanging, club down to the ball.
+  Golf: {
+    pose: pose({ hip: [26, 35], torso: 130, arm1: [5, 5], leg1: [10, 0], leg2: [6, -2] }),
+    scene: [disc([50, 57.5], 1.5)],
+    gear: [line(at('hand1'), at('hand1', 8, 14), 1.2)],
+  },
 
   // Yoga
   // Downward dog into plank, hands planted.
@@ -354,6 +455,17 @@ export const MOTIONS: Record<string, Motion> = {
     pose: pose({ hip: [28, 44], torso: 160, arm1: [140, 145], leg1: [75, -15], leg2: [72, -18] }),
   },
 
+  // Pilates
+  // The hundred: on the back, head and shoulders curled up, legs long at 45 degrees, arms reaching.
+  'Mat Pilates': {
+    pose: pose({ hip: [32, 56], torso: -110, arm1: [95, 95], leg1: [135, 135], leg2: [133, 133] }),
+  },
+  // Footwork on the reformer: lying on the carriage, feet on the footbar, pressing out.
+  'Reformer Pilates': {
+    pose: pose({ hip: [26, 48], torso: -90, arm1: [90, 90], leg1: [115, 65], leg2: [113, 67] }),
+    scene: [line([2, 54], [34, 54], 3), line([2, 57], [58, 57], 2), line([49, 45], [49, 57], 2)],
+  },
+
   // Mobility
   // Standing quad stretch: near foot held up behind the hip, far arm reaching forward for balance.
   Stretching: {
@@ -363,6 +475,12 @@ export const MOTIONS: Record<string, Motion> = {
   'Foam Rolling': {
     pose: pose({ hip: [24, 52], torso: -135, arm1: [-44, 12], leg1: [97, 92], leg2: [95, 90] }),
     scene: [disc([34, 54], 4)],
+  },
+
+  // Mindfulness
+  // Seen from the front: sitting cross-legged, back tall, hands resting on the knees.
+  Meditation: {
+    pose: pose({ hip: [32, 54], torso: 180, arm1: [25, 50], arm2: [-25, -50], leg1: [80, -95], leg2: [-80, 95] }),
   },
 };
 

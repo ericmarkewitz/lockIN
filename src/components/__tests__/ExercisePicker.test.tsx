@@ -171,7 +171,7 @@ describe('ExercisePicker', () => {
     const chip = (s: string) => screen.getByLabelText(`Type ${s}`);
     const openYogaMobility = async (db?: Db) => {
       const r = await open(db);
-      await fireEvent.press(await screen.findByLabelText('Category Yoga & Mobility'));
+      await fireEvent.press(await screen.findByLabelText('Category Mind & Body'));
       return r;
     };
 
@@ -200,11 +200,11 @@ describe('ExercisePicker', () => {
 
     it('moves a custom exercise between yoga and mobility when edited', async () => {
       const db = await createTestDb();
-      const cat = (await listCategoriesWithExercises(db)).find((c) => c.name === 'Yoga & Mobility')!;
+      const cat = (await listCategoriesWithExercises(db)).find((c) => c.name === 'Mind & Body')!;
       const ex = await addExercise(db, cat.id, 'Kundalini', 'Mobility');
       const onEdited = jest.fn();
       await renderWithDb(<ExercisePicker visible onPick={jest.fn()} onClose={jest.fn()} onEdited={onEdited} />, db);
-      await fireEvent.press(await screen.findByLabelText('Category Yoga & Mobility'));
+      await fireEvent.press(await screen.findByLabelText('Category Mind & Body'));
       await fireEvent(screen.getByLabelText('Add Kundalini'), 'longPress');
       expect(screen.getByText('Types · the first is its main one')).toBeTruthy();
       await fireEvent.press(chip('Mobility'));
