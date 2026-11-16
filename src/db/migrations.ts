@@ -226,6 +226,51 @@ const MIGRATIONS: ((db: Db) => Promise<void>)[] = [
     }
     await db.runAsync('DELETE FROM categories WHERE id = ?', [mobility]);
   },
+  // Lift names leave out the equipment, so one exercise covers barbell and dumbbell versions.
+  // Renaming keeps logged sets and the plan on the same row. A name the user already has (any
+  // case) is left to them, and the old built-in stays as it is.
+  async (db) => {
+    const lifts = "(SELECT id FROM categories WHERE name = 'Lifts')";
+    for (const [from, to] of [['Dumbbell Curl', 'Bicep Curl'], ['Barbell Row', 'Bent-Over Row']]) {
+      await db.runAsync(
+        `UPDATE exercises SET name = ?
+         WHERE is_custom = 0 AND name = ? AND category_id = ${lifts}
+           AND NOT EXISTS (SELECT 1 FROM exercises WHERE name = ? COLLATE NOCASE AND category_id = ${lifts})`,
+        [to, from, to],
+      );
+    }
+  },
+  // A build from before v9 (an older checkout run in Expo Go, say) re-adds the separate Yoga and
+  // Mobility categories through its catalog sync. Folds them back into Yoga & Mobility once: each
+  // exercise moves over under its old category's subcategory, and a copy of one already there is
+  // merged into it, taking its logged sets and plan items along.
+  async (db) => {
+    const target = await db.getFirstAsync<{ id: number }>("SELECT id FROM categories WHERE name = 'Yoga & Mobility'");
+    if (!target) return;
+    for (const subcategory of ['Yoga', 'Mobility']) {
+      const stray = await db.getFirstAsync<{ id: number }>('SELECT id FROM categories WHERE name = ?', [subcategory]);
+      if (!stray) continue;
+      const moving = await db.getAllAsync<{ id: number; name: string; is_hidden: number }>(
+        'SELECT id, name, is_hidden FROM exercises WHERE category_id = ?',
+        [stray.id],
+      );
+      for (const ex of moving) {
+        const twin = await db.getFirstAsync<{ id: number }>(
+          'SELECT id FROM exercises WHERE category_id = ? AND name = ? COLLATE NOCASE',
+          [target.id, ex.name],
+        );
+        if (!twin) {
+          await db.runAsync('UPDATE exercises SET category_id = ?, subcategory = ? WHERE id = ?', [target.id, subcategory, ex.id]);
+          continue;
+        }
+        await db.runAsync('UPDATE workout_exercises SET exercise_id = ? WHERE exercise_id = ?', [twin.id, ex.id]);
+        await db.runAsync('UPDATE plan_items SET exercise_id = ? WHERE exercise_id = ?', [twin.id, ex.id]);
+        if (!ex.is_hidden) await db.runAsync('UPDATE exercises SET is_hidden = 0 WHERE id = ?', [twin.id]);
+        await db.runAsync('DELETE FROM exercises WHERE id = ?', [ex.id]);
+      }
+      await db.runAsync('DELETE FROM categories WHERE id = ?', [stray.id]);
+    }
+  },
 ];
 
 export const LATEST_VERSION = MIGRATIONS.length;

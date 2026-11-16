@@ -52,6 +52,24 @@ describe('CATALOG', () => {
     }
   });
 
+  it('names exercises without the equipment, so a lift is the same whether done with a barbell or dumbbells', () => {
+    for (const c of CATALOG) for (const e of c.exercises) expect(e.name).not.toMatch(/barbell|dumbbell/i);
+  });
+
+  it.each([
+    ['Lifts', 'Hack Squat', 'Legs'], ['Lifts', 'Kelso Shrug', 'Back'], ['Lifts', 'Dip', 'Chest'],
+    ['Lifts', 'Chest Press', 'Chest'], ['Lifts', 'Seated Shoulder Press', 'Shoulders'],
+    ['Lifts', 'Incline Curl', 'Arms'], ['Lifts', 'Hammer Curl', 'Arms'],
+    ['Lifts', 'Russian Twist', 'Core'], ['Lifts', 'Crunch', 'Core'], ['Lifts', 'Cable Crunch', 'Core'],
+    ['Lifts', 'Straight-Leg Sit-up', 'Core'], ['Lifts', 'Ab Wheel Rollout', 'Core'], ['Lifts', 'Bird Dog', 'Core'],
+    ['Lifts', 'Dead Bug', 'Core'], ['Lifts', 'Pallof Press', 'Core'],
+    ['Cardio', 'Stair Stepper', undefined], ['Cardio', 'Elliptical', undefined], ['Cardio', 'HIIT', undefined],
+    ['Cardio', 'Golf', undefined], ['Yoga & Mobility', 'Pilates', 'Yoga'],
+  ])('includes %s: %s', (category, name, subcategory) => {
+    const found = CATALOG.find((c) => c.name === category)!.exercises.find((e) => e.name === name);
+    expect(found?.subcategory).toBe(subcategory);
+  });
+
   it('files a deadlift under legs as well as back', () => {
     const deadlift = CATALOG[0].exercises.find((e) => e.name === 'Deadlift')!;
     expect(deadlift.subcategory).toBe('Back');

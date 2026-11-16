@@ -35,7 +35,7 @@ describe('exercises', () => {
     const cats = await listCategoriesWithExercises(db);
     const groups = groupBySubcategory(cats.find((c) => c.name === 'Yoga & Mobility')!);
     expect(groups.map((g) => g.title)).toEqual(['Yoga', 'Mobility']);
-    expect(groups[0].exercises.map((e) => e.name)).toEqual(['Vinyasa', 'Hatha', 'Yin', 'Power Yoga']);
+    expect(groups[0].exercises.map((e) => e.name)).toEqual(['Vinyasa', 'Hatha', 'Yin', 'Power Yoga', 'Pilates']);
     expect(groups[1].exercises.map((e) => e.name)).toEqual(['Stretching', 'Foam Rolling']);
   });
 
@@ -91,7 +91,7 @@ describe('exercises', () => {
 
       expect(groups.map((g) => g.title)).toEqual(['Chest', 'Back', 'Shoulders', 'Arms', 'Legs', 'Other']);
       expect(groups[0].exercises.map((e) => e.name)).toEqual(
-        ['Bench Press', 'Incline Bench Press', 'Close-Grip Bench Press', 'Pec Fly', 'Push-up', 'Lat Pullover'],
+        ['Bench Press', 'Incline Bench Press', 'Close-Grip Bench Press', 'Pec Fly', 'Push-up', 'Dip', 'Chest Press', 'Lat Pullover'],
       );
       expect(groups[5].exercises.map((e) => e.name)).toEqual(['Sandbag Carry']);
     });
@@ -137,7 +137,8 @@ describe('exercises', () => {
       const lifts = cats.find((c) => c.name === 'Lifts')!;
       const r = searchExercises(cats, lifts.id, '  PRESS ');
       expect(names(r.here)).toEqual([
-        'Bench Press', 'Incline Bench Press', 'Overhead Press', 'Leg Press', 'Close-Grip Bench Press', 'Arnold Press',
+        'Bench Press', 'Incline Bench Press', 'Overhead Press', 'Leg Press', 'Close-Grip Bench Press', 'Chest Press',
+        'Arnold Press', 'Seated Shoulder Press', 'Pallof Press',
       ]);
       expect(r.elsewhere).toEqual([]);
       expect(names(searchExercises(cats, lifts.id, 'run').elsewhere)).toEqual(['Running']);

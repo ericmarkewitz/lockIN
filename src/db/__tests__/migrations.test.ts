@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 
 import { LATEST_VERSION, SEED_V1, migrate } from '../migrations';
+import { syncCatalog } from '../catalog';
 import type { Db } from '../types';
 import { LIFT_SUBCATEGORIES } from '@/data/exercises';
 import { setPlanDay } from '@/data/plan';
@@ -14,6 +15,8 @@ const UNDO_V5 = 'ALTER TABLE sets DROP COLUMN weight_unit; ALTER TABLE sets DROP
 const UNDO_V6 = 'DROP TABLE plan_history';
 const UNDO_V7 = 'DROP TABLE exercise_subcategories';
 const UNDO_V8 = 'ALTER TABLE exercises DROP COLUMN is_hidden';
+const UNDO_V10 = `UPDATE exercises SET name = 'Dumbbell Curl' WHERE name = 'Bicep Curl' AND is_custom = 0;
+  UPDATE exercises SET name = 'Barbell Row' WHERE name = 'Bent-Over Row' AND is_custom = 0`;
 
 describe('migrations', () => {
   it('creates the schema and records the version', async () => {
@@ -70,7 +73,7 @@ describe('migrations', () => {
     const db = wrap(raw);
     await migrate(db);
     // Simulate a half-applied earlier run, which can only have the v1 schema.
-    raw.exec(`${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; ${UNDO_V5}; ${UNDO_V3}; ${UNDO_V2}; PRAGMA user_version = 0`);
+    raw.exec(`${UNDO_V10}; ${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; ${UNDO_V5}; ${UNDO_V3}; ${UNDO_V2}; PRAGMA user_version = 0`);
     await expect(migrate(db)).resolves.toBeUndefined();
     const cats = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM categories');
     expect(cats?.n).toBe(3);
@@ -80,7 +83,7 @@ describe('migrations', () => {
     const raw = new DatabaseSync(':memory:');
     const db = wrap(raw);
     await migrate(db);
-    raw.exec(`${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; ${UNDO_V5}; ${UNDO_V3}; ${UNDO_V2}; PRAGMA user_version = 1`);
+    raw.exec(`${UNDO_V10}; ${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; ${UNDO_V5}; ${UNDO_V3}; ${UNDO_V2}; PRAGMA user_version = 1`);
     await db.runAsync("INSERT INTO workouts (date, notes) VALUES ('2026-11-02', 'kept')");
 
     await migrate(db);
@@ -98,7 +101,7 @@ describe('migrations', () => {
       const raw = new DatabaseSync(':memory:');
       const db = wrap(raw);
       await migrate(db);
-      raw.exec(`${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; ${UNDO_V5}; ${UNDO_V3}; PRAGMA user_version = 2`);
+      raw.exec(`${UNDO_V10}; ${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; ${UNDO_V5}; ${UNDO_V3}; PRAGMA user_version = 2`);
       // A v2 install only has the v1 seed; drop what syncCatalog has added since.
       const seeded = SEED_V1.flatMap((c) => c.exercises);
       await db.runAsync(`DELETE FROM exercises WHERE name NOT IN (${seeded.map(() => '?').join(', ')})`, seeded);
@@ -118,9 +121,9 @@ describe('migrations', () => {
       expect(lifts.length).toBeGreaterThan(15);
       for (const lift of lifts) expect(LIFT_SUBCATEGORIES).toContain(lift.subcategory);
       expect(await subcategoryOf(db, 'Bench Press')).toBe('Chest');
-      expect(await subcategoryOf(db, 'Barbell Row')).toBe('Back');
+      expect(await subcategoryOf(db, 'Bent-Over Row')).toBe('Back');
       expect(await subcategoryOf(db, 'Overhead Press')).toBe('Shoulders');
-      expect(await subcategoryOf(db, 'Dumbbell Curl')).toBe('Arms');
+      expect(await subcategoryOf(db, 'Bicep Curl')).toBe('Arms');
       expect(await subcategoryOf(db, 'Squat')).toBe('Legs');
     });
 
@@ -222,7 +225,7 @@ describe('migrations', () => {
       const raw = new DatabaseSync(':memory:');
       const db = wrap(raw);
       await migrate(db);
-      raw.exec(`${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; ${UNDO_V5}; PRAGMA user_version = 4`);
+      raw.exec(`${UNDO_V10}; ${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; ${UNDO_V5}; PRAGMA user_version = 4`);
       await prepare(db);
       await migrate(db);
       return db;
@@ -262,7 +265,7 @@ describe('migrations', () => {
       const raw = new DatabaseSync(':memory:');
       const db = wrap(raw);
       await migrate(db);
-      raw.exec(`${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; PRAGMA user_version = 5`);
+      raw.exec(`${UNDO_V10}; ${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; PRAGMA user_version = 5`);
       const bench = (await db.getFirstAsync<{ id: number }>("SELECT id FROM exercises WHERE name = 'Bench Press'"))!.id;
       await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: bench, targetSets: 3 }] });
       await db.runAsync("UPDATE settings SET value = '1' WHERE key = 'plan_complete'");
@@ -318,7 +321,7 @@ describe('migrations', () => {
       const raw = new DatabaseSync(':memory:');
       const db = wrap(raw);
       await migrate(db);
-      raw.exec(`${UNDO_V8}; ${UNDO_V7}; PRAGMA user_version = 6`);
+      raw.exec(`${UNDO_V10}; ${UNDO_V8}; ${UNDO_V7}; PRAGMA user_version = 6`);
       await migrate(db);
       expect(
         await db.getFirstAsync("SELECT subcategory FROM exercise_subcategories WHERE exercise_id = ?", [await deadliftId(db)]),
@@ -436,6 +439,146 @@ describe('migrations', () => {
       expect(await db.getAllAsync(
         "SELECT s.subcategory FROM exercise_subcategories s JOIN exercises e ON e.id = s.exercise_id WHERE e.name = 'stretching'",
       )).toEqual([{ subcategory: 'Mobility' }]);
+    });
+  });
+
+  describe('v10 drops the equipment from lift names', () => {
+    /** Upgrades from v9, where the built-ins were Dumbbell Curl and Barbell Row. */
+    async function upgradeFromV9(prepare: (db: Db) => Promise<void>) {
+      const raw = new DatabaseSync(':memory:');
+      const db = wrap(raw);
+      await migrate(db);
+      raw.exec(`${UNDO_V10}; PRAGMA user_version = 9`);
+      await prepare(db);
+      await migrate(db);
+      return db;
+    }
+    const lifts = (db: Db) =>
+      db.getAllAsync<{ id: number; name: string; is_custom: number }>(
+        `SELECT e.id, e.name, e.is_custom FROM exercises e JOIN categories c ON c.id = e.category_id
+         WHERE c.name = 'Lifts' ORDER BY e.id`,
+      );
+
+    it('renames Dumbbell Curl and Barbell Row in place, keeping their ids', async () => {
+      let before: { id: number; name: string }[] = [];
+      const db = await upgradeFromV9(async (d) => {
+        before = (await lifts(d)).filter((r) => ['Dumbbell Curl', 'Barbell Row'].includes(r.name));
+      });
+      const after = await lifts(db);
+      const names = after.map((r) => r.name);
+      expect(names).not.toContain('Dumbbell Curl');
+      expect(names).not.toContain('Barbell Row');
+      expect(after.find((r) => r.id === before.find((b) => b.name === 'Dumbbell Curl')!.id)?.name).toBe('Bicep Curl');
+      expect(after.find((r) => r.id === before.find((b) => b.name === 'Barbell Row')!.id)?.name).toBe('Bent-Over Row');
+      expect(names.filter((n) => n === 'Bicep Curl')).toHaveLength(1);
+    });
+
+    it('keeps logged sets on the renamed exercise', async () => {
+      const db = await upgradeFromV9(async (d) => {
+        const { lastInsertRowId: workoutId } = await d.runAsync("INSERT INTO workouts (date) VALUES ('2026-11-02')");
+        const { lastInsertRowId: weId } = await d.runAsync(
+          "INSERT INTO workout_exercises (workout_id, exercise_id, position) VALUES (?, (SELECT id FROM exercises WHERE name = 'Barbell Row'), 0)",
+          [workoutId],
+        );
+        await d.runAsync('INSERT INTO sets (workout_exercise_id, set_number, reps, weight) VALUES (?, 1, 8, 135)', [weId]);
+      });
+      expect(await db.getFirstAsync(
+        `SELECT e.name, s.reps, s.weight FROM sets s JOIN workout_exercises we ON we.id = s.workout_exercise_id
+         JOIN exercises e ON e.id = we.exercise_id`,
+      )).toEqual({ name: 'Bent-Over Row', reps: 8, weight: 135 });
+    });
+
+    it("leaves a lift alone when the user already has a custom one with the new name", async () => {
+      const db = await upgradeFromV9(async (d) => {
+        await d.runAsync(
+          "INSERT INTO exercises (category_id, name, is_custom) VALUES ((SELECT id FROM categories WHERE name = 'Lifts'), 'bicep curl', 1)",
+        );
+      });
+      const rows = await lifts(db);
+      expect(rows.filter((r) => r.name.toLowerCase() === 'bicep curl')).toEqual([expect.objectContaining({ name: 'bicep curl', is_custom: 1 })]);
+      expect(rows.map((r) => r.name)).toContain('Dumbbell Curl');
+      expect(rows.map((r) => r.name)).toContain('Bent-Over Row');
+    });
+  });
+
+  describe('v11 folds back a Yoga or Mobility category an older build re-added', () => {
+    /** At v10, then opened by a build from before v9, whose catalog sync re-adds both categories. */
+    async function upgradeAfterOldBuild(prepare: (db: Db) => Promise<void>) {
+      const raw = new DatabaseSync(':memory:');
+      const db = wrap(raw);
+      await migrate(db);
+      raw.exec('PRAGMA user_version = 10');
+      await syncCatalog(db, [
+        { name: 'Yoga', kind: 'mindbody', exercises: ['Vinyasa', 'Hatha', 'Yin', 'Power Yoga'].map((name) => ({ name })) },
+        { name: 'Mobility', kind: 'mindbody', exercises: ['Stretching', 'Foam Rolling'].map((name) => ({ name })) },
+      ]);
+      await prepare(db);
+      await migrate(db);
+      return db;
+    }
+    const exId = async (db: Db, category: string, name: string) =>
+      (await db.getFirstAsync<{ id: number }>(
+        'SELECT e.id FROM exercises e JOIN categories c ON c.id = e.category_id WHERE c.name = ? AND e.name = ?',
+        [category, name],
+      ))!.id;
+    async function log(db: Db, exerciseId: number, date: string) {
+      const { lastInsertRowId: workoutId } = await db.runAsync('INSERT INTO workouts (date) VALUES (?)', [date]);
+      const { lastInsertRowId: weId } = await db.runAsync(
+        'INSERT INTO workout_exercises (workout_id, exercise_id, position) VALUES (?, ?, 0)',
+        [workoutId, exerciseId],
+      );
+      await db.runAsync('INSERT INTO sets (workout_exercise_id, set_number, duration_min) VALUES (?, 1, 20)', [weId]);
+    }
+    const mindBody = (db: Db) =>
+      db.getAllAsync<{ cat: string; name: string; subcategory: string | null; is_custom: number }>(
+        `SELECT c.name AS cat, e.name, e.subcategory, e.is_custom FROM exercises e
+         JOIN categories c ON c.id = e.category_id WHERE c.kind = 'mindbody' ORDER BY e.id`,
+      );
+
+    it('leaves one Yoga & Mobility category with one of each built-in', async () => {
+      const db = await upgradeAfterOldBuild(async () => {});
+      const cats = await db.getAllAsync<{ name: string }>("SELECT name FROM categories WHERE kind = 'mindbody'");
+      expect(cats).toEqual([{ name: 'Yoga & Mobility' }]);
+      const names = (await mindBody(db)).map((r) => r.name);
+      expect(new Set(names).size).toBe(names.length);
+      expect(names).toEqual(expect.arrayContaining(['Vinyasa', 'Stretching', 'Pilates']));
+    });
+
+    it('moves sets and plan items logged against a re-added copy onto the original', async () => {
+      let original = 0;
+      const db = await upgradeAfterOldBuild(async (d) => {
+        original = await exId(d, 'Yoga & Mobility', 'Stretching');
+        await log(d, original, '2026-11-01');
+        await log(d, await exId(d, 'Mobility', 'Stretching'), '2026-11-02');
+        await d.runAsync('INSERT INTO plan_items (weekday, exercise_id, position) VALUES (1, ?, 0)', [await exId(d, 'Yoga', 'Yin')]);
+      });
+      const logged = await db.getAllAsync<{ date: string; exercise_id: number }>(
+        'SELECT w.date, we.exercise_id FROM workout_exercises we JOIN workouts w ON w.id = we.workout_id ORDER BY w.date',
+      );
+      expect(logged).toEqual([{ date: '2026-11-01', exercise_id: original }, { date: '2026-11-02', exercise_id: original }]);
+      expect(await db.getFirstAsync(
+        'SELECT c.name AS cat, e.name FROM plan_items p JOIN exercises e ON e.id = p.exercise_id JOIN categories c ON c.id = e.category_id',
+      )).toEqual({ cat: 'Yoga & Mobility', name: 'Yin' });
+    });
+
+    it('keeps a custom exercise added in the old build, filed under the subcategory it came from', async () => {
+      const db = await upgradeAfterOldBuild(async (d) => {
+        await d.runAsync(
+          "INSERT INTO exercises (category_id, name, is_custom) VALUES ((SELECT id FROM categories WHERE name = 'Mobility'), 'Band Work', 1)",
+        );
+      });
+      expect((await mindBody(db)).find((r) => r.name === 'Band Work')).toEqual(
+        { cat: 'Yoga & Mobility', name: 'Band Work', subcategory: 'Mobility', is_custom: 1 },
+      );
+    });
+
+    it('changes nothing on an install that never ran an older build', async () => {
+      const db = await createTestDb();
+      const before = await mindBody(db);
+      const raw = db as unknown as Db;
+      await raw.execAsync('PRAGMA user_version = 10');
+      await migrate(raw);
+      expect(await mindBody(db)).toEqual(before);
     });
   });
 });
