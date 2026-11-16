@@ -8,7 +8,7 @@ import { DAY_NAMES } from '@/lib/calendar';
 import { todayKey } from '@/lib/dates';
 import { useTheme } from '@/theme';
 import { ConfirmDialog } from './ConfirmDialog';
-import { MuscleGroupChips, toggled } from './MuscleGroupChips';
+import { MuscleGroupChips, subcategoryNoun, toggled } from './MuscleGroupChips';
 import { Button } from './ui';
 
 const MONDAY_FIRST = [1, 2, 3, 4, 5, 6, 0];
@@ -31,10 +31,10 @@ export function removalMessage({ plannedWeekdays, loggedWorkouts }: ExerciseUsag
   return parts.join(' ') || "It isn't in your plan and hasn't been logged.";
 }
 
-/** Renames a custom exercise, changes its muscle groups, or removes it. */
+/** Renames a custom exercise, changes its subcategories, or removes it. */
 export function EditExerciseSheet({ exercise, subcategories, onSaved, onRemoved, onClose }: {
   exercise: Exercise;
-  /** The muscle groups its category offers; empty hides the chips. */
+  /** The subcategories its category offers; empty hides the chips. */
   subcategories: readonly string[];
   onSaved: (e: Exercise) => void;
   onRemoved: (id: number) => void;
@@ -79,8 +79,8 @@ export function EditExerciseSheet({ exercise, subcategories, onSaved, onRemoved,
           />
           {subcategories.length > 0 && (
             <View>
-              <Text style={[styles.label, { color: t.muted }]}>Muscle groups · the first is its main one</Text>
-              <MuscleGroupChips options={subcategories} picked={groups} onToggle={(s) => setGroups(toggled(groups, s))} t={t} />
+              <Text style={[styles.label, { color: t.muted }]}>{subcategoryNoun(exercise.categoryKind)}s · the first is its main one</Text>
+              <MuscleGroupChips options={subcategories} picked={groups} onToggle={(s) => setGroups(toggled(groups, s))} kind={exercise.categoryKind} t={t} />
             </View>
           )}
           {error && <Text style={{ color: t.danger }}>{error}</Text>}

@@ -292,7 +292,7 @@ export function ExercisePicker({
                   </Pressable>
                 )}
                 {!results.exact && active.subcategories.length > 0 && (
-                  <MuscleGroupChips options={active.subcategories} picked={newGroups} onToggle={toggleGroup} t={t} />
+                  <MuscleGroupChips options={active.subcategories} picked={newGroups} onToggle={toggleGroup} kind={active.kind} t={t} />
                 )}
                 {error && <Text style={[styles.error, { color: t.danger }]}>{error}</Text>}
                 {results.here.length > 0 ? (

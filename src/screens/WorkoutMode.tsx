@@ -423,7 +423,7 @@ function Hero({
         <View style={{ flex: 1, gap: 2 }}>
           <View style={styles.heroMeta}>
             <Text style={[styles.eyebrow, { color: t.primary }]}>{label}</Text>
-            <Icon name={categoryIcon({ name: exercise.categoryName, kind: exercise.categoryKind })} size={11} color={t.muted} fallback="•" />
+            <Icon name={categoryIcon({ kind: exercise.categoryKind, subcategory: exercise.subcategory })} size={11} color={t.muted} fallback="•" />
             <Text style={[styles.eyebrow, { color: t.muted, flexShrink: 1 }]} numberOfLines={1}>{kind}</Text>
           </View>
           <Text style={[styles.title, { color: t.text }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>

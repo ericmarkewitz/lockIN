@@ -26,7 +26,9 @@ const KIND_ICON: Record<CategoryKind, SymbolName> = {
   cardio: sym('figure.run', 'directions_run'),
   mindbody: sym('figure.yoga', 'self_improvement'),
 };
-/** Categories that share a kind but deserve their own icon. */
-const NAME_ICON: Record<string, SymbolName> = { Mobility: sym('figure.flexibility', 'accessibility_new') };
+/** Subcategories that deserve their own icon rather than their kind's. */
+const SUBCATEGORY_ICON: Record<string, SymbolName> = { Mobility: sym('figure.flexibility', 'accessibility_new') };
 
-export const categoryIcon = (c: { name: string; kind: CategoryKind }): SymbolName => NAME_ICON[c.name] ?? KIND_ICON[c.kind];
+/** The icon for a category, or for an exercise when its `subcategory` is given. */
+export const categoryIcon = (c: { kind: CategoryKind; subcategory?: string | null }): SymbolName =>
+  SUBCATEGORY_ICON[c.subcategory ?? ''] ?? KIND_ICON[c.kind];

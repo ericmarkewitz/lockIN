@@ -1,5 +1,5 @@
 import { CATALOG, type CatalogCategory, type LiftSubcategory } from '@/data/catalog';
-import { LIFT_SUBCATEGORIES } from '@/data/exercises';
+import { LIFT_SUBCATEGORIES, SUBCATEGORIES } from '@/data/exercises';
 import { createTestDb } from '@/test/testDb';
 import { syncCatalog } from '../catalog';
 import type { Db } from '../types';
@@ -22,13 +22,21 @@ describe('CATALOG', () => {
     }
   });
 
-  it('files every lift under a known muscle group, and only lifts have one', () => {
+  it('files every exercise under one of its category\'s subcategories, if the category has them', () => {
     for (const c of CATALOG) {
       for (const e of c.exercises) {
-        if (c.kind === 'strength') expect(LIFT_SUBCATEGORIES).toContain(e.subcategory);
+        if (SUBCATEGORIES[c.kind].length) expect(SUBCATEGORIES[c.kind]).toContain(e.subcategory);
         else expect(e.subcategory).toBeUndefined();
       }
     }
+  });
+
+  it('keeps yoga and mobility in one category, as subcategories', () => {
+    const mindBody = CATALOG.filter((c) => c.kind === 'mindbody');
+    expect(mindBody.map((c) => c.name)).toEqual(['Yoga & Mobility']);
+    const sub = (name: string) => mindBody[0].exercises.find((e) => e.name === name)?.subcategory;
+    expect(sub('Vinyasa')).toBe('Yoga');
+    expect(sub('Stretching')).toBe('Mobility');
   });
 
   it('only gives lifts extra muscle groups, each known, distinct and not the main one', () => {
