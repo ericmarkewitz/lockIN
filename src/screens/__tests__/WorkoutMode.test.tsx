@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react-native';
 import { Keyboard, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -297,5 +297,81 @@ describe('WorkoutMode', () => {
   it('has nothing to do on an empty day', async () => {
     await renderWithDb(<WorkoutMode date={MON} />, await createTestDb());
     expect(await screen.findByText('Nothing planned')).toBeTruthy();
+  });
+  describe('switching exercise', () => {
+    const order = async (db: Awaited<ReturnType<typeof setup>>) => (await getWorkout(db, MON))!.exercises.map((e) => e.exerciseName);
+
+    it('does another exercise now, moving it ahead of the current one', async () => {
+      const db = await setup();
+      await setRestSeconds(db, 0);
+      await open(db);
+      await fireEvent.press(screen.getByLabelText('Switch exercise'));
+      await fireEvent.press(screen.getByLabelText('Switch to Squat'));
+      expect(await screen.findByText('Set 1 of 1')).toBeTruthy();
+      expect(screen.getByText('Exercise 1 of 2')).toBeTruthy();
+      expect(screen.getByLabelText('Next: Bench Press')).toBeTruthy();
+      expect(await order(db)).toEqual(['Squat', 'Bench Press']);
+    });
+
+    it('comes back to the sets left on the exercise it switched from', async () => {
+      const db = await setup();
+      await setRestSeconds(db, 0);
+      await open(db);
+      await fireEvent.press(screen.getByLabelText('Done with set 1'));
+      await screen.findByText('Set 2 of 2');
+      await fireEvent.press(screen.getByLabelText('Switch exercise'));
+      await fireEvent.press(screen.getByLabelText('Switch to Squat'));
+      await screen.findByText('Set 1 of 1');
+      await fireEvent.press(screen.getByLabelText('Done with set 1'));
+      expect(await screen.findByText('Set 2 of 2')).toBeTruthy();
+      expect(screen.getByText('Bench Press')).toBeTruthy();
+      // Squat now comes first: its set, then Bench Press's two.
+      expect((await sets(db)).map((x) => x.completed)).toEqual([true, true, false]);
+    });
+
+    it('puts the switch button on the picture, and on the timer while resting, not by the name', async () => {
+      const db = await setup();
+      await setRestSeconds(db, 90);
+      await open(db);
+      expect(within(screen.getByTestId('exercise-media')).getByText('Switch')).toBeTruthy();
+      expect(within(screen.getByTestId('exercise-header')).queryByText('Switch')).toBeNull();
+      await fireEvent.press(screen.getByLabelText('Done with set 1'));
+      await screen.findByLabelText('Skip rest');
+      expect(within(screen.getByTestId('rest-area')).getByText('Switch')).toBeTruthy();
+      expect(within(screen.getByTestId('exercise-header')).queryByText('Switch')).toBeNull();
+    });
+
+    it('closes the list without changing anything', async () => {
+      const db = await setup();
+      await open(db);
+      await fireEvent.press(screen.getByLabelText('Switch exercise'));
+      await fireEvent.press(screen.getByLabelText('Keep current exercise'));
+      expect(screen.queryByLabelText('Switch to Squat')).toBeNull();
+      expect(screen.getByText('Set 1 of 2')).toBeTruthy();
+      expect(await order(db)).toEqual(['Bench Press', 'Squat']);
+    });
+
+    it('can switch while resting, and keeps the rest going', async () => {
+      const db = await setup();
+      await setRestSeconds(db, 90);
+      await open(db);
+      await fireEvent.press(screen.getByLabelText('Done with set 1'));
+      expect(await screen.findByLabelText('Skip rest')).toBeTruthy();
+      await fireEvent.press(screen.getByLabelText('Switch exercise'));
+      await fireEvent.press(screen.getByLabelText('Switch to Squat'));
+      await waitFor(async () => expect(await order(db)).toEqual(['Squat', 'Bench Press']));
+      expect(screen.getByLabelText('Skip rest')).toBeTruthy();
+      await fireEvent.press(screen.getByLabelText('Skip rest'));
+      expect(await screen.findByText('Set 1 of 1')).toBeTruthy();
+      expect(screen.getByText('Squat')).toBeTruthy();
+    });
+
+    it('offers no switch when nothing else is left to do', async () => {
+      const db = await setup();
+      const w = await ensureWorkout(db, MON);
+      await updateSet(db, w.exercises[1].sets[0].id, { reps: 5, completed: true });
+      await open(db);
+      expect(screen.queryByLabelText('Switch exercise')).toBeNull();
+    });
   });
 });

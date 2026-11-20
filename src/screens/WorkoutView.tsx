@@ -1,8 +1,9 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { DragHandle } from '@/components/DragHandle';
 import { ExercisePicker } from '@/components/ExercisePicker';
 import { ExerciseMotionFor } from '@/components/motion/ExerciseMotion';
 import { Icon, sym } from '@/components/Icon';
@@ -10,12 +11,13 @@ import { SetHeader, SetRow } from '@/components/SetRow';
 import { AddButton, Button, Eyebrow, Toggle, useRaised } from '@/components/ui';
 import type { Exercise, WorkoutExercise } from '@/data/types';
 import {
-  addExerciseToWorkout, addSet, loadDay, removeExerciseFromWorkout, removeSet,
+  addExerciseToWorkout, addSet, loadDay, removeExerciseFromWorkout, removeSet, reorderWorkoutExercises,
   setRestDay, setWorkoutNotes, shownExercises, updateSet, type SetPatch,
 } from '@/data/workouts';
 import { useDb } from '@/db/DbContext';
 import { useLoad } from '@/hooks/useLoad';
 import { formatDuration } from '@/lib/duration';
+import { dropIndexByHeights, moveItem } from '@/lib/reorder';
 import { formatDistance } from '@/lib/units';
 import { formatSets } from '@/lib/workoutMode';
 import { mix, tint, useTheme } from '@/theme';
@@ -23,7 +25,16 @@ import { mix, tint, useTheme } from '@/theme';
 /** An exercise is finished once it has sets and every one is marked done. */
 const isFinished = (e: WorkoutExercise) => e.sets.length > 0 && e.sets.every((x) => x.completed);
 
-export function WorkoutView({ date }: { date: string }) {
+/** Space between the cards; part of how far a dragged card has to travel. */
+const GAP = 14;
+
+type Props = {
+  date: string;
+  /** Told when an exercise drag starts and ends, so the screen can hold its scrolling still. */
+  onDragChange?: (dragging: boolean) => void;
+};
+
+export function WorkoutView({ date, onDragChange }: Props) {
   const db = useDb();
   const t = useTheme();
   const router = useRouter();
@@ -38,12 +49,68 @@ export function WorkoutView({ date }: { date: string }) {
   }, [reload]));
   const [picking, setPicking] = useState(false);
   const [removal, setRemoval] = useState<{ title: string; message: string; remove: () => Promise<void> } | null>(null);
+  /** A new order shown straight away, while it is saved. */
+  const [pendingOrder, setPendingOrder] = useState<number[] | null>(null);
+  const [drag, setDrag] = useState<{ from: number; over: number; height: number } | null>(null);
+  const dragRef = useRef(drag);
+  const [dragY] = useState(() => new Animated.Value(0));
+  const cardHeights = useRef(new Map<number, number>());
 
   const act = useCallback(async (fn: () => Promise<unknown>) => { await fn(); await reload(); }, [reload]);
 
   if (!data) return null;
   const { workout, units, last } = data;
-  const exercises = shownExercises(workout);
+  const shown = shownExercises(workout);
+  const exercises = pendingOrder
+    ? [...shown].sort((a, b) => pendingOrder.indexOf(a.id) - pendingOrder.indexOf(b.id))
+    : shown;
+
+  const reorder = async (from: number, to: number) => {
+    const ids = exercises.map((e) => e.id);
+    const next = moveItem(ids, from, to);
+    if (next.every((id, i) => id === ids[i])) return;
+    setPendingOrder(next);
+    try {
+      await act(() => reorderWorkoutExercises(db, workout.id, next));
+    } finally {
+      setPendingOrder(null);
+    }
+  };
+  const setDragState = (next: typeof drag) => {
+    dragRef.current = next;
+    setDrag(next);
+    onDragChange?.(next !== null);
+  };
+  const heights = () => exercises.map((e) => cardHeights.current.get(e.id));
+  const startDrag = (from: number) => {
+    dragY.setValue(0);
+    setDragState({ from, over: from, height: cardHeights.current.get(exercises[from].id) ?? 0 });
+  };
+  const moveDrag = (dy: number) => {
+    const cur = dragRef.current;
+    if (!cur) return;
+    dragY.setValue(dy);
+    const over = dropIndexByHeights(cur.from, dy, heights(), GAP);
+    if (over !== cur.over) setDragState({ ...cur, over });
+  };
+  const cancelDrag = () => {
+    dragY.setValue(0);
+    setDragState(null);
+  };
+  const endDrag = (dy: number) => {
+    const cur = dragRef.current;
+    if (!cur) return;
+    cancelDrag();
+    reorder(cur.from, dropIndexByHeights(cur.from, dy, heights(), GAP));
+  };
+  /** Cards between the dragged one and its drop slot slide out of its way. */
+  const cardShift = (idx: number) => {
+    if (!drag || idx === drag.from) return 0;
+    const pitch = drag.height + GAP;
+    if (drag.from < drag.over && idx > drag.from && idx <= drag.over) return -pitch;
+    if (drag.from > drag.over && idx < drag.from && idx >= drag.over) return pitch;
+    return 0;
+  };
 
   const addEx = async (e: Exercise) => {
     setPicking(false);
@@ -53,6 +120,7 @@ export function WorkoutView({ date }: { date: string }) {
   const progress = { done: exercises.filter(isFinished).length, total: exercises.length };
   const complete = progress.total > 0 && progress.done === progress.total;
   const allSets = exercises.flatMap((e) => e.sets);
+  const canReorder = exercises.length > 1;
   const canStart = !workout.isRest && allSets.some((x) => !x.completed);
 
   const confirmRemoveExercise = (ex: WorkoutExercise) => {
@@ -63,7 +131,7 @@ export function WorkoutView({ date }: { date: string }) {
   };
 
   return (
-    <View style={{ gap: 14 }}>
+    <View style={{ gap: GAP }}>
       <View style={[styles.summary, { backgroundColor: t.card, borderColor: t.border }, raised]}>
         {!workout.isRest && (
           <View accessible accessibilityLabel={`${progress.done} of ${progress.total} exercises done`} style={styles.progress}>
@@ -105,13 +173,39 @@ export function WorkoutView({ date }: { date: string }) {
       )}
       {(!workout.isRest || exercises.length > 0) && (
         <>
-          {exercises.map((ex) => {
+          {exercises.map((ex, idx) => {
             const exDone = ex.sets.filter((x) => x.completed).length;
             const finished = isFinished(ex);
             const isStrength = ex.categoryKind === 'strength';
             return (
-              <View key={ex.id} testID={`exercise-${ex.exerciseName}`} style={[styles.exCard, { backgroundColor: t.card, borderColor: finished ? tint(t.success, 0.5) : t.border }, raised]}>
+              <Animated.View
+                key={ex.id}
+                testID={`exercise-${ex.exerciseName}`}
+                onLayout={(e) => cardHeights.current.set(ex.id, e.nativeEvent.layout.height)}
+                style={[
+                  styles.exCard,
+                  { backgroundColor: t.card, borderColor: finished ? tint(t.success, 0.5) : t.border },
+                  raised,
+                  drag?.from === idx
+                    ? [styles.dragging, { transform: [{ translateY: dragY }] }]
+                    : { transform: [{ translateY: cardShift(idx) }] },
+                ]}
+              >
                 <View style={styles.exHead}>
+                  {/* Away from remove. It reaches into the card's padding, so the picture only moves over a little. */}
+                  {canReorder && (
+                    <View style={styles.handle}>
+                      <DragHandle
+                        label={`Reorder ${ex.exerciseName}`}
+                        onStart={() => startDrag(idx)}
+                        onMove={moveDrag}
+                        onEnd={endDrag}
+                        onCancel={cancelDrag}
+                        onMoveUp={() => reorder(idx, idx - 1)}
+                        onMoveDown={() => reorder(idx, idx + 1)}
+                      />
+                    </View>
+                  )}
                   <View style={[styles.figure, { backgroundColor: tint(t.primary, 0.1) }]}>
                     {ex.isCustom ? (
                       <Text style={[styles.initial, { color: t.primary }]}>{ex.exerciseName.trim().charAt(0).toUpperCase()}</Text>
@@ -174,7 +268,7 @@ export function WorkoutView({ date }: { date: string }) {
                 {isStrength && (
                   <AddButton quiet title="Add set" label={`Add set to ${ex.exerciseName}`} onPress={() => act(() => addSet(db, ex.id))} />
                 )}
-              </View>
+              </Animated.View>
             );
           })}
           {!workout.isRest && <AddButton title="Add exercise" onPress={() => setPicking(true)} />}
@@ -224,6 +318,10 @@ const styles = StyleSheet.create({
   restBox: { alignItems: 'center', gap: 10, padding: 28, borderRadius: 24 },
   exCard: { borderRadius: 24, borderWidth: StyleSheet.hairlineWidth, padding: 14, gap: 8 },
   exHead: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingBottom: 4 },
+  // The handle keeps a 48pt grab area but tucks into the card's padding and the gap before the
+  // picture, so it takes about 30pt of the row and its icon sits just clear of the picture.
+  handle: { marginVertical: -8, marginLeft: -12, marginRight: -16 },
+  dragging: { zIndex: 10, elevation: 8, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } },
   figure: { width: 56, height: 56, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   initial: { fontSize: 22, fontWeight: '800' },
   exName: { fontSize: 18, fontWeight: '900', letterSpacing: -0.3 },

@@ -1,7 +1,7 @@
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { useContext, useState, type ReactNode } from 'react';
-import { Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type ViewStyle } from 'react-native';
+import { Keyboard, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type ViewStyle } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { SafeAreaInsetsContext, type EdgeInsets } from 'react-native-safe-area-context';
 
@@ -14,11 +14,14 @@ import { RestTimer } from '@/components/RestTimer';
 import { UnitPill } from '@/components/UnitPill';
 import { getRestSeconds, type Units } from '@/data/settings';
 import type { WorkoutExercise, WorkoutSet } from '@/data/types';
-import { loadDay, setWorkoutNotes, shownExercises, updateSet, type SetPatch } from '@/data/workouts';
+import {
+  loadDay, reorderWorkoutExercises, setWorkoutNotes, shownExercises, updateSet, type SetPatch,
+} from '@/data/workouts';
 import { useDb } from '@/db/DbContext';
 import { useLoad } from '@/hooks/useLoad';
 import { formatDuration } from '@/lib/duration';
 import { parseNumber } from '@/lib/numbers';
+import { moveItem } from '@/lib/reorder';
 import {
   fromDisplayDistance, fromDisplayWeight, otherDistanceUnit, otherWeightUnit, toDisplayDistance, toDisplayWeight,
 } from '@/lib/units';
@@ -72,6 +75,7 @@ export function WorkoutMode({ date }: { date: string }) {
   const [cursor, setCursor] = useState<Cursor>(null);
   /** A running rest, and the exercise it followed (to say when the next set is a new lift). */
   const [rest, setRest] = useState<{ endsAt: number; afterExerciseId: number } | null>(null);
+  const [switching, setSwitching] = useState(false);
 
   if (!data) return <View style={[styles.screen, { backgroundColor: t.bg }]} />;
 
@@ -102,10 +106,35 @@ export function WorkoutMode({ date }: { date: string }) {
 
   const exercises = [...new Map(steps.map((s) => [s.exercise.id, s.exercise])).values()];
   const upcoming = step && steps.slice(index + 1).find((s) => s.exerciseIndex !== step.exerciseIndex)?.exercise;
+  /** What could be done instead of the current exercise, e.g. when its machine is taken. */
+  const alternatives = step ? exercises.filter((e) => e.id !== step.exercise.id && e.sets.some((x) => !x.completed)) : [];
+
+  /**
+   * Does `picked` now: a later exercise moves into the current one's slot, pushing it back one;
+   * an earlier one is already ahead, so it's only jumped to. A running rest keeps going.
+   */
+  const switchTo = async (picked: WorkoutExercise) => {
+    setSwitching(false);
+    const ids = workout.exercises.map((e) => e.id);
+    const from = ids.indexOf(picked.id);
+    const to = ids.indexOf(step!.exercise.id);
+    if (from > to) {
+      await reorderWorkoutExercises(db, workout.id, moveItem(ids, from, to));
+      await reload();
+    }
+    setCursor(picked.sets.find((x) => !x.completed)!.id);
+  };
 
   // The screen has no header: a set is one card from End and the progress at the top to Done at
   // the bottom, and nothing scrolls but the finish screen's summary.
-  const top = <TopBar steps={steps} exercises={exercises} current={step?.exercise.id ?? null} onEnd={() => router.back()} />;
+  const top = (
+    <TopBar
+      steps={steps}
+      exercises={exercises}
+      current={step?.exercise.id ?? null}
+      onEnd={() => router.back()}
+    />
+  );
   return (
     <KeyboardAvoider scrolls={false}>
       <View style={[styles.screen, { backgroundColor: t.bg }]}>
@@ -150,6 +179,7 @@ export function WorkoutMode({ date }: { date: string }) {
                 onSkip={() => move(nextOpenStep(steps, index))}
                 onPrevious={index > 0 ? () => move(index - 1) : undefined}
                 upcoming={upcoming ?? undefined}
+                onSwitch={alternatives.length ? () => setSwitching(true) : undefined}
               />
             ) : (
               <>
@@ -169,7 +199,49 @@ export function WorkoutMode({ date }: { date: string }) {
         )}
       </View>
       </View>
+      {switching && <SwitchSheet exercises={alternatives} onPick={switchTo} onClose={() => setSwitching(false)} />}
     </KeyboardAvoider>
+  );
+}
+
+/** The exercises still to do, to pick one to do next instead. */
+function SwitchSheet({
+  exercises, onPick, onClose,
+}: { exercises: WorkoutExercise[]; onPick: (e: WorkoutExercise) => void; onClose: () => void }) {
+  const t = useTheme();
+  const insets = useInsets();
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+      <View style={styles.sheetRoot}>
+        <Pressable testID="switch-backdrop" accessible={false} onPress={onClose} style={styles.sheetBackdrop} />
+        <View style={[styles.sheet, { backgroundColor: t.card, paddingBottom: insets.bottom + 16 }]}>
+          <Text style={[styles.sheetTitle, { color: t.text }]}>Switch exercise</Text>
+          <Text style={{ color: t.muted }}>Machine taken? Do another one now and come back to this one after.</Text>
+          <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 8, paddingVertical: 8 }}>
+            {exercises.map((e) => {
+              const left = e.sets.filter((x) => !x.completed).length;
+              const detail = e.categoryKind === 'strength'
+                ? `${left} ${left === 1 ? 'set' : 'sets'} left`
+                : formatDuration(e.targetDurationMin) || e.categoryName;
+              return (
+                <Pressable
+                  key={e.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Switch to ${e.exerciseName}`}
+                  onPress={() => onPick(e)}
+                  style={({ pressed }) => [styles.sheetRow, { backgroundColor: t.surface, opacity: pressed ? 0.6 : 1 }]}
+                >
+                  <Thumb exercise={e} size={40} />
+                  <Text style={{ color: t.text, fontWeight: '700', fontSize: 16, flex: 1 }} numberOfLines={1}>{e.exerciseName}</Text>
+                  <Text style={{ color: t.muted, fontWeight: '600', fontSize: 13 }}>{detail}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+          <CTA title="Keep current exercise" variant="secondary" onPress={onClose} />
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -212,7 +284,7 @@ function TopBar({
 }
 
 function StepView({
-  step, top, exerciseCount, units, last, rest, onDone, onSkip, onPrevious, upcoming,
+  step, top, exerciseCount, units, last, rest, onDone, onSkip, onPrevious, upcoming, onSwitch,
 }: {
   step: Step;
   /** End and progress, drawn as the top row of the card. */
@@ -222,6 +294,8 @@ function StepView({
   onDone: (patch: SetPatch) => void; onSkip: () => void; onPrevious?: () => void;
   /** The next exercise after this one, shown along the bottom of the picture. */
   upcoming?: WorkoutExercise;
+  /** Opens the list of other exercises to do now; absent when there are none left. */
+  onSwitch?: () => void;
 }) {
   const t = useTheme();
   const { exercise, set, setIndex } = step;
@@ -279,20 +353,23 @@ function StepView({
       {rest ? (
         <View style={styles.hero}>
           {top}
-          <View style={styles.compactHead}>
+          <View testID="exercise-header" style={styles.compactHead}>
             <Thumb exercise={exercise} size={48} />
             <View style={{ flex: 1 }}>
               <Text style={[styles.eyebrow, { color: t.primary }]}>Exercise {step.exerciseIndex + 1} of {exerciseCount}</Text>
               <Text style={[styles.compactTitle, { color: t.text }]} numberOfLines={1}>{exercise.exerciseName}</Text>
             </View>
           </View>
-          <RestTimer
-            endsAt={rest.endsAt}
-            next={upNext(rest.newExercise)}
-            onAdjust={rest.onAdjust}
-            onSkip={rest.onEnd}
-            onFinish={rest.onEnd}
-          />
+          <View testID="rest-area" style={styles.fill}>
+            <RestTimer
+              endsAt={rest.endsAt}
+              next={upNext(rest.newExercise)}
+              onAdjust={rest.onAdjust}
+              onSkip={rest.onEnd}
+              onFinish={rest.onEnd}
+            />
+            {onSwitch && <SwitchButton onPress={onSwitch} />}
+          </View>
         </View>
       ) : (
         <>
@@ -301,6 +378,7 @@ function StepView({
             exercise={exercise}
             label={`Exercise ${step.exerciseIndex + 1} of ${exerciseCount}`}
             upcoming={upcoming}
+            onSwitch={onSwitch}
           >
             <View style={styles.entryHead}>
               <Text style={[styles.setLabel, { color: t.text }]}>
@@ -404,9 +482,9 @@ function StepView({
  * The figure is sized to the space measured, so a small phone still fits the whole set.
  */
 function Hero({
-  top, exercise, label, upcoming, children,
+  top, exercise, label, upcoming, onSwitch, children,
 }: {
-  top?: ReactNode; exercise: WorkoutExercise; label: string; upcoming?: WorkoutExercise; children?: ReactNode;
+  top?: ReactNode; exercise: WorkoutExercise; label: string; upcoming?: WorkoutExercise; onSwitch?: () => void; children?: ReactNode;
 }) {
   const t = useTheme();
   // The figure gets whatever room the name and the set leave; its glow is 1.15× the figure.
@@ -419,7 +497,7 @@ function Hero({
       style={styles.hero}
     >
       {top}
-      <View style={styles.heroTop}>
+      <View testID="exercise-header" style={styles.heroTop}>
         <View style={{ flex: 1, gap: 2 }}>
           <View style={styles.heroMeta}>
             <Text style={[styles.eyebrow, { color: t.primary }]}>{label}</Text>
@@ -432,18 +510,46 @@ function Hero({
         </View>
       </View>
       {/* Tapping the picture puts the number keyboard away; there's nothing else to tap off. */}
-      <Pressable
-        testID="exercise-picture"
-        accessible={false}
-        onPress={Keyboard.dismiss}
-        style={styles.heroMedia}
-        onLayout={(e) => setRoom(e.nativeEvent.layout)}
-      >
-        {size >= 48 && <ExerciseMedia name={exercise.exerciseName} isCustom={exercise.isCustom} size={size} />}
-      </Pressable>
+      <View testID="exercise-media" style={styles.fill}>
+        <Pressable
+          testID="exercise-picture"
+          accessible={false}
+          onPress={Keyboard.dismiss}
+          style={styles.heroMedia}
+          onLayout={(e) => setRoom(e.nativeEvent.layout)}
+        >
+          {size >= 48 && <ExerciseMedia name={exercise.exerciseName} isCustom={exercise.isCustom} size={size} />}
+        </Pressable>
+        {onSwitch && <SwitchButton onPress={onSwitch} />}
+      </View>
       {upcoming && <UpNext exercise={upcoming} />}
       {children}
     </Animated.View>
+  );
+}
+
+/**
+ * Floats in the top-right corner of the picture (or the rest timer), in space the figure leaves
+ * empty: do another exercise now, e.g. when this one's machine is taken.
+ */
+function SwitchButton({ onPress }: { onPress: () => void }) {
+  const t = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Switch exercise"
+      accessibilityHint="Do another exercise now and come back to this one"
+      onPress={onPress}
+      // 36 tall to sit lightly on the picture; the slop makes it a full 44 to hit.
+      hitSlop={4}
+      style={({ pressed }) => [
+        styles.switch,
+        { backgroundColor: tint(t.card, 0.8), borderColor: tint(t.primary, 0.3), transform: [{ scale: pressed ? 0.95 : 1 }] },
+      ]}
+    >
+      <Icon name={sym('arrow.up.arrow.down', 'swap_vert')} size={14} color={t.primary} fallback="⇅" />
+      <Text style={[styles.switchText, { color: t.primary }]}>Switch</Text>
+    </Pressable>
   );
 }
 
@@ -710,6 +816,11 @@ const styles = StyleSheet.create({
   fill: { flex: 1, minHeight: 0, gap: 12 },
   empty: { alignItems: 'center', gap: 10, paddingVertical: 20 },
   topBar: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  sheetRoot: { flex: 1, justifyContent: 'flex-end' },
+  sheetBackdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.45)' },
+  sheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, gap: 6, maxHeight: '80%' },
+  sheetTitle: { fontSize: 20, fontWeight: '900', letterSpacing: -0.3 },
+  sheetRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10, borderRadius: 16, minHeight: 56 },
   end: { width: 32, height: 32, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
   capsules: { flex: 1, flexDirection: 'row', gap: 4 },
   topCount: { fontSize: 12, fontWeight: '700', fontVariant: ['tabular-nums'], minWidth: 30, textAlign: 'right' },
@@ -717,6 +828,11 @@ const styles = StyleSheet.create({
   capsuleFill: { height: '100%', borderRadius: 3 },
   hero: { flex: 1, minHeight: 0, gap: 10 },
   heroTop: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 4 },
+  switch: {
+    position: 'absolute', top: 6, right: 6, flexDirection: 'row', alignItems: 'center', gap: 5,
+    minHeight: 36, paddingHorizontal: 12, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth,
+  },
+  switchText: { fontSize: 14, fontWeight: '800' },
   heroMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   heroMedia: { flex: 1, minHeight: 0, alignItems: 'center', justifyContent: 'center' },
   compactHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },

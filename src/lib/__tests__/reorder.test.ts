@@ -1,4 +1,4 @@
-import { dropIndex, moveItem } from '../reorder';
+import { dropIndex, dropIndexByHeights, moveItem } from '../reorder';
 
 describe('moveItem', () => {
   it('moves an item forward and back without mutating the input', () => {
@@ -30,5 +30,35 @@ describe('dropIndex', () => {
 
   it('stays put when the row height is unknown', () => {
     expect(dropIndex(2, 100, 0, 4)).toBe(2);
+  });
+});
+
+describe('dropIndexByHeights', () => {
+  // Rows 100, 40, 40, 200 tall with a 10 gap.
+  const heights = [100, 40, 40, 200];
+
+  it('passes a row once the drag covers half of it', () => {
+    expect(dropIndexByHeights(0, 0, heights, 10)).toBe(0);
+    expect(dropIndexByHeights(0, 24, heights, 10)).toBe(0);
+    expect(dropIndexByHeights(0, 26, heights, 10)).toBe(1);
+    expect(dropIndexByHeights(0, 76, heights, 10)).toBe(2);
+    expect(dropIndexByHeights(0, 204, heights, 10)).toBe(2);
+    expect(dropIndexByHeights(0, 206, heights, 10)).toBe(3);
+  });
+
+  it('works upwards too', () => {
+    expect(dropIndexByHeights(3, -24, heights, 10)).toBe(3);
+    expect(dropIndexByHeights(3, -26, heights, 10)).toBe(2);
+    expect(dropIndexByHeights(3, -106, heights, 10)).toBe(1);
+    expect(dropIndexByHeights(3, -156, heights, 10)).toBe(0);
+  });
+
+  it('clamps to the list bounds', () => {
+    expect(dropIndexByHeights(1, 5000, heights, 10)).toBe(3);
+    expect(dropIndexByHeights(1, -5000, heights, 10)).toBe(0);
+  });
+
+  it('stays put when a height on the way is unknown', () => {
+    expect(dropIndexByHeights(0, 500, [100, undefined, 40], 10)).toBe(0);
   });
 });
