@@ -206,6 +206,25 @@ export async function removeExercise(db: Db, id: number, today: string): Promise
   return 'deleted';
 }
 
+/**
+ * Exercises to do instead of `exerciseId` when it can't be done today: the others in its category
+ * that work any of the same muscle groups (its own group's first), or the whole category when it
+ * has none. Leaves out hidden exercises and those in `exclude`, e.g. the rest of the day.
+ */
+export async function findSimilarExercises(db: Db, exerciseId: number, exclude: readonly number[] = []): Promise<Exercise[]> {
+  const target = await findExercise(db, exerciseId);
+  if (!target) return [];
+  const category = (await listCategoriesWithExercises(db)).find((c) => c.id === target.categoryId);
+  const groups = [target.subcategory, ...target.alsoIn].filter((g): g is string => !!g);
+  const groupsOf = (e: Exercise) => [e.subcategory, ...e.alsoIn];
+  // 0: same own group; 1: listed under the target's own group; 2: shares another group.
+  const rank = (e: Exercise) => (e.subcategory === target.subcategory ? 0 : groupsOf(e).includes(target.subcategory) ? 1 : 2);
+  const candidates = (category?.exercises ?? [])
+    .filter((e) => e.id !== exerciseId && !exclude.includes(e.id))
+    .filter((e) => !groups.length || groupsOf(e).some((g) => !!g && groups.includes(g)));
+  return groups.length ? candidates.map((e, i) => ({ e, i })).sort((a, b) => rank(a.e) - rank(b.e) || a.i - b.i).map((x) => x.e) : candidates;
+}
+
 export type SearchResult = {
   /** Matches in the category being browsed. */
   here: Exercise[];

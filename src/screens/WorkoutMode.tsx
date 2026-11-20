@@ -12,10 +12,12 @@ import { KeyboardAvoider } from '@/components/KeyboardAvoider';
 import { ExerciseMotionFor } from '@/components/motion/ExerciseMotion';
 import { RestTimer } from '@/components/RestTimer';
 import { UnitPill } from '@/components/UnitPill';
+import { Segmented } from '@/components/ui';
+import { findSimilarExercises } from '@/data/exercises';
 import { getRestSeconds, type Units } from '@/data/settings';
 import type { WorkoutExercise, WorkoutSet } from '@/data/types';
 import {
-  loadDay, reorderWorkoutExercises, setWorkoutNotes, shownExercises, updateSet, type SetPatch,
+  loadDay, reorderWorkoutExercises, replaceWorkoutExercise, setWorkoutNotes, shownExercises, updateSet, type SetPatch,
 } from '@/data/workouts';
 import { useDb } from '@/db/DbContext';
 import { useLoad } from '@/hooks/useLoad';
@@ -41,7 +43,8 @@ const NO_INSETS: EdgeInsets = { top: 0, bottom: 0, left: 0, right: 0 };
 const useInsets = () => useContext(SafeAreaInsetsContext) ?? NO_INSETS;
 
 /** Where workout mode is: a set (by id), the finish screen, or null for "the first set not done". */
-type Cursor = number | 'finish' | null;
+/** A set's id, the finish screen, the first open set of an exercise (by its id), or null for the first open set. */
+type Cursor = number | 'finish' | { exercise: number } | null;
 
 const WEIGHT_STEP = { lb: 5, kg: 2.5 } as const;
 /** When a rest that starts now ends. Kept out of the component: it reads the clock. */
@@ -82,7 +85,9 @@ export function WorkoutMode({ date }: { date: string }) {
   const { workout, units, last, restSeconds } = data;
   const steps = workoutSteps(shownExercises(workout));
   const first = firstOpenStep(steps);
-  const found = typeof cursor === 'number' ? steps.findIndex((s) => s.set.id === cursor) : -1;
+  const found = typeof cursor === 'number' ? steps.findIndex((s) => s.set.id === cursor)
+    : cursor && typeof cursor === 'object' ? steps.findIndex((s) => s.exercise.id === cursor.exercise && !s.set.completed)
+    : -1;
   // A set that's gone (removed elsewhere) falls back to the first open one.
   const index = cursor === 'finish' ? -1 : found !== -1 ? found : first;
   const step = index === -1 ? null : steps[index];
@@ -123,6 +128,14 @@ export function WorkoutMode({ date }: { date: string }) {
       await reload();
     }
     setCursor(picked.sets.find((x) => !x.completed)!.id);
+  };
+
+  /** Does `exerciseId` instead of the current exercise for its sets not done yet, e.g. when that lift can't be done today. */
+  const swapIn = async (exerciseId: number) => {
+    setSwitching(false);
+    const { id } = await replaceWorkoutExercise(db, step!.exercise.id, exerciseId);
+    await reload();
+    setCursor({ exercise: id });
   };
 
   // The screen has no header: a set is one card from End and the progress at the top to Done at
@@ -179,7 +192,7 @@ export function WorkoutMode({ date }: { date: string }) {
                 onSkip={() => move(nextOpenStep(steps, index))}
                 onPrevious={index > 0 ? () => move(index - 1) : undefined}
                 upcoming={upcoming ?? undefined}
-                onSwitch={alternatives.length ? () => setSwitching(true) : undefined}
+                onSwitch={() => setSwitching(true)}
               />
             ) : (
               <>
@@ -199,44 +212,86 @@ export function WorkoutMode({ date }: { date: string }) {
         )}
       </View>
       </View>
-      {switching && <SwitchSheet exercises={alternatives} onPick={switchTo} onClose={() => setSwitching(false)} />}
+      {switching && step && (
+        <SwitchSheet
+          current={step.exercise}
+          planned={alternatives}
+          inDay={workout.exercises.map((e) => e.exerciseId)}
+          onPick={switchTo}
+          onSwap={swapIn}
+          onClose={() => setSwitching(false)}
+        />
+      )}
     </KeyboardAvoider>
   );
 }
 
-/** The exercises still to do, to pick one to do next instead. */
+type SwitchMode = 'order' | 'swap';
+
+/**
+ * Two ways out of the current exercise: do another one still planned now and come back to this
+ * one (Change order), or do a different exercise for the same muscles instead (Swap exercise).
+ */
 function SwitchSheet({
-  exercises, onPick, onClose,
-}: { exercises: WorkoutExercise[]; onPick: (e: WorkoutExercise) => void; onClose: () => void }) {
+  current, planned, inDay, onPick, onSwap, onClose,
+}: {
+  current: WorkoutExercise;
+  /** The day's other exercises with sets left. */
+  planned: WorkoutExercise[];
+  /** Every exercise in the day, left out of the swap list. */
+  inDay: number[];
+  onPick: (e: WorkoutExercise) => void;
+  onSwap: (exerciseId: number) => void;
+  onClose: () => void;
+}) {
   const t = useTheme();
+  const db = useDb();
   const insets = useInsets();
+  const [mode, setMode] = useState<SwitchMode>(planned.length ? 'order' : 'swap');
+  const { data: similar } = useLoad(() => findSimilarExercises(db, current.exerciseId, inDay), [db, current.exerciseId]);
+  const intro = mode === 'order'
+    ? 'Do another now and come back to this one later.'
+    : `Replace ${current.exerciseName} with another today.`;
+  const row = (key: number, label: string, name: string, isCustom: boolean, detail: string | null, onPress: () => void) => (
+    <Pressable
+      key={key}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={({ pressed }) => [styles.sheetRow, { backgroundColor: t.surface, opacity: pressed ? 0.6 : 1 }]}
+    >
+      <Thumb exercise={{ exerciseName: name, isCustom }} size={40} />
+      <Text style={{ color: t.text, fontWeight: '700', fontSize: 16, flex: 1 }} numberOfLines={1}>{name}</Text>
+      {!!detail && <Text style={{ color: t.muted, fontWeight: '600', fontSize: 13 }}>{detail}</Text>}
+    </Pressable>
+  );
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.sheetRoot}>
         <Pressable testID="switch-backdrop" accessible={false} onPress={onClose} style={styles.sheetBackdrop} />
         <View style={[styles.sheet, { backgroundColor: t.card, paddingBottom: insets.bottom + 16 }]}>
           <Text style={[styles.sheetTitle, { color: t.text }]}>Switch exercise</Text>
-          <Text style={{ color: t.muted }}>Machine taken? Do another one now and come back to this one after.</Text>
+          {planned.length > 0 && (
+            <Segmented<SwitchMode>
+              options={[{ value: 'order', label: 'Change order' }, { value: 'swap', label: 'Swap exercise' }]}
+              value={mode}
+              onChange={setMode}
+            />
+          )}
+          <Text style={{ color: t.muted }}>{intro}</Text>
           <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 8, paddingVertical: 8 }}>
-            {exercises.map((e) => {
-              const left = e.sets.filter((x) => !x.completed).length;
-              const detail = e.categoryKind === 'strength'
-                ? `${left} ${left === 1 ? 'set' : 'sets'} left`
-                : formatDuration(e.targetDurationMin) || e.categoryName;
-              return (
-                <Pressable
-                  key={e.id}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Switch to ${e.exerciseName}`}
-                  onPress={() => onPick(e)}
-                  style={({ pressed }) => [styles.sheetRow, { backgroundColor: t.surface, opacity: pressed ? 0.6 : 1 }]}
-                >
-                  <Thumb exercise={e} size={40} />
-                  <Text style={{ color: t.text, fontWeight: '700', fontSize: 16, flex: 1 }} numberOfLines={1}>{e.exerciseName}</Text>
-                  <Text style={{ color: t.muted, fontWeight: '600', fontSize: 13 }}>{detail}</Text>
-                </Pressable>
-              );
-            })}
+            {mode === 'order'
+              ? planned.map((e) => {
+                const n = e.sets.filter((x) => !x.completed).length;
+                const detail = e.categoryKind === 'strength'
+                  ? `${n} ${n === 1 ? 'set' : 'sets'} left`
+                  : formatDuration(e.targetDurationMin) || e.categoryName;
+                return row(e.id, `Switch to ${e.exerciseName}`, e.exerciseName, e.isCustom, detail, () => onPick(e));
+              })
+              : similar?.map((e) => row(e.id, `Swap in ${e.name}`, e.name, e.isCustom, e.subcategory, () => onSwap(e.id)))}
+            {mode === 'swap' && similar?.length === 0 && (
+              <Text style={{ color: t.muted, textAlign: 'center', paddingVertical: 12 }}>No other exercises for these muscles yet.</Text>
+            )}
           </ScrollView>
           <CTA title="Keep current exercise" variant="secondary" onPress={onClose} />
         </View>
@@ -553,7 +608,7 @@ function SwitchButton({ onPress }: { onPress: () => void }) {
   );
 }
 
-function Thumb({ exercise, size }: { exercise: WorkoutExercise; size: number }) {
+function Thumb({ exercise, size }: { exercise: Pick<WorkoutExercise, 'exerciseName' | 'isCustom'>; size: number }) {
   const t = useTheme();
   return (
     <View style={[styles.thumb, { width: size, height: size, borderRadius: size * 0.3, backgroundColor: tint(t.primary, 0.1) }]}>
