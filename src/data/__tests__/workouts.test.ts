@@ -1,5 +1,5 @@
 import { addExercise, listCategoriesWithExercises } from '../exercises';
-import { markPlanComplete, setPlanDay } from '../plan';
+import { getPlan, markPlanComplete, setPlanDay } from '../plan';
 import type { Workout } from '../types';
 import {
   addExerciseToWorkout,
@@ -11,6 +11,7 @@ import {
   refreshUntouchedWorkouts,
   removeExerciseFromWorkout,
   removeSet,
+  reorderWorkoutExercises,
   setRestDay,
   updateSet,
 } from '../workouts';
@@ -519,5 +520,57 @@ describe('refreshUntouchedWorkouts', () => {
     await ensureWorkout(db, MON);
     await refreshUntouchedWorkouts(db, '2026-11-05');
     expect(await getWorkout(db, MON)).not.toBeNull();
+  });
+});
+
+describe('reorderWorkoutExercises', () => {
+  async function threeExercises() {
+    const db = await planned();
+    const w = await ensureWorkout(db, MON);
+    await addExerciseToWorkout(db, w.id, await findByName(db, 'Squat'));
+    await addExerciseToWorkout(db, w.id, await findByName(db, 'Deadlift'));
+    const ids = (await getWorkout(db, MON))!.exercises.map((e) => e.id);
+    await db.runAsync('UPDATE workouts SET is_customized = 0 WHERE id = ?', [w.id]);
+    return { db, w, ids };
+  }
+  const names = async (db: Db, date = MON) => (await getWorkout(db, date))!.exercises.map((e) => e.exerciseName);
+
+  it('puts the day in the given order, keeping logged sets with their exercise', async () => {
+    const { db, ids } = await threeExercises();
+    const before = (await getWorkout(db, MON))!;
+    await updateSet(db, before.exercises[0].sets[0].id, { weight: 135, reps: 10, completed: true });
+    await reorderWorkoutExercises(db, before.id, [ids[2], ids[0], ids[1]]);
+    const after = (await getWorkout(db, MON))!;
+    expect(after.exercises.map((e) => e.exerciseName)).toEqual(['Deadlift', 'Bench Press', 'Squat']);
+    expect(after.exercises[1].sets[0]).toMatchObject({ weight: 135, reps: 10, completed: true });
+  });
+
+  it('keeps exercises left out of the list in their order after the listed ones', async () => {
+    const { db, w, ids } = await threeExercises();
+    await reorderWorkoutExercises(db, w.id, [ids[2]]);
+    expect(await names(db)).toEqual(['Deadlift', 'Bench Press', 'Squat']);
+  });
+
+  it('ignores ids from another day and repeats', async () => {
+    const { db, w, ids } = await threeExercises();
+    const other = await ensureWorkout(db, '2026-11-09');
+    await reorderWorkoutExercises(db, w.id, [other.exercises[0].id, ids[1], ids[1], ids[0]]);
+    expect(await names(db)).toEqual(['Squat', 'Bench Press', 'Deadlift']);
+    expect(await names(db, '2026-11-09')).toEqual(['Bench Press']);
+  });
+
+  it('survives a plan edit, and leaves the plan alone', async () => {
+    const { db, w, ids } = await threeExercises();
+    await reorderWorkoutExercises(db, w.id, [ids[1], ids[0], ids[2]]);
+    await refreshUntouchedWorkouts(db, '2026-11-01');
+    expect(await names(db)).toEqual(['Squat', 'Bench Press', 'Deadlift']);
+    const monday = (await getPlan(db)).find((d) => d.weekday === 1)!;
+    expect(monday.items.map((i) => i.exerciseName)).toEqual(['Bench Press']);
+  });
+
+  it('does not mark the day changed when the order stays the same', async () => {
+    const { db, w, ids } = await threeExercises();
+    await reorderWorkoutExercises(db, w.id, ids);
+    expect(await db.getFirstAsync('SELECT is_customized FROM workouts WHERE id = ?', [w.id])).toEqual({ is_customized: 0 });
   });
 });

@@ -218,6 +218,26 @@ export async function removeExerciseFromWorkout(db: Db, workoutExerciseId: numbe
   });
 }
 
+/**
+ * Puts a day's exercises in the order of `ids`, with any it leaves out after them in their old order.
+ * Only this day changes, never the plan; a new order counts as a change by hand, so plan edits keep it.
+ */
+export async function reorderWorkoutExercises(db: Db, workoutId: number, ids: readonly number[]): Promise<void> {
+  await db.withTransactionAsync(async () => {
+    const rows = await db.getAllAsync<{ id: number }>(
+      'SELECT id FROM workout_exercises WHERE workout_id = ? ORDER BY position, id', [workoutId],
+    );
+    const current = rows.map((r) => r.id);
+    const listed = [...new Set(ids)].filter((id) => current.includes(id));
+    const order = [...listed, ...current.filter((id) => !listed.includes(id))];
+    if (order.every((id, i) => id === current[i])) return;
+    for (const [position, id] of order.entries()) {
+      await db.runAsync('UPDATE workout_exercises SET position = ? WHERE id = ?', [position, id]);
+    }
+    await db.runAsync('UPDATE workouts SET is_customized = 1 WHERE id = ?', [workoutId]);
+  });
+}
+
 export async function setRestDay(db: Db, date: string, isRest: boolean): Promise<void> {
   await ensureWorkout(db, date);
   await db.runAsync('UPDATE workouts SET is_rest = ?, is_customized = 1 WHERE date = ?', [isRest ? 1 : 0, date]);

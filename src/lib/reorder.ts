@@ -14,3 +14,21 @@ export function dropIndex(from: number, dy: number, rowPitch: number, count: num
   const target = from + Math.round(dy / rowPitch);
   return Math.min(count - 1, Math.max(0, target));
 }
+
+/**
+ * Like `dropIndex`, for rows of different heights: the dragged row passes a neighbour once it has
+ * covered half of it. Stops at a row whose height isn't known yet.
+ */
+export function dropIndexByHeights(from: number, dy: number, heights: readonly (number | undefined)[], gap: number): number {
+  const dir = Math.sign(dy);
+  let to = from;
+  let covered = 0;
+  for (let i = from + dir; dir !== 0 && i >= 0 && i < heights.length; i += dir) {
+    const h = heights[i];
+    if (h === undefined) break;
+    if (Math.abs(dy) <= covered + (h + gap) / 2) break;
+    covered += h + gap;
+    to = i;
+  }
+  return to;
+}

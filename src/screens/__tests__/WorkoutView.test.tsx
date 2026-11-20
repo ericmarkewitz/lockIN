@@ -458,4 +458,48 @@ describe('WorkoutView', () => {
       expect(screen.getByText('Squat')).toBeTruthy();
     });
   });
+  describe('reordering', () => {
+    const reorder = (label: string, actionName: 'moveUp' | 'moveDown') =>
+      fireEvent(screen.getByLabelText(label), 'accessibilityAction', { nativeEvent: { actionName } });
+    const names = async (db: Awaited<ReturnType<typeof setup>>) => (await getWorkout(db, MON))!.exercises.map((e) => e.exerciseName);
+    const shown = () => screen.getAllByTestId(/^exercise-/).map((v) => v.props.testID);
+    const openDay = async (db: Awaited<ReturnType<typeof setup>>) => {
+      await renderWithDb(<WorkoutView date={MON} />, db);
+      await screen.findByText('Bench Press');
+    };
+
+    it('puts the grab handle at the start of the card header, away from remove', async () => {
+      const db = await setup();
+      await openDay(db);
+      const card = screen.getByTestId('exercise-Bench Press');
+      const labels = within(card).queryAllByLabelText(/Bench Press$/).map((v) => v.props.accessibilityLabel);
+      expect(labels.slice(0, 2)).toEqual(['Reorder Bench Press', 'Remove Bench Press']);
+    });
+
+    it('moves an exercise down and saves the new order for the day', async () => {
+      const db = await setup();
+      await openDay(db);
+      await reorder('Reorder Bench Press', 'moveDown');
+      await waitFor(async () => expect(await names(db)).toEqual(['Squat', 'Bench Press']));
+      expect(shown()).toEqual(['exercise-Squat', 'exercise-Bench Press']);
+    });
+
+    it('moves an exercise up, and ignores moves past the ends', async () => {
+      const db = await setup();
+      await openDay(db);
+      await reorder('Reorder Bench Press', 'moveUp');
+      await reorder('Reorder Squat', 'moveUp');
+      await waitFor(async () => expect(await names(db)).toEqual(['Squat', 'Bench Press']));
+      await reorder('Reorder Bench Press', 'moveDown');
+      expect(await names(db)).toEqual(['Squat', 'Bench Press']);
+    });
+
+    it('has nothing to reorder with a single exercise', async () => {
+      const db = await createTestDb();
+      await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: await findByName(db, 'Squat'), targetSets: 1, targetReps: 5 }] });
+      await renderWithDb(<WorkoutView date={MON} />, db);
+      await screen.findByText('Squat');
+      expect(screen.queryByLabelText('Reorder Squat')).toBeNull();
+    });
+  });
 });
