@@ -238,6 +238,57 @@ export async function reorderWorkoutExercises(db: Db, workoutId: number, ids: re
   });
 }
 
+/**
+ * Swaps another exercise of the same category in for the sets of a day's exercise not logged yet,
+ * e.g. when that lift can't be done today, with the same targets. With nothing logged it takes the
+ * old one's place; otherwise the old one keeps its logged sets and the new one follows it. Only this
+ * day changes, never the plan.
+ */
+export async function replaceWorkoutExercise(db: Db, workoutExerciseId: number, exerciseId: number): Promise<{ id: number }> {
+  const old = await db.getFirstAsync<WeRow & { workout_id: number; category_id: number }>(
+    `SELECT we.*, e.category_id, c.kind AS category_kind FROM workout_exercises we
+     JOIN exercises e ON e.id = we.exercise_id JOIN categories c ON c.id = e.category_id WHERE we.id = ?`,
+    [workoutExerciseId],
+  );
+  if (!old) throw new Error('Exercise not found in this workout');
+  const next = await db.getFirstAsync<{ category_id: number }>('SELECT category_id FROM exercises WHERE id = ?', [exerciseId]);
+  if (!next) throw new Error(`Unknown exercise ${exerciseId}`);
+  if (next.category_id !== old.category_id) throw new Error('Swap in an exercise from the same category');
+  const open = await db.getAllAsync<{ id: number }>(
+    `SELECT s.id FROM sets s WHERE s.workout_exercise_id = ? AND NOT ${LOGGED_SET}`, [workoutExerciseId],
+  );
+  if (!open.length) throw new Error('Every set of this exercise is already done');
+  const total = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM sets WHERE workout_exercise_id = ?', [workoutExerciseId]);
+  const keepOld = open.length < total!.n;
+
+  let id = 0;
+  await db.withTransactionAsync(async () => {
+    const order = (await db.getAllAsync<{ id: number }>(
+      'SELECT id FROM workout_exercises WHERE workout_id = ? ORDER BY position, id', [old.workout_id],
+    )).map((r) => r.id);
+    id = await insertWorkoutExercise(db, old.workout_id, exerciseId, 0, {
+      targetSets: old.category_kind === 'strength' ? open.length : old.target_sets,
+      targetReps: old.target_reps,
+      targetDurationMin: old.target_duration_min,
+      targetDistance: old.target_distance,
+    });
+    const at = order.indexOf(workoutExerciseId);
+    if (keepOld) {
+      for (const s of open) await db.runAsync('DELETE FROM sets WHERE id = ?', [s.id]);
+      order.splice(at + 1, 0, id);
+    } else {
+      await db.runAsync('DELETE FROM sets WHERE workout_exercise_id = ?', [workoutExerciseId]);
+      await db.runAsync('DELETE FROM workout_exercises WHERE id = ?', [workoutExerciseId]);
+      order.splice(at, 1, id);
+    }
+    for (const [position, weId] of order.entries()) {
+      await db.runAsync('UPDATE workout_exercises SET position = ? WHERE id = ?', [position, weId]);
+    }
+    await db.runAsync('UPDATE workouts SET is_customized = 1 WHERE id = ?', [old.workout_id]);
+  });
+  return { id };
+}
+
 export async function setRestDay(db: Db, date: string, isRest: boolean): Promise<void> {
   await ensureWorkout(db, date);
   await db.runAsync('UPDATE workouts SET is_rest = ?, is_customized = 1 WHERE date = ?', [isRest ? 1 : 0, date]);

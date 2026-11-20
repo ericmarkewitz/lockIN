@@ -12,6 +12,7 @@ import {
   removeExerciseFromWorkout,
   removeSet,
   reorderWorkoutExercises,
+  replaceWorkoutExercise,
   setRestDay,
   updateSet,
 } from '../workouts';
@@ -572,5 +573,66 @@ describe('reorderWorkoutExercises', () => {
     const { db, w, ids } = await threeExercises();
     await reorderWorkoutExercises(db, w.id, ids);
     expect(await db.getFirstAsync('SELECT is_customized FROM workouts WHERE id = ?', [w.id])).toEqual({ is_customized: 0 });
+  });
+});
+
+describe('replaceWorkoutExercise', () => {
+  async function benchThenSquat() {
+    const db = await planned();
+    const w = await ensureWorkout(db, MON);
+    await addExerciseToWorkout(db, w.id, await findByName(db, 'Squat'), { targetSets: 2, targetReps: 5 });
+    await db.runAsync('UPDATE workouts SET is_customized = 0 WHERE id = ?', [w.id]);
+    return { db, w: (await getWorkout(db, MON))!, incline: await findByName(db, 'Incline Bench Press') };
+  }
+
+  it('swaps in another exercise in the same place with the same targets, when nothing is logged', async () => {
+    const { db, w, incline } = await benchThenSquat();
+    const { id } = await replaceWorkoutExercise(db, w.exercises[0].id, incline);
+    const after = (await getWorkout(db, MON))!;
+    expect(after.exercises.map((e) => e.exerciseName)).toEqual(['Incline Bench Press', 'Squat']);
+    expect(after.exercises[0]).toMatchObject({ id, targetSets: 3, targetReps: 10 });
+    expect(after.exercises[0].sets.map((s) => [s.setNumber, s.targetReps, s.completed])).toEqual([
+      [1, 10, false], [2, 10, false], [3, 10, false],
+    ]);
+  });
+
+  it('keeps the sets already logged on the old exercise and gives the new one the sets left', async () => {
+    const { db, w, incline } = await benchThenSquat();
+    await updateSet(db, w.exercises[0].sets[0].id, { weight: 135, reps: 10, completed: true });
+    await replaceWorkoutExercise(db, w.exercises[0].id, incline);
+    const after = (await getWorkout(db, MON))!;
+    expect(after.exercises.map((e) => e.exerciseName)).toEqual(['Bench Press', 'Incline Bench Press', 'Squat']);
+    expect(after.exercises[0].sets).toEqual([expect.objectContaining({ weight: 135, reps: 10, completed: true })]);
+    expect(after.exercises[1].sets.map((s) => [s.setNumber, s.targetReps, s.completed])).toEqual([[1, 10, false], [2, 10, false]]);
+  });
+
+  it('carries cardio targets over', async () => {
+    const db = await planned();
+    const w = await ensureWorkout(db, '2026-11-04');
+    await replaceWorkoutExercise(db, w.exercises[0].id, await findByName(db, 'Biking'));
+    const ex = (await getWorkout(db, '2026-11-04'))!.exercises[0];
+    expect(ex).toMatchObject({ exerciseName: 'Biking', targetDurationMin: 30, targetDistance: 3 });
+    expect(ex.sets).toHaveLength(1);
+  });
+
+  it('changes only that day: it survives a plan edit and leaves the plan alone', async () => {
+    const { db, w, incline } = await benchThenSquat();
+    await replaceWorkoutExercise(db, w.exercises[0].id, incline);
+    await refreshUntouchedWorkouts(db, '2026-11-01');
+    expect((await getWorkout(db, MON))!.exercises[0].exerciseName).toBe('Incline Bench Press');
+    expect((await getPlan(db)).find((d) => d.weekday === 1)!.items.map((i) => i.exerciseName)).toEqual(['Bench Press']);
+    expect((await ensureWorkout(db, '2026-11-09')).exercises[0].exerciseName).toBe('Bench Press');
+  });
+
+  it('does nothing when every set is already logged', async () => {
+    const { db, w, incline } = await benchThenSquat();
+    for (const s of w.exercises[0].sets) await updateSet(db, s.id, { reps: 10, completed: true });
+    await expect(replaceWorkoutExercise(db, w.exercises[0].id, incline)).rejects.toThrow(/done/i);
+    expect((await getWorkout(db, MON))!.exercises.map((e) => e.exerciseName)).toEqual(['Bench Press', 'Squat']);
+  });
+
+  it('refuses an exercise from another category', async () => {
+    const { db, w } = await benchThenSquat();
+    await expect(replaceWorkoutExercise(db, w.exercises[0].id, await findByName(db, 'Running'))).rejects.toThrow(/category/i);
   });
 });

@@ -1,4 +1,8 @@
-import { LIFT_SUBCATEGORIES, addExercise, findExercise, groupBySubcategory, listCategoriesWithExercises, searchExercises } from '../exercises';
+import {
+  LIFT_SUBCATEGORIES, addExercise, findExercise, findSimilarExercises, groupBySubcategory, listCategoriesWithExercises, removeExercise,
+  searchExercises,
+} from '../exercises';
+import { findByName } from '@/test/helpers';
 import { createTestDb } from '@/test/testDb';
 import { CATALOG } from '../catalog';
 
@@ -171,5 +175,45 @@ describe('exercises', () => {
     const lifts = (await listCategoriesWithExercises(db)).find((c) => c.name === 'Lifts')!;
     await expect(addExercise(db, lifts.id, '   ')).rejects.toThrow(/name/i);
     await expect(addExercise(db, lifts.id, 'bench press')).rejects.toThrow(/exists/i);
+  });
+
+  describe('findSimilarExercises', () => {
+    const names = (list: { name: string }[]) => list.map((e) => e.name);
+
+    it('lists other exercises for the same muscle group, own group first', async () => {
+      const db = await createTestDb();
+      const similar = names(await findSimilarExercises(db, await findByName(db, 'Bench Press')));
+      expect(similar.slice(0, 6)).toEqual(['Incline Bench Press', 'Close-Grip Bench Press', 'Pec Fly', 'Push-up', 'Dip', 'Chest Press']);
+      // Listed under Chest as well as its own Back.
+      expect(similar).toContain('Lat Pullover');
+      expect(similar).not.toContain('Bench Press');
+      expect(similar).not.toContain('Squat');
+    });
+
+    it('takes in every group a lift works, ranking its own group first', async () => {
+      const db = await createTestDb();
+      const similar = names(await findSimilarExercises(db, await findByName(db, 'Deadlift')));
+      expect(similar).toEqual(expect.arrayContaining(['Bent-Over Row', 'Romanian Deadlift', 'Squat']));
+      expect(similar.indexOf('Bent-Over Row')).toBeLessThan(similar.indexOf('Squat'));
+      expect(similar).not.toContain('Bench Press');
+    });
+
+    it('leaves out the ones given and hidden ones', async () => {
+      const db = await createTestDb();
+      const lifts = (await listCategoriesWithExercises(db)).find((c) => c.name === 'Lifts')!;
+      const gone = await addExercise(db, lifts.id, 'Floor Press', 'Chest');
+      await removeExercise(db, gone.id, '2026-11-01');
+      const similar = names(await findSimilarExercises(db, await findByName(db, 'Bench Press'), [await findByName(db, 'Pec Fly')]));
+      expect(similar).not.toContain('Pec Fly');
+      expect(similar).not.toContain('Floor Press');
+      expect(similar).toContain('Dip');
+    });
+
+    it('offers the rest of the category for an exercise without a muscle group', async () => {
+      const db = await createTestDb();
+      const similar = names(await findSimilarExercises(db, await findByName(db, 'Running')));
+      expect(similar).toEqual(expect.arrayContaining(['Biking', 'Rowing']));
+      expect(similar).not.toContain('Squat');
+    });
   });
 });

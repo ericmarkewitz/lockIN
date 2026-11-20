@@ -366,12 +366,66 @@ describe('WorkoutMode', () => {
       expect(screen.getByText('Squat')).toBeTruthy();
     });
 
-    it('offers no switch when nothing else is left to do', async () => {
+    it('offers only a swap when nothing else is left to do', async () => {
       const db = await setup();
       const w = await ensureWorkout(db, MON);
       await updateSet(db, w.exercises[1].sets[0].id, { reps: 5, completed: true });
       await open(db);
-      expect(screen.queryByLabelText('Switch exercise')).toBeNull();
+      await fireEvent.press(screen.getByLabelText('Switch exercise'));
+      expect(await screen.findByLabelText('Swap in Incline Bench Press')).toBeTruthy();
+      expect(screen.queryByLabelText('Change order')).toBeNull();
+      expect(screen.queryByLabelText('Switch to Squat')).toBeNull();
+    });
+
+    it('swaps in a different exercise for the same muscles', async () => {
+      const db = await setup();
+      await setRestSeconds(db, 0);
+      await open(db);
+      await fireEvent.press(screen.getByLabelText('Switch exercise'));
+      await fireEvent.press(screen.getByLabelText('Swap exercise'));
+      expect(await screen.findByText('Replace Bench Press with another today.')).toBeTruthy();
+      // Only Chest work, and nothing already in the day.
+      expect(screen.getByLabelText('Swap in Pec Fly')).toBeTruthy();
+      expect(screen.queryByLabelText('Swap in Squat')).toBeNull();
+      expect(screen.queryByLabelText('Swap in Bicep Curl')).toBeNull();
+      await fireEvent.press(screen.getByLabelText('Swap in Incline Bench Press'));
+      expect(await screen.findByText('Incline Bench Press')).toBeTruthy();
+      expect(screen.getByText('Set 1 of 2')).toBeTruthy();
+      expect(screen.getByText('Exercise 1 of 2')).toBeTruthy();
+      expect(await order(db)).toEqual(['Incline Bench Press', 'Squat']);
+      // The swapped-in lift is logged as itself.
+      await fireEvent.press(screen.getByLabelText('Done with set 1'));
+      await screen.findByText('Set 2 of 2');
+      expect((await getWorkout(db, MON))!.exercises[0].sets[0].completed).toBe(true);
+    });
+
+    it('keeps sets already done and swaps in the new exercise for the rest', async () => {
+      const db = await setup();
+      await setRestSeconds(db, 0);
+      await open(db);
+      await fireEvent.press(screen.getByLabelText('Done with set 1'));
+      await screen.findByText('Set 2 of 2');
+      await fireEvent.press(screen.getByLabelText('Switch exercise'));
+      await fireEvent.press(screen.getByLabelText('Swap exercise'));
+      await fireEvent.press(await screen.findByLabelText('Swap in Pec Fly'));
+      expect(await screen.findByText('Pec Fly')).toBeTruthy();
+      expect(screen.getByText('Set 1 of 1')).toBeTruthy();
+      expect(screen.getByText('Exercise 2 of 3')).toBeTruthy();
+      expect(await order(db)).toEqual(['Bench Press', 'Pec Fly', 'Squat']);
+      expect((await sets(db)).map((x) => x.completed)).toEqual([true, false, false]);
+    });
+
+    it('can swap while resting, and keeps the rest going', async () => {
+      const db = await setup();
+      await setRestSeconds(db, 90);
+      await open(db);
+      await fireEvent.press(screen.getByLabelText('Done with set 1'));
+      await screen.findByLabelText('Skip rest');
+      await fireEvent.press(screen.getByLabelText('Switch exercise'));
+      await fireEvent.press(screen.getByLabelText('Swap exercise'));
+      await fireEvent.press(await screen.findByLabelText('Swap in Dip'));
+      expect(await screen.findByText('Dip')).toBeTruthy();
+      expect(screen.getByLabelText('Skip rest')).toBeTruthy();
     });
   });
 });
