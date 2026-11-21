@@ -1,4 +1,4 @@
-import { dropIndex, dropIndexByHeights, moveItem } from '../reorder';
+import { clampDragOffset, dropIndex, dropIndexByHeights, moveItem } from '../reorder';
 
 describe('moveItem', () => {
   it('moves an item forward and back without mutating the input', () => {
@@ -60,5 +60,23 @@ describe('dropIndexByHeights', () => {
 
   it('stays put when a height on the way is unknown', () => {
     expect(dropIndexByHeights(0, 500, [100, undefined, 40], 10)).toBe(0);
+  });
+});
+
+describe('clampDragOffset', () => {
+  it('passes a drag through while it stays inside the list', () => {
+    expect(clampDragOffset(1, 30, 50, 4)).toBe(30);
+    expect(clampDragOffset(1, -40, 50, 4)).toBe(-40);
+  });
+
+  it('stops the row at the first and last slot', () => {
+    expect(clampDragOffset(1, 1000, 50, 4)).toBe(100);
+    expect(clampDragOffset(1, -1000, 50, 4)).toBe(-50);
+    expect(clampDragOffset(0, -10, 50, 4)).toBe(0);
+    expect(clampDragOffset(3, 10, 50, 4)).toBe(0);
+  });
+
+  it('keeps a lone row in place', () => {
+    expect(clampDragOffset(0, 80, 50, 1)).toBe(0);
   });
 });

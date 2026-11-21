@@ -15,6 +15,13 @@ export function dropIndex(from: number, dy: number, rowPitch: number, count: num
   return Math.min(count - 1, Math.max(0, target));
 }
 
+/** Clamps a drag of the row at `from` so it can't travel past the first or last slot of its list. */
+export function clampDragOffset(from: number, dy: number, rowPitch: number, count: number): number {
+  const min = Math.min(0, (0 - from) * rowPitch);
+  const max = Math.max(0, (count - 1 - from) * rowPitch);
+  return Math.min(max, Math.max(min, dy)) || 0;
+}
+
 /**
  * Like `dropIndex`, for rows of different heights: the dragged row passes a neighbour once it has
  * covered half of it. Stops at a row whose height isn't known yet.
