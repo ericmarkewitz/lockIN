@@ -4,7 +4,7 @@ import { LOGGED_SET } from './logged';
 import { getPlan, getPlanHistory } from './plan';
 import { DISTANCE_UNITS, getUnits, WEIGHT_UNITS, type DistanceUnit, type WeightUnit } from './settings';
 import type {
-  CategoryKind, DaySummary, DayStatus, Targets, Workout, WorkoutExercise, WorkoutSet,
+  CategoryKind, DaySummary, DayStatus, PlanDay, Targets, Workout, WorkoutExercise, WorkoutSet,
 } from './types';
 
 type WeRow = {
@@ -100,10 +100,25 @@ async function insertWorkoutExercise(
 }
 
 /** Returns the workout for `date`, materializing it from the weekly plan on first access. */
+/**
+ * The plan to fill in a new workout for `date`. Days before the latest plan save use the plan they
+ * had: nothing before the first save, and rest or nothing where that plan said so. The history
+ * keeps no exercise lists, so a day that had exercises then gets today's.
+ */
+async function planDayFor(db: Db, date: string): Promise<{ isRest: boolean; items: PlanDay['items'] }> {
+  const weekday = weekdayOf(date);
+  const current = (await getPlan(db)).find((d) => d.weekday === weekday)!;
+  const history = await getPlanHistory(db); // newest first
+  if (!history.length || date >= history[0].effectiveFrom) return current;
+  const then = history.find((h) => h.weekday === weekday && h.effectiveFrom <= date);
+  if (!then || !then.exerciseCount) return { isRest: !!then?.isRest, items: [] };
+  return current;
+}
+
 export async function ensureWorkout(db: Db, date: string): Promise<Workout> {
   const existing = await getWorkout(db, date);
   if (existing) return existing;
-  const day = (await getPlan(db)).find((d) => d.weekday === weekdayOf(date))!;
+  const day = await planDayFor(db, date);
   await db.withTransactionAsync(async () => {
     const { lastInsertRowId } = await db.runAsync('INSERT INTO workouts (date, is_rest) VALUES (?, ?)', [
       date, day.isRest ? 1 : 0,
@@ -325,6 +340,8 @@ export async function getLastPerformance(
 export async function getRangeSummary(db: Db, from: string, to: string, today: string): Promise<DaySummary[]> {
   const plan = await getPlan(db);
   const history = await getPlanHistory(db); // newest first
+  const first = history.at(-1)?.effectiveFrom;
+  const beforePlan = (date: string) => date < today && (!first || date < first);
   const rows = await db.getAllAsync<{
     date: string; is_rest: number; kind: CategoryKind | null; we_id: number | null;
     total: number | null; done: number | null;
@@ -350,7 +367,10 @@ export async function getRangeSummary(db: Db, from: string, to: string, today: s
       // A rest day only counts the exercises the user actually logged.
       const ex = logged.filter((r) => r.we_id !== null && (!isRest || r.done));
       const kinds = [...new Set(ex.map((r) => r.kind!))];
-      if (!ex.length) return { date, status: isRest ? 'rest' : 'none', exerciseCount: 0, kinds: [] };
+      if (!ex.length) {
+        if (isRest) return { date, status: 'rest', exerciseCount: 0, kinds: [] };
+        return { date, status: 'none', exerciseCount: 0, kinds: [], ...(beforePlan(date) && { beforePlan: true as const }) };
+      }
       const done = ex.reduce((n, r) => n + (r.done ?? 0), 0);
       const total = ex.reduce((n, r) => n + (r.total ?? 0), 0);
       const status: DayStatus = done === 0 ? unfinished() : done >= total ? 'completed' : 'partial';

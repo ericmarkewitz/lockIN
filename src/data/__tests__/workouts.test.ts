@@ -404,6 +404,22 @@ describe('getRangeSummary', () => {
       const [day] = await getRangeSummary(db, MON, MON, LATER);
       expect(day).toMatchObject({ status: 'none', beforePlan: true });
     });
+
+    it('opens a day before the plan was first saved empty, so it is not shown as missed', async () => {
+      const db = await freshPlan();
+      await markPlanComplete(db, '2026-11-04'); // Wednesday; Monday's plan has Bench Press
+      const w = await ensureWorkout(db, MON);
+      expect(w.exercises).toEqual([]);
+      expect(w.isRest).toBe(false);
+      const [day] = await getRangeSummary(db, MON, MON, '2026-11-04');
+      expect(day).toMatchObject({ status: 'none', exerciseCount: 0, beforePlan: true });
+    });
+
+    it('still fills in days from the plan once it was saved', async () => {
+      const db = await freshPlan();
+      await markPlanComplete(db, '2026-11-04');
+      expect((await ensureWorkout(db, '2026-11-09')).exercises).toHaveLength(1);
+    });
   });
 
   describe('after the plan changes', () => {
@@ -433,6 +449,29 @@ describe('getRangeSummary', () => {
       await markPlanComplete(db, '2026-11-06');
       const [day] = await getRangeSummary(db, '2026-11-09', '2026-11-09', LATER);
       expect(day.status).toBe('missed');
+    });
+
+    it('opens a past day that had nothing planned then empty, not with the new plan', async () => {
+      const db = await changed();
+      const w = await ensureWorkout(db, '2026-11-05'); // Thursday: nothing then, Squat now
+      expect(w).toMatchObject({ isRest: false, exercises: [] });
+      const [day] = await getRangeSummary(db, '2026-11-05', '2026-11-05', LATER);
+      expect(day.status).toBe('none');
+    });
+
+    it('opens a past rest day as rest, even if the day has exercises now', async () => {
+      const db = await changed();
+      await setPlanDay(db, 2, { isRest: false, items: [{ exerciseId: await findByName(db, 'Squat'), targetSets: 3 }] });
+      await markPlanComplete(db, '2026-11-06');
+      const w = await ensureWorkout(db, '2026-11-03'); // Tuesday: rest then, Squat now
+      expect(w).toMatchObject({ isRest: true, exercises: [] });
+      const [day] = await getRangeSummary(db, '2026-11-03', '2026-11-03', LATER);
+      expect(day.status).toBe('rest');
+    });
+
+    it('opens days from the latest save on with the current plan', async () => {
+      const db = await changed();
+      expect((await ensureWorkout(db, '2026-11-12')).exercises.map((e) => e.exerciseName)).toEqual(['Squat']);
     });
   });
 

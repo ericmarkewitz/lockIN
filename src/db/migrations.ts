@@ -286,6 +286,20 @@ const MIGRATIONS: ((db: Db) => Promise<void>)[] = [
          AND NOT EXISTS (SELECT 1 FROM exercises WHERE name = 'Mat Pilates' COLLATE NOCASE AND category_id = ${cat})`,
     );
   },
+  // Opening a day from before the plan was first saved used to fill it in from the plan, so it
+  // showed as missed. Drop those days where nothing was logged, noted or changed by hand.
+  async (db) => {
+    await db.execAsync(`
+      DELETE FROM workouts
+      WHERE date < (SELECT MIN(effective_from) FROM plan_history)
+        AND notes IS NULL AND is_customized = 0
+        AND NOT EXISTS (
+          SELECT 1 FROM workout_exercises we JOIN sets s ON s.workout_exercise_id = we.id
+          WHERE we.workout_id = workouts.id
+            AND (s.completed = 1 OR s.reps IS NOT NULL OR s.weight IS NOT NULL OR s.duration_min IS NOT NULL OR s.distance IS NOT NULL)
+        );
+    `);
+  },
 ];
 
 export const LATEST_VERSION = MIGRATIONS.length;
