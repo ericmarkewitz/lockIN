@@ -1,5 +1,5 @@
 import { StyleSheet, View } from 'react-native';
-import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
+import { GestureDetector, usePanGesture, type NativeGesture } from 'react-native-gesture-handler';
 
 import { useTheme } from '@/theme';
 import { Icon, sym } from './Icon';
@@ -8,6 +8,13 @@ export const HANDLE_SIZE = 48;
 
 type Props = {
   label: string;
+  /** Identifies the drag gesture in tests. */
+  testID?: string;
+  /**
+   * The surrounding scroll view's gesture. Holding the handle stops it from scrolling, so the
+   * screen doesn't have to toggle `scrollEnabled` (which makes iOS jump a large-title page).
+   */
+  blocks?: NativeGesture | null;
   onStart: () => void;
   onMove: (dy: number) => void;
   /** Called with the final vertical distance when the finger lifts. */
@@ -20,11 +27,13 @@ type Props = {
 };
 
 /** A large grab area that reports vertical drags. Drag state lives in the parent. */
-export function DragHandle({ label, onStart, onMove, onEnd, onCancel, onMoveUp, onMoveDown }: Props) {
+export function DragHandle({ label, testID, blocks, onStart, onMove, onEnd, onCancel, onMoveUp, onMoveDown }: Props) {
   const t = useTheme();
   const pan = usePanGesture({
     runOnJS: true,
     minDistance: 0,
+    testID,
+    block: blocks ?? undefined,
     onActivate: () => onStart(),
     onUpdate: (e) => onMove(e.translationY),
     onDeactivate: (e) => (e.canceled ? onCancel() : onEnd(e.translationY)),

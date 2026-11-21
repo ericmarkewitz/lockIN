@@ -1,4 +1,5 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react-native';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react-native';
+import { createGestureController, getByGestureTestId } from 'react-native-gesture-handler/jest-utils';
 
 import { addExercise, listCategoriesWithExercises } from '@/data/exercises';
 import { getPlan, isPlanComplete, setPlanDay } from '@/data/plan';
@@ -207,6 +208,27 @@ describe('PlanEditor', () => {
     const items = (await getPlan(db)).find((d) => d.weekday === 1)!.items;
     expect(items.map((i) => i.exerciseName)).toEqual(['Lunge', 'Squat', 'Leg Press']);
     expect(items[0]).toMatchObject({ targetSets: 5 });
+  });
+
+  it('keeps the page where it is while an exercise is dragged', async () => {
+    const db = await createTestDb();
+    await renderWithDb(<PlanEditor onSaved={jest.fn()} />, db);
+    for (const name of ['Squat', 'Lunge']) {
+      await fireEvent.press(await screen.findByLabelText('Add exercise to Monday'));
+      await fireEvent.press(await screen.findByLabelText(`Add ${name}`));
+    }
+    // Holding the handle stops the scroll view's own gesture from starting.
+    const relations = () => (getByGestureTestId('drag-Squat-1') as { gestureRelations?: { blocksHandlers: number[] } }).gestureRelations;
+    await waitFor(() => expect(relations()?.blocksHandlers).toHaveLength(1));
+
+    const drag = createGestureController('drag-Squat-1');
+    await act(() => {
+      drag.begin();
+      drag.activate({ translationY: 0 });
+    });
+    // Toggling scrolling under the large title makes iOS jump the page.
+    expect(screen.getByTestId('plan-scroll').props.scrollEnabled).not.toBe(false);
+    await act(() => drag.end({ translationY: 0 }));
   });
 
   it('ignores moves past either end of the list', async () => {

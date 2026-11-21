@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { ScrollView } from 'react-native-gesture-handler';
+import { ScrollView, type NativeGesture } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AddButton, Button, Eyebrow, Toggle, useRaised } from '@/components/ui';
@@ -22,7 +22,7 @@ import { useDb } from '@/db/DbContext';
 import { DAY_NAMES } from '@/lib/calendar';
 import { todayKey } from '@/lib/dates';
 import { parseNumber } from '@/lib/numbers';
-import { dropIndex, moveItem } from '@/lib/reorder';
+import { clampDragOffset, dropIndex, moveItem } from '@/lib/reorder';
 import { MAX_REPS, MAX_SETS, wheelOptions } from '@/lib/wheel';
 import { accentGradient, tint, useTheme } from '@/theme';
 
@@ -61,6 +61,9 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
   const [drag, setDrag] = useState<{ weekday: number; from: number; over: number; pitch: number } | null>(null);
   const dragRef = useRef(drag);
   const [dragY] = useState(() => new Animated.Value(0));
+  // Drag handles block this so the page holds still under a drag. The setter is stable and the
+  // scroll view only reports a new gesture, so the scary prop name below is safe here.
+  const [scrollGesture, setScrollGesture] = useState<NativeGesture | null>(null);
   const rowHeights = useRef(new Map<string, number>());
   const nextKey = useRef(0);
   const newKey = () => `row-${nextKey.current++}`;
@@ -106,7 +109,8 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
   const moveDrag = (d: DayDraft, dy: number) => {
     const cur = dragRef.current;
     if (!cur) return;
-    dragY.setValue(dy);
+    // The row stays inside its own day; it can't be dropped on another one.
+    dragY.setValue(clampDragOffset(cur.from, dy, cur.pitch, d.items.length));
     const over = dropIndex(cur.from, dy, cur.pitch, d.items.length);
     if (over !== cur.over) setDragState({ ...cur, over });
   };
@@ -174,7 +178,7 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
 
   return (
     <KeyboardAvoider>
-      <ScrollView testID="plan-scroll" {...keyboardScrollProps} scrollEnabled={!drag} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.wrap} style={{ backgroundColor: t.bg }}>
+      <ScrollView testID="plan-scroll" {...keyboardScrollProps} onGestureUpdate_CAN_CAUSE_INFINITE_RERENDER={setScrollGesture} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.wrap} style={{ backgroundColor: t.bg }}>
         <WeekOverview days={days} />
         {days.map((d) => (
           <View
@@ -216,6 +220,8 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
                   >
                     <DragHandle
                       label={`Reorder ${it.name} on ${DAY_NAMES[d.weekday]}`}
+                      testID={`drag-${it.name}-${d.weekday}`}
+                      blocks={scrollGesture}
                       onStart={() => startDrag(d.weekday, idx, it.key)}
                       onMove={(dy) => moveDrag(d, dy)}
                       onEnd={(dy) => endDrag(d, dy)}
