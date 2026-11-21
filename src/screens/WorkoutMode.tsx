@@ -114,15 +114,20 @@ export function WorkoutMode({ date }: { date: string }) {
   /** What could be done instead of the current exercise, e.g. when its machine is taken. */
   const alternatives = step ? exercises.filter((e) => e.id !== step.exercise.id && e.sets.some((x) => !x.completed)) : [];
 
+  // Read through `current` with a guard, never `step!`: the React Compiler evaluates a
+  // handler's dependencies on every render, and `step` is null on the finish screen.
+  const current = step?.exercise ?? null;
+
   /**
    * Does `picked` now: a later exercise moves into the current one's slot, pushing it back one;
    * an earlier one is already ahead, so it's only jumped to. A running rest keeps going.
    */
   const switchTo = async (picked: WorkoutExercise) => {
     setSwitching(false);
+    if (!current) return;
     const ids = workout.exercises.map((e) => e.id);
     const from = ids.indexOf(picked.id);
-    const to = ids.indexOf(step!.exercise.id);
+    const to = ids.indexOf(current.id);
     if (from > to) {
       await reorderWorkoutExercises(db, workout.id, moveItem(ids, from, to));
       await reload();
@@ -133,7 +138,8 @@ export function WorkoutMode({ date }: { date: string }) {
   /** Does `exerciseId` instead of the current exercise for its sets not done yet, e.g. when that lift can't be done today. */
   const swapIn = async (exerciseId: number) => {
     setSwitching(false);
-    const { id } = await replaceWorkoutExercise(db, step!.exercise.id, exerciseId);
+    if (!current) return;
+    const { id } = await replaceWorkoutExercise(db, current.id, exerciseId);
     await reload();
     setCursor({ exercise: id });
   };
