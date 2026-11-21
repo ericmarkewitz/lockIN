@@ -42,7 +42,7 @@ describe('WorkoutMode', () => {
     expect(screen.getByText('Exercise 1 of 2')).toBeTruthy();
     expect(screen.getByLabelText('Weight').props.value).toBe('');
     expect(screen.getByLabelText('Reps').props.value).toBe('10');
-    expect(screen.getByLabelText('0 of 3 sets done')).toBeTruthy();
+    expect(screen.getByLabelText('On set 1 of 3, 0 done')).toBeTruthy();
     expect(screen.getByLabelText('Next: Squat')).toBeTruthy();
   });
 
@@ -60,7 +60,31 @@ describe('WorkoutMode', () => {
     expect(await screen.findByText('Set 2 of 2')).toBeTruthy();
     expect((await sets(db))[0]).toMatchObject({ weight: 135, reps: 10, completed: true });
     expect(screen.getByLabelText('Weight').props.value).toBe('135');
-    expect(screen.getByLabelText('1 of 3 sets done')).toBeTruthy();
+    expect(screen.getByLabelText('On set 2 of 3, 1 done')).toBeTruthy();
+  });
+
+  it('counts the set you are on in the progress at the top, so the last set reads 3/3', async () => {
+    const db = await setup();
+    await setRestSeconds(db, 0);
+    await open(db);
+    expect(screen.getByText('1/3', { includeHiddenElements: true })).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Done with set 1'));
+    await fireEvent.press(await screen.findByLabelText('Done with set 2'));
+    await screen.findByText('Set 1 of 1');
+    expect(screen.getByText('3/3', { includeHiddenElements: true })).toBeTruthy();
+    expect(screen.getByLabelText('On set 3 of 3, 2 done')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Done with set 1'));
+    await screen.findByText('Workout complete');
+    expect(screen.getByLabelText('3 of 3 sets done')).toBeTruthy();
+  });
+
+  it('does not count a skipped set as one you are on', async () => {
+    const db = await setup();
+    await setRestSeconds(db, 0);
+    await open(db);
+    await fireEvent.press(screen.getByLabelText('Skip set 1'));
+    await screen.findByText('Set 2 of 2');
+    expect(screen.getByLabelText('On set 1 of 3, 0 done')).toBeTruthy();
   });
 
   it('logs fewer reps when you did fewer', async () => {
