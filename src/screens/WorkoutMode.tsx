@@ -151,6 +151,7 @@ export function WorkoutMode({ date }: { date: string }) {
       steps={steps}
       exercises={exercises}
       current={step?.exercise.id ?? null}
+      onSet={!!step && !step.set.completed}
       onEnd={() => router.back()}
     />
   );
@@ -308,13 +309,21 @@ function SwitchSheet({
 
 /**
  * End, then one capsule per exercise filling as its sets are done (the current one tinted),
- * then the count of sets done.
+ * then the count of sets: the ones done plus the one you're on, so the last set reads 7/7 like
+ * "Set 3 of 3" does. On the finish screen it's the sets done.
  */
 function TopBar({
-  steps, exercises, current, onEnd,
-}: { steps: Step[]; exercises: WorkoutExercise[]; current: number | null; onEnd: () => void }) {
+  steps, exercises, current, onSet, onEnd,
+}: {
+  steps: Step[]; exercises: WorkoutExercise[]; current: number | null;
+  /** Whether a set not done yet is showing, which then counts as the one you're on. */
+  onSet: boolean;
+  onEnd: () => void;
+}) {
   const t = useTheme();
   const done = steps.filter((s) => s.set.completed).length;
+  const count = done + (onSet ? 1 : 0);
+  const label = onSet ? `On set ${count} of ${steps.length}, ${done} done` : `${done} of ${steps.length} sets done`;
   return (
     <View style={styles.topBar}>
       <Pressable
@@ -326,7 +335,7 @@ function TopBar({
       >
         <Icon name={sym('xmark', 'close')} size={13} color={t.text} fallback="✕" />
       </Pressable>
-      <View accessible accessibilityLabel={`${done} of ${steps.length} sets done`} style={styles.capsules}>
+      <View accessible accessibilityLabel={label} style={styles.capsules}>
         {exercises.map((e) => {
           const share = e.sets.filter((s) => s.completed).length / e.sets.length;
           const on = e.id === current;
@@ -338,7 +347,7 @@ function TopBar({
         })}
       </View>
       <Text style={[styles.topCount, { color: t.muted }]} importantForAccessibility="no" accessibilityElementsHidden>
-        {done}/{steps.length}
+        {count}/{steps.length}
       </Text>
     </View>
   );
