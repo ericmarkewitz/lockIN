@@ -639,4 +639,62 @@ describe('migrations', () => {
       expect(rows.find((r) => r.name === 'Pilates')).toMatchObject({ is_custom: 0 });
     });
   });
+
+  describe('v13 clears days opened before the plan existed', () => {
+    /** Upgrades from v12 with a plan first saved on Wednesday Nov 18. */
+    async function upgradeFromV12(prepare: (db: Db) => Promise<void>) {
+      const raw = new DatabaseSync(':memory:');
+      const db = wrap(raw);
+      await migrate(db);
+      raw.exec('PRAGMA user_version = 12');
+      await db.runAsync(
+        "INSERT INTO plan_history (effective_from, weekday, is_rest, exercise_count, kinds) VALUES ('2026-11-18', 1, 0, 1, 'strength')",
+      );
+      await prepare(db);
+      await migrate(db);
+      return db;
+    }
+    const bench = async (db: Db) => (await db.getFirstAsync<{ id: number }>("SELECT id FROM exercises WHERE name = 'Bench Press'"))!.id;
+    async function workout(db: Db, date: string, extra: { notes?: string; customized?: boolean; logged?: boolean } = {}) {
+      const { lastInsertRowId: id } = await db.runAsync('INSERT INTO workouts (date, notes, is_customized) VALUES (?, ?, ?)', [
+        date, extra.notes ?? null, extra.customized ? 1 : 0,
+      ]);
+      const { lastInsertRowId: we } = await db.runAsync(
+        'INSERT INTO workout_exercises (workout_id, exercise_id, position) VALUES (?, ?, 0)', [id, await bench(db)],
+      );
+      await db.runAsync('INSERT INTO sets (workout_exercise_id, set_number, reps, weight, completed) VALUES (?, 1, ?, ?, ?)', [
+        we, extra.logged ? 5 : null, extra.logged ? 100 : null, extra.logged ? 1 : 0,
+      ]);
+    }
+    const dates = async (db: Db) => (await db.getAllAsync<{ date: string }>('SELECT date FROM workouts ORDER BY date')).map((r) => r.date);
+
+    it('drops untouched workouts from before the plan, so they are no longer missed', async () => {
+      const db = await upgradeFromV12(async (d) => {
+        await workout(d, '2026-11-16'); // Monday, opened after the plan was saved
+        await workout(d, '2026-11-23'); // after the plan: kept
+      });
+      expect(await dates(db)).toEqual(['2026-11-23']);
+      const [mon] = await getRangeSummary(db, '2026-11-16', '2026-11-16', '2026-11-20');
+      expect(mon).toMatchObject({ status: 'none', beforePlan: true });
+    });
+
+    it('keeps days before the plan that were logged, noted or changed by hand', async () => {
+      const db = await upgradeFromV12(async (d) => {
+        await workout(d, '2026-11-14', { logged: true });
+        await workout(d, '2026-11-15', { notes: 'sore' });
+        await workout(d, '2026-11-16', { customized: true });
+      });
+      expect(await dates(db)).toEqual(['2026-11-14', '2026-11-15', '2026-11-16']);
+    });
+
+    it('leaves workouts alone when no plan was ever saved', async () => {
+      const raw = new DatabaseSync(':memory:');
+      const db = wrap(raw);
+      await migrate(db);
+      raw.exec('PRAGMA user_version = 12');
+      await workout(db, '2026-11-16');
+      await migrate(db);
+      expect(await dates(db)).toEqual(['2026-11-16']);
+    });
+  });
 });
