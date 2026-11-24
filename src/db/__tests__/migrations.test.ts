@@ -3,7 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { LATEST_VERSION, SEED_V1, migrate } from '../migrations';
 import { syncCatalog } from '../catalog';
 import type { Db } from '../types';
-import { LIFT_SUBCATEGORIES } from '@/data/exercises';
+import { LIFT_SUBCATEGORIES, listCategoriesWithExercises } from '@/data/exercises';
 import { getRangeSummary } from '@/data/workouts';
 import { createTestDb, wrap } from '@/test/testDb';
 
@@ -20,12 +20,15 @@ const UNDO_V12 = `UPDATE categories SET name = 'Yoga & Mobility' WHERE name = 'M
 const UNDO_V10 = `UPDATE exercises SET name = 'Dumbbell Curl' WHERE name = 'Bicep Curl' AND is_custom = 0;
   UPDATE exercises SET name = 'Barbell Row' WHERE name = 'Bent-Over Row' AND is_custom = 0`;
 
-// v14 runs after every older migration, so each replay below undoes it first.
-const UNDO_V14 = `ALTER TABLE exercises DROP COLUMN fields; ALTER TABLE exercises DROP COLUMN builtin_fields;
-  ALTER TABLE plan_items DROP COLUMN fields; ALTER TABLE workout_exercises DROP COLUMN fields;
+// v14 and v15 run after every older migration, so each replay below undoes them first.
+const UNDO_V15 = `ALTER TABLE exercises DROP COLUMN builtin_fields;
+  ALTER TABLE plan_items DROP COLUMN fields; ALTER TABLE workout_exercises DROP COLUMN fields`;
+const UNDO_V14_ONLY = `ALTER TABLE exercises DROP COLUMN fields;
   ALTER TABLE sets DROP COLUMN count; ALTER TABLE sets DROP COLUMN elevation;
   ALTER TABLE sets DROP COLUMN score; ALTER TABLE sets DROP COLUMN difficulty;
   ALTER TABLE plan_items DROP COLUMN target_count; ALTER TABLE workout_exercises DROP COLUMN target_count`;
+// Undoing v14 means undoing v15 first.
+const UNDO_V14 = `${UNDO_V15}; ${UNDO_V14_ONLY}`;
 
 describe('migrations', () => {
   it('creates the schema and records the version', async () => {
@@ -763,4 +766,45 @@ describe('migrations', () => {
       await db.runAsync('INSERT INTO sets (workout_exercise_id, set_number, difficulty) VALUES (?, 1, 10)', [we]);
     });
   });
+
+  describe('v15 lets plans and days pick what they record', () => {
+    /** A database as the first v14 build left it: the catalog's fields written into `exercises.fields`. */
+    async function upgradeFromV14(prepare: (db: Db) => Promise<void> = async () => {}) {
+      const raw = new DatabaseSync(':memory:');
+      const db = wrap(raw);
+      await migrate(db);
+      raw.exec(`UPDATE exercises SET fields = builtin_fields WHERE is_custom = 0; ${UNDO_V15}; PRAGMA user_version = 14`);
+      await prepare(db);
+      await migrate(db);
+      return db;
+    }
+    const row = (db: Db, name: string) =>
+      db.getFirstAsync<{ fields: string | null; builtin_fields: string | null }>('SELECT fields, builtin_fields FROM exercises WHERE name = ?', [name]);
+
+    it("opens a v14 database, moving a built-in's catalog fields out of the user's default", async () => {
+      const db = await upgradeFromV14();
+      expect(await row(db, 'Walking')).toEqual({ fields: null, builtin_fields: 'duration,distance,steps' });
+      expect(await row(db, 'Bench Press')).toEqual({ fields: null, builtin_fields: null });
+      expect((await listCategoriesWithExercises(db)).flatMap((c) => c.exercises).find((e) => e.name === 'Walking')!.fields)
+        .toEqual(['duration', 'distance', 'steps']);
+    });
+
+    it('keeps what a custom exercise was set to record', async () => {
+      const db = await upgradeFromV14(async (d) => {
+        await d.runAsync(
+          "INSERT INTO exercises (category_id, name, is_custom, fields) VALUES ((SELECT id FROM categories WHERE name = 'Cardio'), 'Bouldering', 1, 'duration,routes')",
+        );
+      });
+      expect(await row(db, 'Bouldering')).toEqual({ fields: 'duration,routes', builtin_fields: null });
+    });
+
+    it('lets plan items and days start following the exercise', async () => {
+      const db = await upgradeFromV14(async (d) => {
+        await d.runAsync("INSERT INTO plan_items (weekday, exercise_id, position) VALUES (1, (SELECT id FROM exercises WHERE name = 'Walking'), 0)");
+      });
+      expect(await db.getFirstAsync('SELECT fields FROM plan_items')).toEqual({ fields: null });
+      expect(await db.getFirstAsync("SELECT COUNT(*) AS n FROM pragma_table_info('workout_exercises') WHERE name = 'fields'")).toEqual({ n: 1 });
+    });
+  });
 });
+
