@@ -586,7 +586,6 @@ function StepView({
               </Text>
               {set.completed && <Pill icon={sym('checkmark.circle.fill', 'check_circle')} fallback="✓" text="Done" color={t.success} />}
               <View style={{ flex: 1 }} />
-              {isStrength && <SetDots sets={exercise.sets} current={setIndex} />}
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={`Change what ${exercise.exerciseName} records`}
@@ -741,25 +740,6 @@ function RoundAction({
     >
       {children}
     </Pressable>
-  );
-}
-
-/** A dot per set: done sets fill green, the current one stretches into a bar. */
-function SetDots({ sets, current }: { sets: WorkoutSet[]; current: number }) {
-  const t = useTheme();
-  return (
-    <View style={styles.dots} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
-      {sets.map((s, i) => (
-        <View
-          key={s.id}
-          style={[
-            styles.dot,
-            i === current && styles.dotOn,
-            { backgroundColor: i === current ? t.primary : s.completed ? t.success : tint(t.text, 0.15) },
-          ]}
-        />
-      ))}
-    </View>
   );
 }
 
@@ -1004,9 +984,6 @@ const styles = StyleSheet.create({
   card: { borderRadius: 24, borderWidth: StyleSheet.hairlineWidth, padding: 14 },
   entryHead: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 },
   setLabel: { fontSize: 18, fontWeight: '900', letterSpacing: -0.3 },
-  dots: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  dotOn: { width: 22 },
   pill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, maxWidth: '100%' },
   fieldLabel: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1.2 },
   duration: { minHeight: 44, backgroundColor: 'transparent' },
