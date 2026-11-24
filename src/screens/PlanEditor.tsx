@@ -7,7 +7,7 @@ import { AddButton, Button, Eyebrow, Toggle, useRaised } from '@/components/ui';
 import { KindIcon } from '@/components/calendar/KindIcon';
 import { Icon, sym } from '@/components/Icon';
 import { ExerciseMotionFor } from '@/components/motion/ExerciseMotion';
-import { DragHandle, HANDLE_SIZE } from '@/components/DragHandle';
+import { DragHandle } from '@/components/DragHandle';
 import { ExercisePicker } from '@/components/ExercisePicker';
 import { RecordSheet } from '@/components/RecordSheet';
 import { UnitPill } from '@/components/UnitPill';
@@ -236,11 +236,12 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
             title={it.name}
             value={parseNumber(it.duration)}
             onChange={(minutes) => patchItem(d.weekday, idx, { duration: txt(minutes) })}
-            style={{ ...styles.duration, backgroundColor: t.card }}
+            style={{ ...styles.chip, backgroundColor: t.card }}
+            textStyle={styles.chipText}
           />
         )}
         {distField && (
-          <View style={styles.num}>
+          <View style={[styles.chip, styles.numChip, { backgroundColor: t.card }]}>
             <TextInput
               accessibilityLabel={`${d.weekday} ${it.name} distance`}
               value={it.distance}
@@ -248,9 +249,10 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
               keyboardType="decimal-pad"
               placeholder="–"
               placeholderTextColor={t.muted}
-              style={[styles.numInput, { color: t.text, backgroundColor: t.card }]}
+              style={[styles.numInput, { color: t.text }]}
             />
             <UnitPill
+              bare
               label={`${d.weekday} ${it.name} distance unit`}
               unit={fieldUnit(distField, draftUnits(it))}
               onPress={() => patchItem(d.weekday, idx, { distanceUnit: otherDistanceUnit(it.distanceUnit) })}
@@ -258,7 +260,7 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
           </View>
         )}
         {counted && (
-          <View style={styles.num}>
+          <View style={[styles.chip, styles.numChip, { backgroundColor: t.card }]}>
             <TextInput
               accessibilityLabel={`${d.weekday} ${it.name} ${FIELDS[counted].noun}`}
               value={it.count}
@@ -266,9 +268,9 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
               keyboardType="number-pad"
               placeholder="–"
               placeholderTextColor={t.muted}
-              style={[styles.numInput, styles.countInput, { color: t.text, backgroundColor: t.card }]}
+              style={[styles.numInput, styles.countInput, { color: t.text }]}
             />
-            <Text style={[styles.countNoun, { color: t.muted }]}>{FIELDS[counted].noun}</Text>
+            <Text style={[styles.chipUnit, { color: t.muted }]}>{FIELDS[counted].noun}</Text>
           </View>
         )}
       </>
@@ -317,7 +319,6 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
                         : { transform: [{ translateY: rowShift(d.weekday, idx) }] },
                     ]}
                   >
-                    <View testID={`plan-row-${it.name}-${d.weekday}`} style={styles.itemRow}>
                     <DragHandle
                       label={`Reorder ${it.name} on ${DAY_NAMES[d.weekday]}`}
                       testID={`drag-${it.name}-${d.weekday}`}
@@ -332,29 +333,36 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
                     <View style={[styles.thumb, { backgroundColor: t.card }]}>
                       {it.isCustom
                         ? <Text style={[styles.thumbInitial, { color: t.primary }]}>{it.name.trim().charAt(0).toUpperCase()}</Text>
-                        : <ExerciseMotionFor name={it.name} isCustom={it.isCustom} size={34} />}
+                        : <ExerciseMotionFor name={it.name} isCustom={it.isCustom} size={38} />}
                     </View>
-                    <Text numberOfLines={2} style={[styles.itemName, { color: t.text }]}>{it.name}</Text>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={`Change what ${it.name} records on ${DAY_NAMES[d.weekday]}`}
-                      onPress={() => setChanging({ weekday: d.weekday, idx })}
-                      hitSlop={8}
-                      style={({ pressed }) => [styles.remove, { backgroundColor: t.card, opacity: pressed ? 0.5 : 1 }]}
-                    >
-                      <Icon name={sym('slider.horizontal.3', 'tune')} size={11} color={t.muted} fallback="⋯" />
-                    </Pressable>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={`Remove ${it.name} from ${DAY_NAMES[d.weekday]}`}
-                      onPress={() => patchDay(d.weekday, (x) => ({ ...x, items: x.items.filter((_, i) => i !== idx) }))}
-                      hitSlop={8}
-                      style={({ pressed }) => [styles.remove, { backgroundColor: t.card, opacity: pressed ? 0.5 : 1 }]}
-                    >
-                      <Icon name={sym('xmark', 'close')} size={10} color={t.muted} fallback="×" />
-                    </Pressable>
+                    {/* The name has the full width on its line; the targets go on the line under it. */}
+                    <View style={styles.itemBody}>
+                      <Text testID={`plan-name-${it.name}-${d.weekday}`} numberOfLines={2} style={[styles.itemName, { color: t.text }]}>{it.name}</Text>
+                      <View testID={`plan-targets-${it.name}-${d.weekday}`} style={styles.targetLine}>
+                        {targetControls(d, it, idx)}
+                      </View>
                     </View>
-                    {hasTargets(it) && <View style={styles.targetsBelow}>{targetControls(d, it, idx)}</View>}
+                    {/* The item's own actions, kept apart from its targets. */}
+                    <View style={styles.rowActions}>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Change what ${it.name} records on ${DAY_NAMES[d.weekday]}`}
+                        onPress={() => setChanging({ weekday: d.weekday, idx })}
+                        hitSlop={6}
+                        style={({ pressed }) => [styles.rowAction, { opacity: pressed ? 0.5 : 1 }]}
+                      >
+                        <Icon name={sym('slider.horizontal.3', 'tune')} size={15} color={t.muted} fallback="⋯" />
+                      </Pressable>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Remove ${it.name} from ${DAY_NAMES[d.weekday]}`}
+                        onPress={() => patchDay(d.weekday, (x) => ({ ...x, items: x.items.filter((_, i) => i !== idx) }))}
+                        hitSlop={6}
+                        style={({ pressed }) => [styles.rowAction, { opacity: pressed ? 0.5 : 1 }]}
+                      >
+                        <Icon name={sym('xmark', 'close')} size={12} color={t.muted} fallback="×" />
+                      </Pressable>
+                    </View>
                   </Animated.View>
                 ))}
                 <AddButton compact title="Add exercise" label={`Add exercise to ${DAY_NAMES[d.weekday]}`} onPress={() => setPickerFor(d.weekday)} />
@@ -457,13 +465,6 @@ function WeekOverview({ days }: { days: DayDraft[] }) {
   );
 }
 
-/**
- * Whether an item has any targets to set. They go on a line of their own under its name, so the
- * name always has the row to itself.
- */
-const hasTargets = (it: Draft) =>
-  it.kind === 'strength' || it.fields.includes('duration') || !!distanceField(it.fields) || !!fieldFor(it.fields, 'count');
-
 /** Sets alone, for a lift that has no reps (a hold, a carry). */
 function SetsField({
   label, title, sets, onChange,
@@ -478,8 +479,8 @@ function SetsField({
       title={title}
       columns={[{ label: 'Sets', options: wheelOptions(1, MAX_SETS, n), value: n }]}
       onDone={([next]) => onChange(txt(next))}
-      style={{ ...styles.targets, backgroundColor: t.card }}
-      textStyle={styles.targetText}
+      style={{ ...styles.chip, backgroundColor: t.card }}
+      textStyle={styles.chipText}
     />
   );
 }
@@ -501,13 +502,30 @@ function TargetsField({
         { label: 'Reps', options: wheelOptions(1, MAX_REPS, repCount), value: repCount },
       ]}
       onDone={([nextSets, nextReps]) => onChange(txt(nextSets), txt(nextReps))}
-      style={{ ...styles.targets, backgroundColor: t.card }}
-      textStyle={styles.targetText}
+      style={{ ...styles.chip, backgroundColor: t.card }}
+      textStyle={styles.chipText}
     />
   );
 }
 
 const styles = StyleSheet.create({
+  item: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 60, paddingVertical: 8, paddingRight: 6, borderRadius: 16 },
+  // Tucks into the handle's grab area, so the picture only moves over a little.
+  thumb: { width: 46, height: 46, borderRadius: 13, alignItems: 'center', justifyContent: 'center', marginLeft: -8 },
+  thumbInitial: { fontSize: 18, fontWeight: '800' },
+  itemBody: { flex: 1, minWidth: 0, gap: 6 },
+  itemName: { fontSize: 15, fontWeight: '700', letterSpacing: -0.2 },
+  targetLine: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
+  // One target: sets × reps, a time, a distance or a count, with its unit inside.
+  chip: { minHeight: 36, minWidth: 0, borderRadius: 10, paddingHorizontal: 10, alignItems: 'center', justifyContent: 'center' },
+  chipText: { fontSize: 14, fontWeight: '800' },
+  chipUnit: { fontSize: 12, fontWeight: '600' },
+  numChip: { flexDirection: 'row', paddingLeft: 6, paddingRight: 8, gap: 0 },
+  // Right-aligned so the unit after it reads as part of the number: "3.1 mi", "8000 steps".
+  numInput: { minWidth: 30, paddingVertical: 6, paddingRight: 2, textAlign: 'right', fontSize: 14, fontWeight: '800' },
+  countInput: { minWidth: 40 },
+  rowActions: { alignItems: 'center', gap: 4 },
+  rowAction: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
   wrap: { padding: 16, gap: 12 },
   overview: { borderRadius: 24, borderWidth: StyleSheet.hairlineWidth, padding: 16, gap: 14 },
   overviewTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -524,20 +542,5 @@ const styles = StyleSheet.create({
   summaryRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   summary: { fontSize: 13, fontWeight: '600' },
   restLabel: { fontSize: 13, fontWeight: '600' },
-  item: { minHeight: 56, paddingRight: 8, borderRadius: 14 },
-  itemRow: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 56 },
-  // Lines the targets up under the name: the handle, then the picture (which overlaps the gap before it) and its gap.
-  targetsBelow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, paddingLeft: HANDLE_SIZE + 38 + 6, paddingBottom: 10 },
   dragging: { zIndex: 10, elevation: 6, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
-  thumb: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginLeft: -6 },
-  thumbInitial: { fontSize: 16, fontWeight: '800' },
-  itemName: { flex: 1, minWidth: 0, fontSize: 15, fontWeight: '700' },
-  targets: { minWidth: 72, minHeight: 40 },
-  targetText: { fontWeight: '800' },
-  duration: { minWidth: 46, minHeight: 40 },
-  num: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  numInput: { width: 46, minHeight: 40, borderRadius: 10, paddingVertical: 6, textAlign: 'center', fontWeight: '600' },
-  countInput: { width: 64 },
-  countNoun: { fontSize: 12, fontWeight: '600' },
-  remove: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
 });

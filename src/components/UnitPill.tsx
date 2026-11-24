@@ -2,8 +2,11 @@ import { Pressable, StyleSheet, Text } from 'react-native';
 
 import { useTheme } from '@/theme';
 
-/** The unit after a number field, as a button that switches that entry to the other unit. */
-export function UnitPill({ label, unit, onPress }: { label: string; unit: string; onPress: () => void }) {
+/**
+ * The unit after a number field, as a button that switches that entry to the other unit. `bare`
+ * drops the outline, for a unit sitting inside the field's own chip.
+ */
+export function UnitPill({ label, unit, onPress, bare }: { label: string; unit: string; onPress: () => void; bare?: boolean }) {
   const t = useTheme();
   return (
     <Pressable
@@ -13,14 +16,19 @@ export function UnitPill({ label, unit, onPress }: { label: string; unit: string
       accessibilityHint="Switches to the other unit"
       hitSlop={8}
       onPress={onPress}
-      style={({ pressed }) => [styles.pill, { backgroundColor: t.card, borderColor: t.border, opacity: pressed ? 0.6 : 1 }]}
+      style={({ pressed }) => [
+        styles.pill,
+        bare ? styles.bare : { backgroundColor: t.card, borderColor: t.border },
+        { opacity: pressed ? 0.6 : 1 },
+      ]}
     >
-      <Text style={[styles.text, { color: t.text }]}>{unit}</Text>
+      <Text style={[styles.text, { color: bare ? t.primary : t.text }]}>{unit}</Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   pill: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8, borderWidth: StyleSheet.hairlineWidth },
+  bare: { borderWidth: 0, paddingHorizontal: 4 },
   text: { fontSize: 12, fontWeight: '600' },
 });
