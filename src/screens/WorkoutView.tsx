@@ -10,6 +10,7 @@ import { ExercisePicker } from '@/components/ExercisePicker';
 import { ExerciseMotionFor } from '@/components/motion/ExerciseMotion';
 import { Icon, sym } from '@/components/Icon';
 import { SetHeader, SetRow } from '@/components/SetRow';
+import { SwapDaySheet } from '@/components/SwapDaySheet';
 import { AddButton, Toggle, useRaised } from '@/components/ui';
 import type { Exercise, WorkoutExercise } from '@/data/types';
 import {
@@ -49,6 +50,7 @@ export function WorkoutView({ date, onDragChange }: Props) {
     focusedBefore.current = true;
   }, [reload]));
   const [picking, setPicking] = useState(false);
+  const [swapping, setSwapping] = useState(false);
   /** The exercise whose fields are being changed for this day. */
   const [changing, setChanging] = useState<WorkoutExercise | null>(null);
   const [removal, setRemoval] = useState<{ title: string; message: string; remove: () => Promise<void> } | null>(null);
@@ -154,6 +156,20 @@ export function WorkoutView({ date, onDragChange }: Props) {
         <Text style={{ color: t.text, fontWeight: '700', flex: 1 }}>Rest day</Text>
         <Toggle label="Rest day" value={workout.isRest} onChange={(v) => act(() => setRestDay(db, date, v))} />
       </View>
+      {/* Logged sets stay on the day they were done, so only a day with nothing logged can move. */}
+      {!workout.exercises.some((e) => e.hasLoggedSets) && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Swap day"
+          accessibilityHint="Trades this day's workout with another day's, without changing your plan"
+          onPress={() => setSwapping(true)}
+          style={({ pressed }) => [styles.restRow, { backgroundColor: t.card, borderColor: t.border, opacity: pressed ? 0.6 : 1 }]}
+        >
+          <Icon name={sym('arrow.left.arrow.right', 'swap_horiz')} size={16} color={t.muted} fallback="⇄" />
+          <Text style={{ color: t.text, fontWeight: '700', flex: 1 }}>Swap with another day</Text>
+          <Text style={{ color: t.muted, fontSize: 18 }}>›</Text>
+        </Pressable>
+      )}
       {(!workout.isRest || exercises.length > 0) && (
         <>
           {exercises.map((ex, idx) => {
@@ -279,6 +295,7 @@ export function WorkoutView({ date, onDragChange }: Props) {
           </View>
         </>
       )}
+      {swapping && <SwapDaySheet date={date} onClose={() => setSwapping(false)} onSwapped={() => { setSwapping(false); reload(); }} />}
       {changing && <ChangeRecords exercise={changing} onDone={() => { setChanging(null); reload(); }} />}
       <ExercisePicker visible={picking} onClose={() => setPicking(false)} onPick={addEx} onEdited={reload} onRemoved={reload} />
       {removal && (

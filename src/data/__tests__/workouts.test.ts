@@ -15,6 +15,8 @@ import {
   replaceWorkoutExercise,
   setRestDay,
   setWorkoutExerciseFields,
+  previewDays,
+  swapDays,
   updateSet,
 } from '../workouts';
 import { findByName } from '@/test/helpers';
@@ -775,5 +777,80 @@ describe('what a day records for an exercise', () => {
     const { db } = await walkPlanned();
     const we = (await ensureWorkout(db, MON)).exercises[0];
     await expect(setWorkoutExerciseFields(db, we.id, ['reps'])).rejects.toThrow('Reps is not available');
+  });
+});
+
+describe('swapping two days', () => {
+  const WED = '2026-11-04';
+  const TUE = '2026-11-03';
+
+  it("trades the days' exercises, targets and rest, leaving the plan alone", async () => {
+    const db = await planned();
+    const planBefore = await getPlan(db);
+    await swapDays(db, MON, TUE);
+    const mon = (await getWorkout(db, MON))!;
+    const tue = (await getWorkout(db, TUE))!;
+    expect(mon.isRest).toBe(true);
+    expect(mon.exercises).toHaveLength(0);
+    expect(tue.isRest).toBe(false);
+    expect(tue.exercises.map((e) => [e.exerciseName, e.targetSets, e.sets.length])).toEqual([['Bench Press', 3, 3]]);
+    expect(await getPlan(db)).toEqual(planBefore);
+    // Next week still follows the plan.
+    expect((await ensureWorkout(db, '2026-11-09')).exercises.map((e) => e.exerciseName)).toEqual(['Bench Press']);
+  });
+
+  it('swaps two training days', async () => {
+    const db = await planned();
+    await swapDays(db, MON, WED);
+    expect((await getWorkout(db, MON))!.exercises.map((e) => e.exerciseName)).toEqual(['Running']);
+    expect((await getWorkout(db, WED))!.exercises.map((e) => e.exerciseName)).toEqual(['Bench Press']);
+  });
+
+  it('keeps each date its own notes', async () => {
+    const db = await planned();
+    await ensureWorkout(db, MON);
+    await db.runAsync('UPDATE workouts SET notes = ? WHERE date = ?', ['sore', MON]);
+    await swapDays(db, MON, WED);
+    expect((await getWorkout(db, MON))!.notes).toBe('sore');
+    expect((await getWorkout(db, WED))!.notes).toBeNull();
+  });
+
+  it('survives a plan edit', async () => {
+    const db = await planned();
+    await swapDays(db, MON, WED);
+    const squat = await findByName(db, 'Squat');
+    await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: squat, targetSets: 5, targetReps: 5 }] });
+    await refreshUntouchedWorkouts(db, MON);
+    expect((await getWorkout(db, MON))!.exercises.map((e) => e.exerciseName)).toEqual(['Running']);
+    expect((await getWorkout(db, WED))!.exercises.map((e) => e.exerciseName)).toEqual(['Bench Press']);
+  });
+
+  it('refuses a day with anything logged, changing neither', async () => {
+    const db = await planned();
+    const w = await ensureWorkout(db, MON);
+    await updateSet(db, w.exercises[0].sets[0].id, { reps: 10, weight: 100, completed: true });
+    await expect(swapDays(db, MON, WED)).rejects.toThrow(/logged/);
+    await expect(swapDays(db, WED, MON)).rejects.toThrow(/logged/);
+    expect((await getWorkout(db, MON))!.exercises.map((e) => e.exerciseName)).toEqual(['Bench Press']);
+    expect((await getWorkout(db, WED))!.exercises.map((e) => e.exerciseName)).toEqual(['Running']);
+  });
+
+  it('refuses swapping a day with itself', async () => {
+    const db = await planned();
+    await expect(swapDays(db, MON, MON)).rejects.toThrow();
+  });
+
+  it('previews days without creating their workouts', async () => {
+    const db = await planned();
+    await swapDays(db, MON, WED);
+    const w = await ensureWorkout(db, MON);
+    await updateSet(db, w.exercises[0].sets[0].id, { durationMin: 20, completed: true });
+    expect(await previewDays(db, [MON, TUE, WED, '2026-11-06'])).toEqual([
+      { date: MON, isRest: false, exercises: ['Running'], logged: true },
+      { date: TUE, isRest: true, exercises: [], logged: false },
+      { date: WED, isRest: false, exercises: ['Bench Press'], logged: false },
+      { date: '2026-11-06', isRest: false, exercises: [], logged: false },
+    ]);
+    expect(await getWorkout(db, '2026-11-06')).toBeNull();
   });
 });

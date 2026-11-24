@@ -354,6 +354,53 @@ export async function replaceWorkoutExercise(db: Db, workoutExerciseId: number, 
   return { id };
 }
 
+const hasLogged = (db: Db, workoutId: number) => db.getFirstAsync(
+  `SELECT 1 FROM workout_exercises we JOIN sets s ON s.workout_exercise_id = we.id
+   WHERE we.workout_id = ? AND ${LOGGED_SET}`,
+  [workoutId],
+);
+
+/**
+ * Trades what two days hold, e.g. moving today's legs to Wednesday's rest: their exercises, targets
+ * and rest flag. Each date keeps its notes. Only these two days change, never the plan, and both
+ * count as changed by hand so plan edits leave them be. A day with anything logged can't move.
+ */
+export async function swapDays(db: Db, a: string, b: string): Promise<void> {
+  if (a === b) throw new Error('Pick another day to swap with');
+  const wa = await ensureWorkout(db, a);
+  const wb = await ensureWorkout(db, b);
+  for (const w of [wa, wb]) {
+    if (await hasLogged(db, w.id)) throw new Error(`${w.date} already has sets logged`);
+  }
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      `UPDATE workout_exercises SET workout_id = CASE workout_id WHEN ? THEN ? ELSE ? END WHERE workout_id IN (?, ?)`,
+      [wa.id, wb.id, wa.id, wa.id, wb.id],
+    );
+    await db.runAsync('UPDATE workouts SET is_rest = ?, is_customized = 1 WHERE id = ?', [wb.isRest ? 1 : 0, wa.id]);
+    await db.runAsync('UPDATE workouts SET is_rest = ?, is_customized = 1 WHERE id = ?', [wa.isRest ? 1 : 0, wb.id]);
+  });
+}
+
+export type DayPreview = { date: string; isRest: boolean; exercises: string[]; logged: boolean };
+
+/** What each day holds, from its workout or else the plan, without creating any workouts. */
+export async function previewDays(db: Db, dates: readonly string[]): Promise<DayPreview[]> {
+  const out: DayPreview[] = [];
+  for (const date of dates) {
+    const w = await getWorkout(db, date);
+    if (w) {
+      out.push({
+        date, isRest: w.isRest, exercises: shownExercises(w).map((e) => e.exerciseName), logged: !!(await hasLogged(db, w.id)),
+      });
+    } else {
+      const day = await planDayFor(db, date);
+      out.push({ date, isRest: day.isRest, exercises: day.isRest ? [] : day.items.map((i) => i.exerciseName), logged: false });
+    }
+  }
+  return out;
+}
+
 export async function setRestDay(db: Db, date: string, isRest: boolean): Promise<void> {
   await ensureWorkout(db, date);
   await db.runAsync('UPDATE workouts SET is_rest = ?, is_customized = 1 WHERE date = ?', [isRest ? 1 : 0, date]);

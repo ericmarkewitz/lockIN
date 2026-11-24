@@ -7,6 +7,7 @@ import { MonthView } from '@/components/calendar/MonthView';
 import { WeekView } from '@/components/calendar/WeekView';
 import { Icon, sym } from '@/components/Icon';
 import { KeyboardAvoider, keyboardScrollProps } from '@/components/KeyboardAvoider';
+import { SwapDaySheet } from '@/components/SwapDaySheet';
 import { IconButton, Segmented } from '@/components/ui';
 import { getRangeSummary } from '@/data/workouts';
 import type { DaySummary } from '@/data/types';
@@ -23,6 +24,7 @@ export function CalendarScreen({ today = todayKey() }: { today?: string }) {
   const router = useRouter();
   const [mode, setMode] = useState<ViewMode>('week');
   const [anchor, setAnchor] = useState(today);
+  const [swapping, setSwapping] = useState<string | null>(null);
   const { from, to } = periodRange(anchor, mode);
   const { data, reload } = useLoad(() => getRangeSummary(db, from, to, today), [db, from, to, today]);
   useFocusEffect(useCallback(() => { reload(); }, [reload]));
@@ -85,9 +87,12 @@ export function CalendarScreen({ today = todayKey() }: { today?: string }) {
       </View>
 
       {mode === 'day' && <WorkoutView key={anchor} date={anchor} />}
-      {mode === 'week' && <WeekView dates={weekDates(anchor)} byDate={byDate} today={today} onOpen={open} />}
+      {mode === 'week' && <WeekView dates={weekDates(anchor)} byDate={byDate} today={today} onOpen={open} onSwap={setSwapping} />}
       {mode === 'month' && <MonthView anchor={anchor} byDate={byDate} today={today} onPick={pick} />}
     </ScrollView>
+    {swapping && (
+      <SwapDaySheet date={swapping} onClose={() => setSwapping(null)} onSwapped={() => { setSwapping(null); reload(); }} />
+    )}
     </KeyboardAvoider>
     </SafeAreaView>
   );
