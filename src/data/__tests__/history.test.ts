@@ -152,3 +152,44 @@ describe('sets only count for strength', () => {
     expect(await listLoggedWorkouts(db)).toEqual([{ date: '2026-11-04', exerciseNames: ['Running'], setCount: 0 }]);
   });
 });
+
+describe('history of exercises that record more than weight, reps, time and distance', () => {
+  const MON = '2026-11-02';
+  async function loggedOn(name: string, sets: Parameters<typeof updateSet>[2][], targets: { targetSets?: number } = {}) {
+    const db = await createTestDb();
+    const id = await findByName(db, name);
+    await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: id, ...targets }] });
+    const we = (await ensureWorkout(db, MON)).exercises[0];
+    for (let i = we.sets.length; i < sets.length; i++) await addSet(db, we.id);
+    const fresh = (await ensureWorkout(db, MON)).exercises[0];
+    for (const [i, s] of sets.entries()) await updateSet(db, fresh.sets[i].id, { ...s, completed: true });
+    return { db, id };
+  }
+
+  it('says what each logged exercise records', async () => {
+    const { db } = await loggedOn('Climbing', [{ durationMin: 60 }]);
+    expect(await listLoggedExercises(db)).toMatchObject([{ name: 'Climbing', fields: ['duration', 'routes', 'difficulty'] }]);
+  });
+
+  it('totals steps, elevation and score, and keeps the hardest difficulty', async () => {
+    const { db, id } = await loggedOn('Climbing', [{ durationMin: 60, count: 8, difficulty: 6 }]);
+    const we = (await ensureWorkout(db, MON)).exercises[0];
+    await db.runAsync('INSERT INTO sets (workout_exercise_id, set_number, count, difficulty, elevation, score, completed) VALUES (?, 2, 3, 8, 100, 4, 1)', [we.id]);
+    expect((await getExerciseHistory(db, id))[0]).toMatchObject({ count: 11, difficulty: 8, elevation: 100, score: 4, durationMin: 60 });
+  });
+
+  it('keeps a short distance precise enough to show in yards or meters', async () => {
+    const { db, id } = await loggedOn('Swimming', [{ durationMin: 30, distance: 1000 / 1760 }]);
+    expect((await getExerciseHistory(db, id))[0].distance! * 1760).toBeCloseTo(1000, 2);
+  });
+
+  it('leaves values never logged as null', async () => {
+    const { db, id } = await loggedOn('Walking', [{ durationMin: 30 }]);
+    expect((await getExerciseHistory(db, id))[0]).toMatchObject({ count: null, elevation: null, score: null, difficulty: null });
+  });
+
+  it("keeps a timed lift's heaviest weight and longest hold", async () => {
+    const { db, id } = await loggedOn('Weighted Plank', [{ weight: 25, durationMin: 1 }, { weight: 45, durationMin: 0.5 }], { targetSets: 2 });
+    expect((await getExerciseHistory(db, id))[0]).toMatchObject({ best: null, heaviest: 45, longestMin: 1, durationMin: 1.5 });
+  });
+});

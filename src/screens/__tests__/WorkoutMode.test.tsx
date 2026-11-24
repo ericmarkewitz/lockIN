@@ -318,6 +318,84 @@ describe('WorkoutMode', () => {
     expect((await sets(db))[0]).toMatchObject({ durationMin: 30, distance: 3, completed: true });
   });
 
+  describe('exercises that record something else', () => {
+    const planOne = async (name: string, targets: Record<string, number> = {}) => {
+      const db = await createTestDb();
+      await setRestSeconds(db, 0);
+      await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: await findByName(db, name), ...targets }] });
+      await renderWithDb(<WorkoutMode date={MON} />, db);
+      await screen.findByText(name);
+      return db;
+    };
+
+    it('logs a plank set as weight and hold time, without reps or volume', async () => {
+      const db = await planOne('Weighted Plank', { targetSets: 1, targetDurationMin: 1 });
+      expect(screen.getByText('Set 1 of 1')).toBeTruthy();
+      expect(screen.queryByLabelText('Reps')).toBeNull();
+      expect(screen.getByLabelText('Time')).toBeTruthy();
+      await fireEvent.changeText(screen.getByLabelText('Weight'), '25');
+      await fireEvent.press(screen.getByLabelText('Done with set 1'));
+      expect(await screen.findByText('Workout complete')).toBeTruthy();
+      expect(screen.queryByLabelText(/^Volume/)).toBeNull();
+      expect((await sets(db))[0]).toMatchObject({ weight: 25, durationMin: 1, reps: null, completed: true });
+    });
+
+    it('says what is up next for a timed lift', async () => {
+      const db = await createTestDb();
+      await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: await findByName(db, 'Weighted Plank'), targetSets: 2, targetDurationMin: 1 }] });
+      await renderWithDb(<WorkoutMode date={MON} />, db);
+      await fireEvent.changeText(await screen.findByLabelText('Weight'), '25');
+      await fireEvent.press(screen.getByLabelText('Done with set 1'));
+      await screen.findByLabelText('Rest, 1:30 left');
+      expect(screen.getByText('Up next: Set 2 of 2 · 25 lb × 1 min')).toBeTruthy();
+    });
+
+    it('logs a walk with steps as well as time and distance', async () => {
+      const db = await planOne('Walking', { targetDurationMin: 40, targetCount: 8000 });
+      expect(screen.getByText('Log your session')).toBeTruthy();
+      expect(screen.getByLabelText('Distance')).toBeTruthy();
+      expect(screen.getByLabelText('Steps').props.value).toBe('8000');
+      await fireEvent.changeText(screen.getByLabelText('Steps'), '8432');
+      await fireEvent.press(screen.getByLabelText('Done with Walking'));
+      expect(await screen.findByText('Workout complete')).toBeTruthy();
+      expect((await sets(db))[0]).toMatchObject({ durationMin: 40, count: 8432, distance: null, completed: true });
+    });
+
+    it('logs a climbing session as routes and a 1–10 difficulty', async () => {
+      const db = await planOne('Climbing', { targetDurationMin: 90 });
+      expect(screen.queryByLabelText('Distance')).toBeNull();
+      await fireEvent.changeText(screen.getByLabelText('Routes'), '11');
+      await fireEvent.press(screen.getByLabelText('Difficulty rating'));
+      await fireEvent.press(within(screen.getByLabelText('Difficulty')).getByText('8'));
+      await fireEvent.press(screen.getByLabelText('Done'));
+      await fireEvent.press(screen.getByLabelText('Done with Climbing'));
+      expect(await screen.findByText('Workout complete')).toBeTruthy();
+      expect((await sets(db))[0]).toMatchObject({ durationMin: 90, count: 11, difficulty: 8 });
+    });
+
+    it('changes what the exercise records mid-workout', async () => {
+      const db = await planOne('Walking');
+      expect(screen.queryByLabelText('Elevation')).toBeNull();
+      await fireEvent.press(screen.getByLabelText('Change what Walking records'));
+      await fireEvent.press(screen.getByLabelText('Record Elevation gain'));
+      await fireEvent.press(screen.getByLabelText('Save Walking'));
+      await fireEvent.press(await screen.findByText('Just this workout'));
+      expect(await screen.findByLabelText('Elevation')).toBeTruthy();
+      expect((await getWorkout(db, MON))!.exercises[0].fields).toEqual(['duration', 'distance', 'elevation', 'steps']);
+    });
+
+    it('logs elevation in the unit of the distance', async () => {
+      const db = await planOne('Hiking');
+      expect(screen.getByText('ft')).toBeTruthy();
+      await fireEvent.changeText(screen.getByLabelText('Elevation'), '1200');
+      await fireEvent.press(screen.getByLabelText('Distance unit'));
+      expect(screen.getByText('m')).toBeTruthy();
+      await fireEvent.press(screen.getByLabelText('Done with Hiking'));
+      expect(await screen.findByText('Workout complete')).toBeTruthy();
+      expect((await sets(db))[0]).toMatchObject({ elevation: expect.closeTo(1200 / 0.3048, 6), distanceUnit: 'km' });
+    });
+  });
+
   it('has nothing to do on an empty day', async () => {
     await renderWithDb(<WorkoutMode date={MON} />, await createTestDb());
     expect(await screen.findByText('Nothing planned')).toBeTruthy();

@@ -249,6 +249,7 @@ describe('ExercisePicker', () => {
       expect(screen.queryByLabelText('Add Rack Pull')).toBeNull();
     });
 
+
     it("shows why a name can't be used, and keeps the sheet open", async () => {
       const { db } = await withRackPull();
       await open(db);

@@ -1,15 +1,16 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import type { DistanceUnit, WeightUnit } from '@/data/settings';
+import { DEFAULT_FIELDS, FIELDS, type FieldId } from '@/data/fields';
+import type { DistanceUnit, Units, WeightUnit } from '@/data/settings';
 import type { CategoryKind, WorkoutSet } from '@/data/types';
 import type { SetPatch } from '@/data/workouts';
+import { fieldUnit, fieldValue, fromDisplayField, toDisplayField } from '@/lib/fields';
 import { parseNumber } from '@/lib/numbers';
-import {
-  fromDisplayDistance, fromDisplayWeight, otherDistanceUnit, otherWeightUnit, toDisplayDistance, toDisplayWeight,
-} from '@/lib/units';
+import { otherDistanceUnit, otherWeightUnit } from '@/lib/units';
 import { MAX_REPS, wheelOptions } from '@/lib/wheel';
 import { tint, useTheme } from '@/theme';
+import { DifficultyButton } from './DifficultyButton';
 import { DurationButton } from './DurationButton';
 import { Icon, sym } from './Icon';
 import { UnitPill } from './UnitPill';
@@ -17,6 +18,8 @@ import { WheelButton } from './WheelSheet';
 
 type Props = {
   kind: CategoryKind;
+  /** What the exercise records, in order; its category's default when left out. */
+  fields?: readonly FieldId[];
   set: WorkoutSet;
   /** Sets don't store a duration target; it comes from the workout exercise. */
   targetDurationMin?: number | null;
@@ -32,23 +35,31 @@ type Props = {
 
 const show = (n: number | null) => (n === null ? '' : String(n));
 
+/** Fields whose unit follows the set's distance unit: miles or km, yards or meters, feet or meters. */
+const DISTANCE_LIKE: readonly string[] = ['distance', 'shortDistance', 'elevation'];
+
 /**
  * A typed number. With `onSuffixPress` the suffix is a button (a unit to switch); it gets the
  * number on screen, including unsaved typing, which it takes over instead of `onCommit`.
+ * `integer` takes whole numbers, rounding what's typed.
  */
 function NumField({
-  label, value, suffix, suffixLabel, onSuffixPress, onCommit,
+  label, value, suffix, suffixLabel, onSuffixPress, onCommit, integer,
 }: {
   label: string; value: number | null; suffix: string; suffixLabel?: string;
-  onSuffixPress?: (current: number | null) => void; onCommit: (n: number | null) => void;
+  onSuffixPress?: (current: number | null) => void; onCommit: (n: number | null) => void; integer?: boolean;
 }) {
   const t = useTheme();
   // `draft` holds in-progress typing; null means "show the stored value".
   const [draft, setDraft] = useState<string | null>(null);
   const text = draft ?? show(value);
+  const parse = (typed: string) => {
+    const n = parseNumber(typed);
+    return integer && n !== null ? Math.round(n) : n;
+  };
   const commit = () => {
     if (draft === null) return;
-    const parsed = parseNumber(draft);
+    const parsed = parse(draft);
     setDraft(null);
     if (parsed !== value) onCommit(parsed);
   };
@@ -60,7 +71,7 @@ function NumField({
         onChangeText={setDraft}
         onBlur={commit}
         onSubmitEditing={commit}
-        keyboardType="decimal-pad"
+        keyboardType={integer ? 'number-pad' : 'decimal-pad'}
         placeholder="–"
         placeholderTextColor={t.muted}
         style={[styles.input, { color: t.text }]}
@@ -70,13 +81,13 @@ function NumField({
           label={suffixLabel ?? `${label} unit`}
           unit={suffix}
           onPress={() => {
-            const current = draft === null ? value : parseNumber(draft);
+            const current = draft === null ? value : parse(draft);
             setDraft(null);
             onSuffixPress(current);
           }}
         />
-      ) : (
-        <Text style={[styles.suffix, { color: t.muted }]}>{suffix}</Text>
+      ) : !!suffix && (
+        <Text style={[styles.suffix, { color: t.muted }]} numberOfLines={1}>{suffix}</Text>
       )}
     </View>
   );
@@ -107,39 +118,107 @@ function RepsField({ set, onCommit }: { set: WorkoutSet; onCommit: (reps: number
   );
 }
 
-/** Column headings that line up with the fields of strength SetRows below them. */
-export function SetHeader() {
+/** How hard it felt, 1 to 10. */
+function DifficultyField({ label, title, value, onCommit }: {
+  label: string; title: string; value: number | null; onCommit: (n: number | null) => void;
+}) {
   const t = useTheme();
-  const [a, b] = ['Weight', 'Reps'];
+  return (
+    <View style={[styles.field, { backgroundColor: t.surface }]}>
+      <DifficultyButton label={label} title={title} value={value} onChange={onCommit} style={styles.wheelButton} />
+      <Text style={[styles.suffix, { color: t.muted }]}>/10</Text>
+    </View>
+  );
+}
+
+/** Column headings that line up with the fields of strength SetRows below them. */
+export function SetHeader({ fields = DEFAULT_FIELDS.strength }: { fields?: readonly FieldId[] }) {
+  const t = useTheme();
   const head = [styles.headText, { color: t.muted }];
   return (
     <View style={styles.header} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
       <Text style={[head, styles.num]}>Set</Text>
-      <Text style={[head, styles.headCol]}>{a}</Text>
-      <Text style={[head, styles.headCol]}>{b}</Text>
+      {fields.map((f) => <Text key={f} style={[head, styles.headCol]} numberOfLines={1}>{FIELDS[f].label}</Text>)}
       <View style={styles.headActions} />
     </View>
   );
 }
 
 /**
- * One logged row. Strength exercises have numbered sets of weight × reps. Cardio, yoga and
- * mobility log a single entry (time, plus distance for cardio) named after the exercise; an
- * extra entry from before is numbered so it stays distinct.
+ * One logged row, with a field for each thing the exercise records. Strength exercises have
+ * numbered sets (weight × reps by default). Cardio, yoga and mobility log a single entry (time,
+ * plus distance for cardio, by default) named after the exercise; an extra entry from before is
+ * numbered so it stays distinct.
  */
 export function SetRow({
-  kind, set, targetDurationMin = null, unit, distanceUnit = 'mi', exerciseName = 'Exercise', onChange, onRemove,
+  kind, fields = DEFAULT_FIELDS[kind], set, targetDurationMin = null, unit, distanceUnit = 'mi', exerciseName = 'Exercise', onChange, onRemove,
 }: Props) {
   const t = useTheme();
   const n = set.setNumber;
-  const weightUnit = set.weightUnit ?? unit;
-  const distUnit = set.distanceUnit ?? distanceUnit;
+  const units: Units = { weight: set.weightUnit ?? unit, distance: set.distanceUnit ?? distanceUnit };
   const done = set.completed;
   const isSet = kind === 'strength';
   const entry = n === 1 ? exerciseName : `${exerciseName} ${n}`;
   // "Weight for set 2" for a set; "Running duration" for an entry.
   const fieldLabel = (field: string) => (isSet ? `${field} for set ${n}` : `${entry} ${field.toLowerCase()}`);
   const subject = isSet ? `set ${n}` : entry;
+  // One switch for the distance unit, on the first field that follows it; the rest show its unit.
+  const switchesDistance = fields.find((f) => DISTANCE_LIKE.includes(FIELDS[f].input));
+
+  const field = (f: FieldId) => {
+    const def = FIELDS[f];
+    if (def.input === 'reps') return <RepsField key={f} set={set} onCommit={(reps) => onChange({ reps })} />;
+    if (def.input === 'difficulty') {
+      return (
+        <DifficultyField
+          key={f}
+          label={fieldLabel(def.label)}
+          title={isSet ? `Set ${n}` : entry}
+          value={set.difficulty}
+          onCommit={(difficulty) => onChange({ difficulty })}
+        />
+      );
+    }
+    if (def.input === 'duration') {
+      return (
+        <View key={f} style={[styles.field, styles.fieldBare, { backgroundColor: t.surface }]}>
+          <DurationButton
+            label={fieldLabel(isSet ? 'Time' : 'Duration')}
+            title={isSet ? `Set ${n}` : entry}
+            value={set.durationMin}
+            target={targetDurationMin}
+            onChange={(durationMin) => onChange({ durationMin })}
+            style={styles.wheelButton}
+          />
+        </View>
+      );
+    }
+    // The number stays as typed and now means the other unit: 20 lb becomes 20 kg.
+    const switchUnit = def.input === 'weight'
+      ? (current: number | null) => {
+        const next = { ...units, weight: otherWeightUnit(units.weight) };
+        onChange({ weightUnit: next.weight, [def.key]: fromDisplayField(f, current, next) });
+      }
+      : f === switchesDistance
+        ? (current: number | null) => {
+          const next = { ...units, distance: otherDistanceUnit(units.distance) };
+          onChange({ distanceUnit: next.distance, [def.key]: fromDisplayField(f, current, next) });
+        }
+        : undefined;
+    return (
+      <NumField
+        key={f}
+        label={fieldLabel(def.label)}
+        value={toDisplayField(f, fieldValue(set, f), units)}
+        suffix={fieldUnit(f, units)}
+        suffixLabel={fieldLabel(`${def.label} unit`)}
+        onSuffixPress={switchUnit}
+        onCommit={(value) => onChange({ [def.key]: fromDisplayField(f, value, units) })}
+        integer={def.input === 'count'}
+      />
+    );
+  };
+
   return (
     <View style={[styles.row, done && { backgroundColor: tint(t.success, 0.1) }]}>
       {isSet && (
@@ -147,50 +226,7 @@ export function SetRow({
           <Text style={[styles.numText, { color: done ? t.bg : t.muted }]}>{n}</Text>
         </View>
       )}
-      {isSet ? (
-        <>
-          <NumField
-            label={fieldLabel('Weight')}
-            value={toDisplayWeight(set.weight, weightUnit)}
-            suffix={weightUnit}
-            suffixLabel={fieldLabel('Weight unit')}
-            // The number stays as typed and now means the other unit: 20 lb becomes 20 kg.
-            onSuffixPress={(current) => {
-              const next = otherWeightUnit(weightUnit);
-              onChange({ weightUnit: next, weight: fromDisplayWeight(current, next) });
-            }}
-            onCommit={(weight) => onChange({ weight: fromDisplayWeight(weight, weightUnit) })}
-          />
-          <RepsField set={set} onCommit={(reps) => onChange({ reps })} />
-        </>
-      ) : (
-        <>
-          <View style={[styles.field, styles.fieldBare, { backgroundColor: t.surface }]}>
-            <DurationButton
-              label={fieldLabel('Duration')}
-              title={entry}
-              value={set.durationMin}
-              target={targetDurationMin}
-              onChange={(durationMin) => onChange({ durationMin })}
-              style={styles.wheelButton}
-            />
-          </View>
-          {kind === 'cardio' && (
-            <NumField
-              label={fieldLabel('Distance')}
-              value={toDisplayDistance(set.distance, distUnit)}
-              suffix={distUnit}
-              suffixLabel={fieldLabel('Distance unit')}
-              // As with weight: the typed number stays and now means the other unit.
-              onSuffixPress={(current) => {
-                const next = otherDistanceUnit(distUnit);
-                onChange({ distanceUnit: next, distance: fromDisplayDistance(current, next) });
-              }}
-              onCommit={(distance) => onChange({ distance: fromDisplayDistance(distance, distUnit) })}
-            />
-          )}
-        </>
-      )}
+      {fields.map(field)}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Mark ${subject} ${set.completed ? 'not done' : 'done'}`}
@@ -225,7 +261,7 @@ const styles = StyleSheet.create({
   fieldBare: { paddingRight: 0 },
   input: { flex: 1, minWidth: 0, paddingHorizontal: 8, paddingVertical: 10, textAlign: 'center', fontSize: 18, fontWeight: '800', fontVariant: ['tabular-nums'] },
   wheelButton: { flex: 1, minWidth: 0, backgroundColor: 'transparent' },
-  suffix: { fontSize: 12, fontWeight: '600' },
+  suffix: { fontSize: 12, fontWeight: '600', flexShrink: 1 },
   check: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   remove: { width: 18, alignItems: 'center' },
   header: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 4 },

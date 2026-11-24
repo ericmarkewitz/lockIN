@@ -3,7 +3,7 @@ import { weekdayOf } from '@/lib/dates';
 import { findByName } from '@/test/helpers';
 import { createTestDb } from '@/test/testDb';
 import {
-  addExercise, findExercise, getExerciseUsage, listCategoriesWithExercises, removeExercise, updateExercise,
+  addExercise, findExercise, getExerciseUsage, listCategoriesWithExercises, removeExercise, setDefaultFields, updateExercise,
 } from '../exercises';
 import { getPlan, getPlanHistory, markPlanComplete, setPlanDay } from '../plan';
 import { ensureWorkout, getWorkout, updateSet } from '../workouts';
@@ -152,5 +152,78 @@ describe('updateExercise', () => {
     await removeExercise(db, old.id, TODAY);
     const ex = await addExercise(db, lifts, 'Sled Drag');
     await expect(updateExercise(db, ex.id, { name: 'sled push', subcategory: null, alsoIn: [] })).rejects.toThrow(/removed/i);
+  });
+});
+
+describe('what an exercise records by default', () => {
+  const cardioId = async (db: Db) => (await listCategoriesWithExercises(db)).find((c) => c.name === 'Cardio')!.id;
+
+  it("starts a custom exercise on its category's default", async () => {
+    const db = await createTestDb();
+    expect((await addExercise(db, await liftsId(db), 'Rack Pull', 'Back')).fields).toEqual(['weight', 'reps']);
+    expect((await addExercise(db, await cardioId(db), 'Rucking')).fields).toEqual(['duration', 'distance']);
+  });
+
+  it('lists built-ins with the fields the catalog gives them', async () => {
+    const db = await createTestDb();
+    const all = (await listCategoriesWithExercises(db)).flatMap((c) => c.exercises);
+    expect(all.find((e) => e.name === 'Walking')!.fields).toEqual(['duration', 'distance', 'steps']);
+    expect(all.find((e) => e.name === 'Bench Press')!.fields).toEqual(['weight', 'reps']);
+  });
+
+  it("changes a built-in's default, in standard order, and can put it back", async () => {
+    const db = await createTestDb();
+    const walk = await findByName(db, 'Walking');
+    expect((await setDefaultFields(db, walk, ['steps', 'duration'])).fields).toEqual(['duration', 'steps']);
+    expect((await findExercise(db, walk))!.fields).toEqual(['duration', 'steps']);
+    expect((await setDefaultFields(db, walk, null)).fields).toEqual(['duration', 'distance', 'steps']);
+  });
+
+  it("changes a custom exercise's default, keeping what was already logged", async () => {
+    const db = await createTestDb();
+    const ex = await addExercise(db, await liftsId(db), 'Sled Push', 'Legs');
+    await logOn(db, ex.id, PAST);
+    expect((await setDefaultFields(db, ex.id, ['weight', 'shortDistance'])).fields).toEqual(['weight', 'shortDistance']);
+    expect((await getWorkout(db, PAST))!.exercises[0].sets[0]).toMatchObject({ reps: 5, weight: 100 });
+  });
+
+  it("refuses a field the category doesn't offer, or none", async () => {
+    const db = await createTestDb();
+    const bench = await findByName(db, 'Bench Press');
+    await expect(setDefaultFields(db, bench, ['steps'])).rejects.toThrow('Steps is not available');
+    await expect(setDefaultFields(db, bench, [])).rejects.toThrow('Pick at least one thing to record');
+    expect((await findExercise(db, bench))!.fields).toEqual(['weight', 'reps']);
+  });
+
+  it('leaves workouts already logged recording what they did, and moves the rest to the new default', async () => {
+    const db = await createTestDb();
+    const walk = await findByName(db, 'Walking');
+    await logOn(db, walk, PAST);
+    const nextWeek = '2026-11-17'; // the same weekday as PAST, so planned too
+    await ensureWorkout(db, nextWeek);
+    await setDefaultFields(db, walk, ['duration', 'steps']);
+    expect((await getWorkout(db, PAST))!.exercises[0].fields).toEqual(['duration', 'distance', 'steps']);
+    expect((await getWorkout(db, nextWeek))!.exercises[0].fields).toEqual(['duration', 'steps']);
+  });
+
+  it('asks what to record for custom exercises and the built-ins without an obvious default, until a default is set', async () => {
+    const db = await createTestDb();
+    const all = (await listCategoriesWithExercises(db)).flatMap((c) => c.exercises);
+    expect(all.find((e) => e.name === 'Walking')!.asksWhatToRecord).toBe(true);
+    expect(all.find((e) => e.name === 'Bench Press')!.asksWhatToRecord).toBe(false);
+    expect(all.find((e) => e.name === 'Climbing')!.asksWhatToRecord).toBe(false);
+    const ruck = await addExercise(db, await cardioId(db), 'Rucking');
+    expect(ruck.asksWhatToRecord).toBe(true);
+    expect((await setDefaultFields(db, ruck.id, ['duration', 'elevation'])).asksWhatToRecord).toBe(false);
+    const walk = await findByName(db, 'Walking');
+    expect((await setDefaultFields(db, walk, ['duration', 'steps'])).asksWhatToRecord).toBe(false);
+    expect((await setDefaultFields(db, walk, null)).asksWhatToRecord).toBe(true);
+  });
+
+  it('keeps the default across a rename', async () => {
+    const db = await createTestDb();
+    const ex = await addExercise(db, await cardioId(db), 'Rucking');
+    await setDefaultFields(db, ex.id, ['duration', 'steps']);
+    expect((await updateExercise(db, ex.id, { name: 'Ruck', subcategory: null, alsoIn: [] })).fields).toEqual(['duration', 'steps']);
   });
 });

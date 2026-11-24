@@ -175,3 +175,38 @@ describe('exportFileName', () => {
     expect(exportFileName({ dates: ['2026-10-05', '2026-10-09'] })).toBe('lockin-2026-10-05_to_2026-10-09.csv');
   });
 });
+
+describe('exporting what other exercises record', () => {
+  async function walkAndClimb() {
+    const db = await createTestDb();
+    const walk = await findByName(db, 'Walking');
+    const climb = await findByName(db, 'Climbing');
+    await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: walk }, { exerciseId: climb }] });
+    const w = await ensureWorkout(db, '2026-11-02');
+    await updateSet(db, w.exercises[0].sets[0].id, { durationMin: 40, count: 6500, elevation: 120 });
+    await updateSet(db, w.exercises[1].sets[0].id, { durationMin: 90, count: 9, difficulty: 7 });
+    return db;
+  }
+
+  it('exports counts with what they count, elevation, score and difficulty', async () => {
+    const db = await walkAndClimb();
+    const { rows } = await buildExport(db, { fields: allFields });
+    expect(rows[0]).toMatchObject({ exercise: 'Walking', count: 6500, count_of: 'steps', elevation: 120, difficulty: null, score: null });
+    expect(rows[1]).toMatchObject({ exercise: 'Climbing', count: 9, count_of: 'routes', elevation: null, difficulty: 7 });
+  });
+
+  it('labels elevation with the unit that goes with the distance setting', async () => {
+    const db = await walkAndClimb();
+    const header = async () => (await buildExport(db, { fields: ['elevation', 'count', 'count_of', 'score', 'difficulty'] })).csv.split('\r\n')[0];
+    expect(await header()).toBe('Elevation gain (ft),Count,Count of,Score,Difficulty (1-10)');
+    await db.runAsync("INSERT INTO settings (key, value) VALUES ('distance_unit', 'km')");
+    expect(await header()).toBe('Elevation gain (m),Count,Count of,Score,Difficulty (1-10)');
+    expect((await buildExport(db, { fields: ['elevation'] })).rows[0]).toMatchObject({ elevation: 36.58 });
+  });
+
+  it('leaves Count of blank for an exercise that counts nothing', async () => {
+    const db = await seeded();
+    expect((await buildExport(db, { fields: allFields })).rows[0]).toMatchObject({ count: null, count_of: null });
+  });
+});
+

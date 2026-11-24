@@ -1,4 +1,5 @@
 import type { Db } from '@/db/types';
+import { normalizeFields, resolveFields, serializeFields, type FieldId } from './fields';
 import { LOGGED_SET } from './logged';
 import { isPlanComplete, markPlanComplete } from './plan';
 import { refreshUntouchedWorkouts } from './workouts';
@@ -39,6 +40,7 @@ export function groupBySubcategory(category: Category): ExerciseGroup[] {
 
 type Row = {
   id: number; category_id: number; name: string; is_custom: number; subcategory: string | null;
+  fields: string | null; builtin_fields: string | null; builtin_asks: number;
   category_name: string; category_kind: CategoryKind;
 };
 
@@ -51,6 +53,8 @@ const toExercise = (r: Row, alsoIn: string[]): Exercise => ({
   categoryKind: r.category_kind,
   subcategory: r.subcategory,
   alsoIn,
+  fields: resolveFields(r.category_kind, r.fields, r.builtin_fields),
+  asksWhatToRecord: r.fields === null && (!!r.is_custom || !!r.builtin_asks),
 });
 
 /** Each exercise's extra subcategories, in display order. */
@@ -69,7 +73,7 @@ async function loadAlsoIn(db: Db, exerciseId?: number): Promise<Map<number, stri
   return map;
 }
 
-const SELECT = `SELECT e.id, e.category_id, e.name, e.is_custom, e.subcategory, c.name AS category_name, c.kind AS category_kind
+const SELECT = `SELECT e.id, e.category_id, e.name, e.is_custom, e.subcategory, e.fields, e.builtin_fields, e.builtin_asks, c.name AS category_name, c.kind AS category_kind
   FROM exercises e JOIN categories c ON c.id = e.category_id`;
 
 export async function findExercise(db: Db, id: number): Promise<Exercise | null> {
@@ -159,6 +163,27 @@ export async function updateExercise(db: Db, id: number, edit: ExerciseEdit): Pr
   await db.withTransactionAsync(async () => {
     await db.runAsync('UPDATE exercises SET name = ?, subcategory = ? WHERE id = ?', [name, edit.subcategory, id]);
     await setAlsoIn(db, id, edit.subcategory, edit.alsoIn);
+  });
+  return (await findExercise(db, id))!;
+}
+
+/**
+ * Sets what an exercise records by default, built-in or custom: what a plan offers first, and what
+ * days and plan items that haven't picked their own record. Null goes back to the catalog's (or
+ * the category's) default. Workouts already logged keep recording what they did, so their history
+ * reads the same; values are never deleted either way.
+ */
+export async function setDefaultFields(db: Db, id: number, fields: readonly FieldId[] | null): Promise<Exercise> {
+  const ex = await findExercise(db, id);
+  if (!ex) throw new Error('Exercise not found');
+  const stored = fields === null ? null : serializeFields(normalizeFields(fields, ex.categoryKind));
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      `UPDATE workout_exercises SET fields = ? WHERE exercise_id = ? AND fields IS NULL
+         AND EXISTS (SELECT 1 FROM sets s WHERE s.workout_exercise_id = workout_exercises.id AND ${LOGGED_SET})`,
+      [serializeFields(ex.fields), id],
+    );
+    await db.runAsync('UPDATE exercises SET fields = ? WHERE id = ?', [stored, id]);
   });
   return (await findExercise(db, id))!;
 }

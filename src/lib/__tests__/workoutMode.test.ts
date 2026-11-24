@@ -1,16 +1,18 @@
 import type { CategoryKind, WorkoutExercise, WorkoutSet } from '@/data/types';
+import { DEFAULT_FIELDS } from '@/data/fields';
 import { firstOpenStep, formatSets, groupThousands, nextOpenStep, suggestEntry, workoutSteps, workoutVolume } from '../workoutMode';
 
 const set = (n: number, over: Partial<WorkoutSet> = {}): WorkoutSet => ({
   id: n, setNumber: n, targetReps: 10, reps: null, weight: null, durationMin: null, distance: null,
+  count: null, elevation: null, score: null, difficulty: null,
   weightUnit: null, distanceUnit: null, completed: false, isLogged: false, ...over,
 });
 
 let nextId = 100;
 const ex = (name: string, sets: WorkoutSet[], kind: CategoryKind = 'strength', over: Partial<WorkoutExercise> = {}): WorkoutExercise => ({
   id: nextId++, exerciseId: nextId, exerciseName: name, categoryName: 'Lifts', categoryKind: kind, subcategory: null,
-  position: 0, targetSets: sets.length, targetReps: 10, targetDurationMin: null, targetDistance: null,
-  hasLoggedSets: false, isCustom: false, sets, ...over,
+  position: 0, targetSets: sets.length, targetReps: 10, targetDurationMin: null, targetDistance: null, targetCount: null,
+  fields: [...DEFAULT_FIELDS[kind]], defaultFields: [...DEFAULT_FIELDS[kind]], hasLoggedSets: false, isCustom: false, sets, ...over,
 });
 
 const units = { weight: 'lb', distance: 'mi' } as const;
@@ -80,6 +82,23 @@ describe('suggestEntry', () => {
       .toMatchObject({ weight: null, reps: 10, weightUnit: 'kg' });
   });
 
+  it('uses the planned count, and leaves elevation, score and difficulty to be entered', () => {
+    const e = ex('Walking', [set(1, { targetReps: null })], 'cardio', { targetCount: 8000, fields: ['duration', 'distance', 'steps'] });
+    expect(suggestEntry(e, 0, null, units)).toMatchObject({ count: 8000, elevation: null, score: null, difficulty: null });
+    const logged = ex('Climbing', [set(1, { count: 9, difficulty: 6 })], 'cardio', { fields: ['duration', 'routes', 'difficulty'] });
+    expect(suggestEntry(logged, 0, null, units)).toMatchObject({ count: 9, difficulty: 6 });
+  });
+
+  it('carries a hold time from the set before, then last time, like weight', () => {
+    const fields = ['weight', 'duration'] as const;
+    const today = ex('Plank', [set(1, { weight: 25, durationMin: 1, completed: true }), set(2)], 'strength', { fields: [...fields] });
+    expect(suggestEntry(today, 1, null, units)).toMatchObject({ weight: 25, durationMin: 1 });
+    const last = { date: '2026-10-26', sets: [set(1, { weight: 25, durationMin: 1.5 })] };
+    expect(suggestEntry(ex('Plank', [set(5)], 'strength', { fields: [...fields] }), 0, last, units)).toMatchObject({ durationMin: 1.5 });
+    const planned = ex('Plank', [set(6)], 'strength', { fields: [...fields], targetDurationMin: 2 });
+    expect(suggestEntry(planned, 0, last, units)).toMatchObject({ durationMin: 2 });
+  });
+
   it('uses the planned duration and distance for cardio', () => {
     const e = ex('Running', [set(1, { targetReps: null })], 'cardio', { targetDurationMin: 30, targetDistance: 3 });
     expect(suggestEntry(e, 0, null, units)).toMatchObject({ durationMin: 30, distance: 3, distanceUnit: 'mi' });
@@ -88,12 +107,29 @@ describe('suggestEntry', () => {
 
 describe('formatSets', () => {
   it('shows strength sets as weight×reps in the user\'s unit', () => {
-    expect(formatSets([set(1, { weight: 135, reps: 10 }), set(2, { weight: null, reps: 8 })], 'strength', units)).toBe('135×10, –×8');
-    expect(formatSets([set(1, { weight: 135, reps: 10, weightUnit: 'lb' })], 'strength', { weight: 'kg', distance: 'km' })).toBe('61.23×10');
+    expect(formatSets([set(1, { weight: 135, reps: 10 }), set(2, { weight: null, reps: 8 })], ['weight', 'reps'], units)).toBe('135×10, –×8');
+    expect(formatSets([set(1, { weight: 135, reps: 10, weightUnit: 'lb' })], ['weight', 'reps'], { weight: 'kg', distance: 'km' })).toBe('61.23×10');
   });
 
   it('shows cardio as time and distance', () => {
-    expect(formatSets([set(1, { durationMin: 30, distance: 3 })], 'cardio', { weight: 'lb', distance: 'km' })).toBe('30 min 4.83 km');
+    expect(formatSets([set(1, { durationMin: 30, distance: 3 })], ['duration', 'distance'], { weight: 'lb', distance: 'km' })).toBe('30 min 4.83 km');
+  });
+
+  it('shows whatever else an exercise records', () => {
+    expect(formatSets([set(1, { durationMin: 40, count: 6500 })], ['duration', 'distance', 'steps'], units)).toBe('40 min 6,500 steps');
+    expect(formatSets([set(1, { durationMin: 90, count: 9, difficulty: 6 })], ['duration', 'routes', 'difficulty'], units))
+      .toBe('1h 30m 9 routes Difficulty 6/10');
+  });
+
+  it('shows a weighted hold or carry as weight × time or distance', () => {
+    expect(formatSets([set(1, { weight: 45, durationMin: 1 }), set(2, { durationMin: 0.75 })], ['weight', 'duration'], units))
+      .toBe('45 lb × 1 min, 45s');
+    expect(formatSets([set(1, { weight: 70, distance: 40 / 1760 })], ['weight', 'shortDistance'], units)).toBe('70 lb × 40 yd');
+  });
+
+
+  it('marks a set with nothing in it', () => {
+    expect(formatSets([set(1)], ['duration', 'routes'], units)).toBe('–');
   });
 });
 

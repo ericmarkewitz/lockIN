@@ -1,3 +1,4 @@
+import type { FieldId } from './fields';
 import type { DistanceUnit, WeightUnit } from './settings';
 
 export type CategoryKind = 'strength' | 'cardio' | 'mindbody';
@@ -12,6 +13,13 @@ export type Exercise = {
   subcategory: string | null;
   /** More subcategories the exercise is listed under, besides its own. */
   alsoIn: string[];
+  /** What it records, in the order shown. */
+  fields: FieldId[];
+  /**
+   * Whether adding it to the plan asks what to record: for custom exercises and built-ins without
+   * an obvious default, until the user sets one.
+   */
+  asksWhatToRecord: boolean;
 };
 
 export type Category = {
@@ -28,17 +36,27 @@ export type Targets = {
   targetReps?: number | null;
   targetDurationMin?: number | null;
   targetDistance?: number | null;
+  /** Steps, runs, routes or the like: whichever count the exercise records. */
+  targetCount?: number | null;
 };
 
-export type PlanItemInput = Targets & { exerciseId: number };
+export type PlanItemInput = Targets & {
+  exerciseId: number;
+  /** What this item records; left out or null, the exercise's default. */
+  fields?: readonly FieldId[] | null;
+};
 
-export type PlanItem = PlanItemInput & {
+export type PlanItem = Omit<PlanItemInput, 'fields'> & {
   id: number;
   position: number;
   exerciseName: string;
   isCustom: boolean;
   categoryName: string;
   categoryKind: CategoryKind;
+  /** What it records: its own pick, else the exercise's default. */
+  fields: FieldId[];
+  /** What was picked for this item; null follows the exercise's default. */
+  ownFields: FieldId[] | null;
 };
 
 export type PlanDay = { weekday: number; isRest: boolean; items: PlanItem[] };
@@ -50,8 +68,16 @@ export type WorkoutSet = {
   reps: number | null;
   weight: number | null;
   durationMin: number | null;
+  /** Miles, also for a short distance shown in yards or meters. */
   distance: number | null;
-  /** The unit this set was entered in; null follows the user's setting. */
+  /** Steps, runs, routes or the like, as the exercise's fields say. */
+  count: number | null;
+  /** Elevation gain, in feet. */
+  elevation: number | null;
+  score: number | null;
+  /** How hard it felt, 1–10. */
+  difficulty: number | null;
+  /** The unit this set was entered in; null follows the user's setting. For short distances and elevation, mi means yd and ft, km means m. */
   weightUnit: WeightUnit | null;
   distanceUnit: DistanceUnit | null;
   completed: boolean;
@@ -71,6 +97,11 @@ export type WorkoutExercise = {
   targetReps: number | null;
   targetDurationMin: number | null;
   targetDistance: number | null;
+  targetCount: number | null;
+  /** What it records on this day, in the order shown. */
+  fields: FieldId[];
+  /** What the exercise records by default, to tell whether this day's differs. */
+  defaultFields: FieldId[];
   hasLoggedSets: boolean;
   /** Added by the user rather than seeded with the app. */
   isCustom: boolean;

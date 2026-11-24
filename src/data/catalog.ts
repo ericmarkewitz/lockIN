@@ -1,4 +1,5 @@
 import { LIFT_SUBCATEGORIES, MINDBODY_SUBCATEGORIES } from './exercises';
+import type { FieldId } from './fields';
 import type { CategoryKind } from './types';
 
 export type LiftSubcategory = (typeof LIFT_SUBCATEGORIES)[number];
@@ -9,13 +10,27 @@ export type CatalogExercise = {
   subcategory?: LiftSubcategory | MindBodySubcategory;
   /** More muscle groups the lift works, so the picker lists it under those too. */
   also?: LiftSubcategory[];
+  /** What it records, when not its category's default (`DEFAULT_FIELDS`). In standard order. */
+  fields?: FieldId[];
+  /** Ask what to record when it's added to the plan, since its fields aren't an obvious default. */
+  asks?: true;
 };
 export type CatalogCategory = { name: string; kind: CategoryKind; exercises: CatalogExercise[] };
 
-const plain = (...names: string[]): CatalogExercise[] => names.map((name) => ({ name }));
+/** A lift, written `'Squat'`, `['Deadlift', 'Legs']` for one that also works other groups, or in full to set its fields. */
+type LiftEntry = string | [string, ...LiftSubcategory[]] | Omit<CatalogExercise, 'subcategory'>;
 /** Lifts in one muscle group. Write `['Deadlift', 'Legs']` for a lift that also works other groups. */
-const lifts = (subcategory: LiftSubcategory, ...names: (string | [string, ...LiftSubcategory[]])[]): CatalogExercise[] =>
-  names.map((n) => (typeof n === 'string' ? { name: n, subcategory } : { name: n[0], subcategory, also: n.slice(1) as LiftSubcategory[] }));
+const lifts = (subcategory: LiftSubcategory, ...entries: LiftEntry[]): CatalogExercise[] =>
+  entries.map((n) => (typeof n === 'string' ? { name: n, subcategory }
+    : Array.isArray(n) ? { name: n[0], subcategory, also: n.slice(1) as LiftSubcategory[] }
+    : { ...n, subcategory }));
+/** Exercises with no subcategory: a name, or `{ name, fields }` for one that records something else. */
+const plain = (...entries: (string | CatalogExercise)[]): CatalogExercise[] =>
+  entries.map((n) => (typeof n === 'string' ? { name: n } : n));
+
+/** Cardio that climbs: time, distance and elevation gain. */
+const uphill = (name: string): CatalogExercise => ({ name, fields: ['duration', 'distance', 'elevation'] });
+
 /** Yoga, pilates, mobility or mindfulness exercises. */
 const mindBody = (subcategory: MindBodySubcategory, ...names: string[]): CatalogExercise[] =>
   names.map((name) => ({ name, subcategory }));
@@ -24,6 +39,9 @@ const mindBody = (subcategory: MindBodySubcategory, ...names: string[]): Catalog
  * Every built-in category and exercise. `syncCatalog` adds whatever is missing on each launch,
  * so adding an exercise is one line here plus its figure in `MOTIONS`
  * (`src/components/motion/motions.ts`); a test fails until the figure exists.
+ *
+ * `fields` (what an exercise records) is synced too, so a built-in's can be changed here. Logged
+ * values stay in the database either way; a field taken away just stops being shown.
  *
  * Muscle groups in `also` are synced the same way, so a new one can be added here too.
  *
@@ -47,17 +65,26 @@ export const CATALOG: CatalogCategory[] = [
         'Goblet Squat', 'Bulgarian Split Squat', 'Single-Leg Romanian Deadlift', 'Step-up',
         'Hip Thrust', 'Glute Bridge', 'Hamstring Curl', 'Leg Extension',
         'Standing Calf Raise', 'Seated Calf Raise', 'Tibialis Raise', 'Hack Squat'),
-      ...lifts('Core', 'Weighted Plank', ['Farmer Carry', 'Arms'], 'Russian Twist', 'Crunch', 'Cable Crunch',
-        'Straight-Leg Sit-up', 'Ab Wheel Rollout', 'Bird Dog', 'Dead Bug', 'Pallof Press'),
+      ...lifts('Core', { name: 'Weighted Plank', fields: ['weight', 'duration'] },
+        { name: 'Farmer Carry', also: ['Arms'], fields: ['weight', 'shortDistance'] }, 'Russian Twist',
+        'Crunch', 'Cable Crunch', 'Straight-Leg Sit-up', 'Ab Wheel Rollout', 'Bird Dog', 'Dead Bug', 'Pallof Press'),
     ],
   },
   {
     name: 'Cardio',
     kind: 'cardio',
     exercises: plain(
-      'Running', 'Biking', 'Hiking', 'Downhill Skiing', 'Swimming', 'Rowing', 'Walking',
-      'Ski Touring', 'Cross-Country Skiing', 'Snowshoeing', 'Climbing', 'Stair Stepper', 'Elliptical',
-      'HIIT', 'Golf',
+      'Running', uphill('Biking'), uphill('Hiking'),
+      { name: 'Downhill Skiing', fields: ['duration', 'elevation', 'runs'], asks: true },
+      { name: 'Swimming', fields: ['duration', 'shortDistance'], asks: true },
+      { name: 'Rowing', fields: ['duration', 'shortDistance'] },
+      { name: 'Walking', fields: ['duration', 'distance', 'steps'], asks: true },
+      uphill('Ski Touring'), 'Cross-Country Skiing', uphill('Snowshoeing'),
+      { name: 'Climbing', fields: ['duration', 'routes', 'difficulty'] },
+      { name: 'Stair Stepper', fields: ['duration', 'floors'], asks: true },
+      'Elliptical',
+      { name: 'HIIT', fields: ['duration', 'rounds'] },
+      { name: 'Golf', fields: ['duration', 'holes', 'score'], asks: true },
     ),
   },
   {

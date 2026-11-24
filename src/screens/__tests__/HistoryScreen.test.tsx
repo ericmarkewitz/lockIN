@@ -224,4 +224,38 @@ describe('HistoryScreen', () => {
     await fireEvent.press(await screen.findByLabelText('Bench Press history'));
     expect(await screen.findByLabelText('Bench Press estimated 1RM, 2 sessions, from 173.3 to 163.3 lb')).toBeTruthy();
   });
+
+  describe('exercises that record something else', () => {
+    async function loggedOnce(name: string, patches: Parameters<typeof updateSet>[2][], targets: { targetSets?: number } = {}) {
+      const db = await createTestDb();
+      await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: await findByName(db, name), ...targets }] });
+      const w = await ensureWorkout(db, '2026-11-02');
+      for (const [i, patch] of patches.entries()) await updateSet(db, w.exercises[0].sets[i].id, { ...patch, completed: true });
+      await renderWithDb(<HistoryScreen />, db);
+      await fireEvent.press(await screen.findByLabelText('Exercises'));
+      await fireEvent.press(await screen.findByLabelText(`${name} history`));
+    }
+
+    it('sums up a climbing session as time, routes and difficulty', async () => {
+      await loggedOnce('Climbing', [{ durationMin: 90, count: 9, difficulty: 6 }]);
+      expect(await screen.findByText('1h 30m · 9 routes · Difficulty 6/10')).toBeTruthy();
+    });
+
+    it('sums up a walk with its steps and a hike with its elevation', async () => {
+      await loggedOnce('Walking', [{ durationMin: 40, count: 6500 }]);
+      expect(await screen.findByText('40 min · 6,500 steps')).toBeTruthy();
+    });
+
+    it('shows a swim in yards or meters', async () => {
+      await loggedOnce('Swimming', [{ durationMin: 30, distance: 1000 / 1760 }]);
+      expect(await screen.findByText('30 min · 1,000 yd')).toBeTruthy();
+    });
+
+    it("sums up a plank by its heaviest weight and longest hold, with no 1RM chart", async () => {
+      await loggedOnce('Weighted Plank', [{ weight: 25, durationMin: 1 }, { weight: 45, durationMin: 0.75 }], { targetSets: 2 });
+      expect(await screen.findByText('Heaviest 45 lb · Longest 1 min')).toBeTruthy();
+      expect(screen.queryByLabelText(/estimated 1RM/)).toBeNull();
+    });
+  });
 });
+
