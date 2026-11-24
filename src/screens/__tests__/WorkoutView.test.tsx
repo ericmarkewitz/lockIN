@@ -598,5 +598,29 @@ describe('WorkoutView', () => {
       expect((await getWorkout(db, MON))!.exercises[0].fields).toEqual(['duration', 'distance', 'steps']);
     });
   });
+
+  describe('the day hero', () => {
+    it('names the day and shows the sets logged', async () => {
+      const db = await setup();
+      await renderWithDb(<WorkoutView date={MON} />, db);
+      expect(await screen.findByText('Monday · Nov 2')).toBeTruthy();
+      expect(screen.getByText('0 of 3 sets logged')).toBeTruthy();
+    });
+
+    it('holds the button into workout mode', async () => {
+      const db = await setup();
+      await renderWithDb(<WorkoutView date={MON} />, db);
+      await fireEvent.press(await screen.findByLabelText('Start workout'));
+      expect(mockPush).toHaveBeenCalledWith({ pathname: '/workout/[date]', params: { date: MON } });
+    });
+
+    it('says a rest day is for resting, with no progress', async () => {
+      const db = await setup();
+      await setRestDay(db, MON, true);
+      await renderWithDb(<WorkoutView date={MON} />, db);
+      expect(await screen.findByText('Rest and recover. 😴')).toBeTruthy();
+      expect(screen.queryByLabelText(/exercises done/)).toBeNull();
+    });
+  });
 });
 
