@@ -84,19 +84,19 @@ describe('WorkoutMode', () => {
     const styleOf = (el: { props: Record<string, any> }) => StyleSheet.flatten(el.props.style);
     const widthOf = (el: { props: Record<string, any> }) => styleOf(el).width;
 
-    it("adds a see-through set to the current exercise's capsule, right after the sets done", async () => {
+    it("extends the current exercise's fill, see-through, by the set you're on", async () => {
       const db = await setup(); // Bench Press 2 sets, Squat 1
       await setRestSeconds(db, 0);
       await open(db);
       expect(preview()).toHaveLength(1);
       expect(widthOf(preview()[0])).toBe('50%');
-      expect(styleOf(preview()[0]).left).toBe('0%');
 
       await fireEvent.press(screen.getByLabelText('Done with set 1'));
       await screen.findByText('Set 2 of 2');
       expect(widthOf(fill('Bench Press'))).toBe('50%');
-      expect(styleOf(preview()[0]).left).toBe('50%');
-      expect(widthOf(preview()[0])).toBe('50%');
+      // One bar from the start, under the solid fill, so the two read as one line.
+      expect(styleOf(preview()[0]).left).toBe(0);
+      expect(widthOf(preview()[0])).toBe('100%');
     });
 
     it('shows no preview while resting or once the workout is finished', async () => {
