@@ -317,7 +317,7 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
                         : { transform: [{ translateY: rowShift(d.weekday, idx) }] },
                     ]}
                   >
-                    <View style={styles.itemRow}>
+                    <View testID={`plan-row-${it.name}-${d.weekday}`} style={styles.itemRow}>
                     <DragHandle
                       label={`Reorder ${it.name} on ${DAY_NAMES[d.weekday]}`}
                       testID={`drag-${it.name}-${d.weekday}`}
@@ -335,7 +335,6 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
                         : <ExerciseMotionFor name={it.name} isCustom={it.isCustom} size={34} />}
                     </View>
                     <Text numberOfLines={2} style={[styles.itemName, { color: t.text }]}>{it.name}</Text>
-                    {!targetsBelow(it) && targetControls(d, it, idx)}
                     <Pressable
                       accessibilityRole="button"
                       accessibilityLabel={`Change what ${it.name} records on ${DAY_NAMES[d.weekday]}`}
@@ -355,7 +354,7 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
                       <Icon name={sym('xmark', 'close')} size={10} color={t.muted} fallback="×" />
                     </Pressable>
                     </View>
-                    {targetsBelow(it) && <View style={styles.targetsBelow}>{targetControls(d, it, idx)}</View>}
+                    {hasTargets(it) && <View style={styles.targetsBelow}>{targetControls(d, it, idx)}</View>}
                   </Animated.View>
                 ))}
                 <AddButton compact title="Add exercise" label={`Add exercise to ${DAY_NAMES[d.weekday]}`} onPress={() => setPickerFor(d.weekday)} />
@@ -459,14 +458,11 @@ function WeekOverview({ days }: { days: DayDraft[] }) {
 }
 
 /**
- * An item's targets take a line of their own under its name when they wouldn't fit beside it:
- * with a count to type (steps, routes), or three or more of them.
+ * Whether an item has any targets to set. They go on a line of their own under its name, so the
+ * name always has the row to itself.
  */
-function targetsBelow(it: Draft): boolean {
-  if (fieldFor(it.fields, 'count')) return true;
-  const shown = (it.kind === 'strength' ? 1 : 0) + (it.fields.includes('duration') ? 1 : 0) + (distanceField(it.fields) ? 1 : 0);
-  return shown >= 3;
-}
+const hasTargets = (it: Draft) =>
+  it.kind === 'strength' || it.fields.includes('duration') || !!distanceField(it.fields) || !!fieldFor(it.fields, 'count');
 
 /** Sets alone, for a lift that has no reps (a hold, a carry). */
 function SetsField({
@@ -535,7 +531,7 @@ const styles = StyleSheet.create({
   dragging: { zIndex: 10, elevation: 6, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
   thumb: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginLeft: -6 },
   thumbInitial: { fontSize: 16, fontWeight: '800' },
-  itemName: { flex: 1, fontSize: 15, fontWeight: '700' },
+  itemName: { flex: 1, minWidth: 0, fontSize: 15, fontWeight: '700' },
   targets: { minWidth: 72, minHeight: 40 },
   targetText: { fontWeight: '800' },
   duration: { minWidth: 46, minHeight: 40 },

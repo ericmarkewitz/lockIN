@@ -426,5 +426,21 @@ describe('PlanEditor', () => {
       expect((await getPlan(db)).find((d) => d.weekday === 1)!.items[0].ownFields).toEqual(['duration', 'steps']);
     });
   });
+
+  it('gives the name its own line, with the targets underneath', async () => {
+    const db = await createTestDb();
+    await setPlanDay(db, 1, { isRest: false, items: [
+      { exerciseId: await findByName(db, 'Single-Leg Romanian Deadlift'), targetSets: 3, targetReps: 8 },
+      { exerciseId: await findByName(db, 'Cross-Country Skiing'), targetDurationMin: 60, targetDistance: 6 },
+    ] });
+    await renderWithDb(<PlanEditor onSaved={jest.fn()} />, db);
+    const lift = await screen.findByTestId('plan-row-Single-Leg Romanian Deadlift-1');
+    expect(within(lift).getByText('Single-Leg Romanian Deadlift')).toBeTruthy();
+    expect(within(lift).queryByLabelText('1 Single-Leg Romanian Deadlift sets and reps')).toBeNull();
+    expect(screen.getByLabelText('1 Single-Leg Romanian Deadlift sets and reps')).toBeTruthy();
+    const ski = screen.getByTestId('plan-row-Cross-Country Skiing-1');
+    expect(within(ski).queryByLabelText('1 Cross-Country Skiing minutes')).toBeNull();
+    expect(within(ski).queryByLabelText('1 Cross-Country Skiing distance')).toBeNull();
+  });
 });
 
