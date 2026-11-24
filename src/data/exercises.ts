@@ -40,7 +40,7 @@ export function groupBySubcategory(category: Category): ExerciseGroup[] {
 
 type Row = {
   id: number; category_id: number; name: string; is_custom: number; subcategory: string | null;
-  fields: string | null; builtin_fields: string | null;
+  fields: string | null; builtin_fields: string | null; builtin_asks: number;
   category_name: string; category_kind: CategoryKind;
 };
 
@@ -54,6 +54,7 @@ const toExercise = (r: Row, alsoIn: string[]): Exercise => ({
   subcategory: r.subcategory,
   alsoIn,
   fields: resolveFields(r.category_kind, r.fields, r.builtin_fields),
+  asksWhatToRecord: r.fields === null && (!!r.is_custom || !!r.builtin_asks),
 });
 
 /** Each exercise's extra subcategories, in display order. */
@@ -72,7 +73,7 @@ async function loadAlsoIn(db: Db, exerciseId?: number): Promise<Map<number, stri
   return map;
 }
 
-const SELECT = `SELECT e.id, e.category_id, e.name, e.is_custom, e.subcategory, e.fields, e.builtin_fields, c.name AS category_name, c.kind AS category_kind
+const SELECT = `SELECT e.id, e.category_id, e.name, e.is_custom, e.subcategory, e.fields, e.builtin_fields, e.builtin_asks, c.name AS category_name, c.kind AS category_kind
   FROM exercises e JOIN categories c ON c.id = e.category_id`;
 
 export async function findExercise(db: Db, id: number): Promise<Exercise | null> {

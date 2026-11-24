@@ -206,6 +206,20 @@ describe('what an exercise records by default', () => {
     expect((await getWorkout(db, nextWeek))!.exercises[0].fields).toEqual(['duration', 'steps']);
   });
 
+  it('asks what to record for custom exercises and the built-ins without an obvious default, until a default is set', async () => {
+    const db = await createTestDb();
+    const all = (await listCategoriesWithExercises(db)).flatMap((c) => c.exercises);
+    expect(all.find((e) => e.name === 'Walking')!.asksWhatToRecord).toBe(true);
+    expect(all.find((e) => e.name === 'Bench Press')!.asksWhatToRecord).toBe(false);
+    expect(all.find((e) => e.name === 'Climbing')!.asksWhatToRecord).toBe(false);
+    const ruck = await addExercise(db, await cardioId(db), 'Rucking');
+    expect(ruck.asksWhatToRecord).toBe(true);
+    expect((await setDefaultFields(db, ruck.id, ['duration', 'elevation'])).asksWhatToRecord).toBe(false);
+    const walk = await findByName(db, 'Walking');
+    expect((await setDefaultFields(db, walk, ['duration', 'steps'])).asksWhatToRecord).toBe(false);
+    expect((await setDefaultFields(db, walk, null)).asksWhatToRecord).toBe(true);
+  });
+
   it('keeps the default across a rename', async () => {
     const db = await createTestDb();
     const ex = await addExercise(db, await cardioId(db), 'Rucking');

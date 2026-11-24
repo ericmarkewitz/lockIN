@@ -329,6 +329,12 @@ const MIGRATIONS: ((db: Db) => Promise<void>)[] = [
       UPDATE exercises SET builtin_fields = fields, fields = NULL WHERE is_custom = 0;
     `);
   },
+  // Adding an exercise to the plan asks what to record only when it has no obvious default. The
+  // catalog marks the built-ins that do (`builtin_asks`, filled in by syncCatalog); custom
+  // exercises always ask until the user sets a default.
+  async (db) => {
+    await db.execAsync('ALTER TABLE exercises ADD COLUMN builtin_asks INTEGER NOT NULL DEFAULT 0');
+  },
 ];
 
 export const LATEST_VERSION = MIGRATIONS.length;

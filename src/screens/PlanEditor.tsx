@@ -78,6 +78,8 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
   const [pickerFor, setPickerFor] = useState<number | null>(null);
   /** An exercise picked for a day, waiting on what it should record. */
   const [adding, setAdding] = useState<{ weekday: number; exercise: Exercise } | null>(null);
+  /** A plan item whose fields are being changed. */
+  const [changing, setChanging] = useState<{ weekday: number; idx: number } | null>(null);
   const [saving, setSaving] = useState(false);
   const [drag, setDrag] = useState<{ weekday: number; from: number; over: number; pitch: number } | null>(null);
   const dragRef = useRef(drag);
@@ -156,13 +158,15 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
     return 0;
   };
 
-  const addExercise = (weekday: number, e: Exercise, fields: FieldId[]) => {
+  /** Adds `e` to a day, recording `fields` if they were picked for it, else the exercise's default. */
+  const addExercise = (weekday: number, e: Exercise, picked: FieldId[] | null) => {
+    const fields = picked ?? e.fields;
     const targets = defaultTargets({ categoryKind: e.categoryKind, fields });
     patchDay(weekday, (d) => ({
       ...d,
       isRest: false,
       items: [...d.items, {
-        key: newKey(), exerciseId: e.id, name: e.name, kind: e.categoryKind, isCustom: e.isCustom, fields, ownFields: fields,
+        key: newKey(), exerciseId: e.id, name: e.name, kind: e.categoryKind, isCustom: e.isCustom, fields, ownFields: picked,
         sets: txt(targets.targetSets), reps: txt(targets.targetReps), duration: '',
         distance: '', distanceUnit, savedDistance: null, count: '',
       }],
@@ -201,6 +205,8 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
       setSaving(false);
     }
   };
+
+  const changingItem = changing && days.find((d) => d.weekday === changing.weekday)?.items[changing.idx];
 
   /** The targets an item can have: sets (and reps), time, distance and a count, as its fields allow. */
   const targetControls = (d: DayDraft, it: Draft, idx: number) => {
@@ -332,6 +338,15 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
                     {!targetsBelow(it) && targetControls(d, it, idx)}
                     <Pressable
                       accessibilityRole="button"
+                      accessibilityLabel={`Change what ${it.name} records on ${DAY_NAMES[d.weekday]}`}
+                      onPress={() => setChanging({ weekday: d.weekday, idx })}
+                      hitSlop={8}
+                      style={({ pressed }) => [styles.remove, { backgroundColor: t.card, opacity: pressed ? 0.5 : 1 }]}
+                    >
+                      <Icon name={sym('slider.horizontal.3', 'tune')} size={11} color={t.muted} fallback="⋯" />
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
                       accessibilityLabel={`Remove ${it.name} from ${DAY_NAMES[d.weekday]}`}
                       onPress={() => patchDay(d.weekday, (x) => ({ ...x, items: x.items.filter((_, i) => i !== idx) }))}
                       hitSlop={8}
@@ -357,7 +372,11 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
         visible={pickerFor !== null}
         onClose={() => setPickerFor(null)}
         onPick={(e) => {
-          if (pickerFor !== null) setAdding({ weekday: pickerFor, exercise: e });
+          // Only an exercise without an obvious default asks what to record first.
+          if (pickerFor !== null) {
+            if (e.asksWhatToRecord) setAdding({ weekday: pickerFor, exercise: e });
+            else addExercise(pickerFor, e, null);
+          }
           setPickerFor(null);
         }}
         onEdited={renameDrafts}
@@ -372,6 +391,19 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
           confirmA11yLabel={`Add ${adding.exercise.name} to the plan`}
           onConfirm={(fields) => addExercise(adding.weekday, adding.exercise, fields)}
           onClose={() => setAdding(null)}
+        />
+      )}
+      {changing && changingItem && (
+        <RecordSheet
+          exerciseName={changingItem.name}
+          kind={changingItem.kind}
+          initial={changingItem.fields}
+          confirmLabel="Save"
+          onConfirm={(fields) => {
+            patchItem(changing.weekday, changing.idx, { fields, ownFields: fields });
+            setChanging(null);
+          }}
+          onClose={() => setChanging(null)}
         />
       )}
     </KeyboardAvoider>

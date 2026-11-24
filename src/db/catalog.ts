@@ -9,7 +9,7 @@ import type { Db } from './types';
  * built-in's extra muscle groups (`also`) are never given to a custom exercise.
  *
  * A built-in's `builtin_fields` always follow the catalog (null for its category's default). The
- * default the user picked (`fields`) is theirs and left alone. Logged values stay put either way.
+ * default the user picked (`fields`) is theirs and left alone. So does whether it asks what to record (`builtin_asks`). Logged values stay put either way.
  */
 export async function syncCatalog(db: Db, catalog: CatalogCategory[] = CATALOG): Promise<void> {
   await db.withTransactionAsync(async () => {
@@ -27,6 +27,11 @@ export async function syncCatalog(db: Db, catalog: CatalogCategory[] = CATALOG):
         await db.runAsync(
           'UPDATE exercises SET builtin_fields = ? WHERE category_id = ? AND name = ? AND is_custom = 0 AND builtin_fields IS NOT ?',
           [fields, row!.id, ex.name, fields],
+        );
+        const asks = ex.asks ? 1 : 0;
+        await db.runAsync(
+          'UPDATE exercises SET builtin_asks = ? WHERE category_id = ? AND name = ? AND is_custom = 0 AND builtin_asks IS NOT ?',
+          [asks, row!.id, ex.name, asks],
         );
         for (const sub of ex.also ?? []) {
           await db.runAsync(

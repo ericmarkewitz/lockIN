@@ -20,14 +20,16 @@ const UNDO_V12 = `UPDATE categories SET name = 'Yoga & Mobility' WHERE name = 'M
 const UNDO_V10 = `UPDATE exercises SET name = 'Dumbbell Curl' WHERE name = 'Bicep Curl' AND is_custom = 0;
   UPDATE exercises SET name = 'Barbell Row' WHERE name = 'Bent-Over Row' AND is_custom = 0`;
 
-// v14 and v15 run after every older migration, so each replay below undoes them first.
-const UNDO_V15 = `ALTER TABLE exercises DROP COLUMN builtin_fields;
+// v14 to v16 run after every older migration, so each replay below undoes them first.
+const UNDO_V16 = 'ALTER TABLE exercises DROP COLUMN builtin_asks';
+const UNDO_V15_ONLY = `ALTER TABLE exercises DROP COLUMN builtin_fields;
   ALTER TABLE plan_items DROP COLUMN fields; ALTER TABLE workout_exercises DROP COLUMN fields`;
 const UNDO_V14_ONLY = `ALTER TABLE exercises DROP COLUMN fields;
   ALTER TABLE sets DROP COLUMN count; ALTER TABLE sets DROP COLUMN elevation;
   ALTER TABLE sets DROP COLUMN score; ALTER TABLE sets DROP COLUMN difficulty;
   ALTER TABLE plan_items DROP COLUMN target_count; ALTER TABLE workout_exercises DROP COLUMN target_count`;
-// Undoing v14 means undoing v15 first.
+// Undoing a migration means undoing the ones after it first.
+const UNDO_V15 = `${UNDO_V16}; ${UNDO_V15_ONLY}`;
 const UNDO_V14 = `${UNDO_V15}; ${UNDO_V14_ONLY}`;
 
 describe('migrations', () => {
@@ -804,6 +806,18 @@ describe('migrations', () => {
       });
       expect(await db.getFirstAsync('SELECT fields FROM plan_items')).toEqual({ fields: null });
       expect(await db.getFirstAsync("SELECT COUNT(*) AS n FROM pragma_table_info('workout_exercises') WHERE name = 'fields'")).toEqual({ n: 1 });
+    });
+  });
+
+  describe('v16 marks the built-ins that ask what to record', () => {
+    it('adds the flag to an existing database and fills it in for the built-ins', async () => {
+      const raw = new DatabaseSync(':memory:');
+      const db = wrap(raw);
+      await migrate(db);
+      raw.exec(`${UNDO_V16}; PRAGMA user_version = 15`);
+      await migrate(db);
+      expect(await db.getFirstAsync("SELECT builtin_asks FROM exercises WHERE name = 'Golf'")).toEqual({ builtin_asks: 1 });
+      expect(await db.getFirstAsync("SELECT builtin_asks FROM exercises WHERE name = 'Squat'")).toEqual({ builtin_asks: 0 });
     });
   });
 });

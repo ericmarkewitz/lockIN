@@ -66,7 +66,6 @@ describe('setup route', () => {
     await fireEvent.press(await screen.findByLabelText('Plan'));
     await fireEvent.press(await screen.findByLabelText('Add exercise to Monday'));
     await fireEvent.press(await screen.findByLabelText('Add Squat'));
-    await fireEvent.press(await screen.findByLabelText('Add Squat to the plan'));
     await fireEvent.press(screen.getByText('Cancel'));
 
     await waitFor(() => expect(r.getPathname()).toBe('/'));

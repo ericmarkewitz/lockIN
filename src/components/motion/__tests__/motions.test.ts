@@ -4,7 +4,7 @@ import { CANVAS, FLOOR_Y, MOTIONS, motionFor, type Anchor, type Prop } from '../
 import { skeleton } from '../skeleton';
 
 const exercise = (name: string, isCustom = false): Exercise => ({
-  id: 1, categoryId: 1, name, isCustom, categoryName: 'Lifts', categoryKind: 'strength', subcategory: null, alsoIn: [], fields: ['weight', 'reps'],
+  id: 1, categoryId: 1, name, isCustom, categoryName: 'Lifts', categoryKind: 'strength', subcategory: null, alsoIn: [], fields: ['weight', 'reps'], asksWhatToRecord: false,
 });
 
 describe('motions', () => {

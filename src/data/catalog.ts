@@ -12,6 +12,8 @@ export type CatalogExercise = {
   also?: LiftSubcategory[];
   /** What it records, when not its category's default (`DEFAULT_FIELDS`). In standard order. */
   fields?: FieldId[];
+  /** Ask what to record when it's added to the plan, since its fields aren't an obvious default. */
+  asks?: true;
 };
 export type CatalogCategory = { name: string; kind: CategoryKind; exercises: CatalogExercise[] };
 
@@ -73,16 +75,16 @@ export const CATALOG: CatalogCategory[] = [
     kind: 'cardio',
     exercises: plain(
       'Running', uphill('Biking'), uphill('Hiking'),
-      { name: 'Downhill Skiing', fields: ['duration', 'elevation', 'runs'] },
-      { name: 'Swimming', fields: ['duration', 'shortDistance'] },
+      { name: 'Downhill Skiing', fields: ['duration', 'elevation', 'runs'], asks: true },
+      { name: 'Swimming', fields: ['duration', 'shortDistance'], asks: true },
       { name: 'Rowing', fields: ['duration', 'shortDistance'] },
-      { name: 'Walking', fields: ['duration', 'distance', 'steps'] },
+      { name: 'Walking', fields: ['duration', 'distance', 'steps'], asks: true },
       uphill('Ski Touring'), 'Cross-Country Skiing', uphill('Snowshoeing'),
       { name: 'Climbing', fields: ['duration', 'routes', 'difficulty'] },
-      { name: 'Stair Stepper', fields: ['duration', 'floors'] },
+      { name: 'Stair Stepper', fields: ['duration', 'floors'], asks: true },
       'Elliptical',
       { name: 'HIIT', fields: ['duration', 'rounds'] },
-      { name: 'Golf', fields: ['duration', 'holes', 'score'] },
+      { name: 'Golf', fields: ['duration', 'holes', 'score'], asks: true },
     ),
   },
   {

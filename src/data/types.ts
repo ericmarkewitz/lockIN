@@ -15,6 +15,11 @@ export type Exercise = {
   alsoIn: string[];
   /** What it records, in the order shown. */
   fields: FieldId[];
+  /**
+   * Whether adding it to the plan asks what to record: for custom exercises and built-ins without
+   * an obvious default, until the user sets one.
+   */
+  asksWhatToRecord: boolean;
 };
 
 export type Category = {

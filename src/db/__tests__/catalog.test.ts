@@ -94,6 +94,11 @@ describe('CATALOG', () => {
     expect(found.fields).toEqual(fields as FieldId[] | undefined);
   });
 
+  it('asks what to record only for exercises without an obvious default', () => {
+    const asking = CATALOG.flatMap((c) => c.exercises).filter((e) => e.asks).map((e) => e.name);
+    expect(asking.sort()).toEqual(['Downhill Skiing', 'Golf', 'Stair Stepper', 'Swimming', 'Walking']);
+  });
+
   it('keeps Farmer Carry listed under arms as well as core', () => {
     expect(CATALOG[0].exercises.find((e) => e.name === 'Farmer Carry')).toMatchObject({ subcategory: 'Core', also: ['Arms'] });
     expect(CATALOG[0].exercises.find((e) => e.name === 'Push-up')).toMatchObject({ subcategory: 'Chest', also: ['Arms'] });
@@ -196,6 +201,15 @@ describe('syncCatalog', () => {
       const db = await createTestDb();
       expect(await fieldsOf(db, 'Climbing')).toBe('duration,routes,difficulty');
       expect(await fieldsOf(db, 'Running')).toBeNull();
+    });
+
+    it('marks the built-ins that ask what to record, and follows the catalog when that changes', async () => {
+      const db = await createTestDb();
+      const asks = async (name: string) => (await db.getFirstAsync<{ builtin_asks: number }>('SELECT builtin_asks FROM exercises WHERE name = ?', [name]))!.builtin_asks;
+      expect(await asks('Walking')).toBe(1);
+      expect(await asks('Running')).toBe(0);
+      await syncCatalog(db, CATALOG.map((c) => ({ ...c, exercises: c.exercises.map((e) => (e.name === 'Walking' ? { ...e, asks: undefined } : e)) })));
+      expect(await asks('Walking')).toBe(0);
     });
 
     it("updates a built-in already installed when the catalog changes what it records", async () => {
