@@ -85,8 +85,10 @@ function Progress({ days, t }: { days: DaySummary[]; t: Theme }) {
   );
 }
 
-export function WeekView({ dates, byDate, today, onOpen }: {
+export function WeekView({ dates, byDate, today, onOpen, onSwap }: {
   dates: string[]; byDate: Map<string, DaySummary>; today: string; onOpen: (date: string) => void;
+  /** Long press: trade this day's workout with another's. */
+  onSwap?: (date: string) => void;
 }) {
   const t = useTheme();
   const raised = useRaised();
@@ -110,6 +112,10 @@ export function WeekView({ dates, byDate, today, onOpen }: {
                 accessibilityRole="button"
                 accessibilityLabel={`Open ${date}`}
                 onPress={() => onOpen(date)}
+                onLongPress={onSwap && (() => onSwap(date))}
+                accessibilityHint={onSwap && 'Long press to swap with another day'}
+                accessibilityActions={onSwap && [{ name: 'swap', label: 'Swap with another day' }]}
+                onAccessibilityAction={onSwap && ((e) => { if (e.nativeEvent.actionName === 'swap') onSwap(date); })}
                 style={({ pressed }) => [
                   styles.row,
                   isToday

@@ -257,4 +257,16 @@ describe('CalendarScreen', () => {
     await fireEvent.press(screen.getByLabelText('Next'));
     await waitFor(() => expect(screen.getByText('Thursday, Nov 5')).toBeTruthy());
   });
+
+  it('swaps two days of the week with a long press', async () => {
+    const db = await setup();
+    await renderWithDb(<CalendarScreen today={TODAY} />, db);
+    await fireEvent(await screen.findByLabelText('Open 2026-11-02'), 'longPress');
+    const tue = await screen.findByLabelText('Swap with Tue, Nov 3');
+    expect(within(tue).getByText('Rest day')).toBeTruthy();
+    await fireEvent.press(tue);
+    await waitFor(() => expect(within(screen.getByLabelText('Open 2026-11-02')).getByText('Rest day')).toBeTruthy());
+    expect(within(screen.getByLabelText('Open 2026-11-03')).getByText('Lifts')).toBeTruthy();
+    expect(mockPush).not.toHaveBeenCalled();
+  });
 });

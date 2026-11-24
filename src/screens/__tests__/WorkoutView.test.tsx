@@ -622,5 +622,56 @@ describe('WorkoutView', () => {
       expect(screen.queryByLabelText(/exercises done/)).toBeNull();
     });
   });
+
+  describe('swapping the day', () => {
+    it("trades this day's exercises with another day's, just for those dates", async () => {
+      const db = await setup();
+      await renderWithDb(<WorkoutView date={MON} />, db);
+      await fireEvent.press(await screen.findByLabelText('Swap day'));
+      const wed = await screen.findByLabelText('Swap with Wed, Nov 4');
+      expect(within(wed).getByText('Nothing planned')).toBeTruthy();
+      // Up to six days either side.
+      expect(screen.getByLabelText('Swap with Tue, Oct 27')).toBeTruthy();
+      expect(screen.getByLabelText('Swap with Sun, Nov 8')).toBeTruthy();
+      expect(screen.queryByLabelText('Swap with Mon, Oct 26')).toBeNull();
+      expect(screen.queryByLabelText('Swap with Mon, Nov 9')).toBeNull();
+      expect(screen.queryByLabelText('Swap with Mon, Nov 2')).toBeNull();
+      expect(screen.getAllByLabelText(/^Swap with /)).toHaveLength(12);
+      // The day being swapped sits in the middle, marked and not pickable.
+      const rows = screen.getAllByTestId(/^swap-row-/).map((r) => r.props.testID);
+      expect(rows).toHaveLength(13);
+      expect(rows[6]).toBe('swap-row-2026-11-02');
+      const self = screen.getByTestId('swap-row-2026-11-02');
+      expect(within(self).getByText('This day')).toBeTruthy();
+      expect(within(self).getByText('Bench Press, Squat')).toBeTruthy();
+      expect(screen.queryByLabelText('Swap with Mon, Nov 2')).toBeNull();
+      await fireEvent.press(wed);
+      await waitFor(() => expect(screen.queryByText('Bench Press')).toBeNull());
+      expect((await getWorkout(db, '2026-11-04'))!.exercises.map((e) => e.exerciseName)).toEqual(['Bench Press', 'Squat']);
+    });
+
+    it("can't pick a day that has sets logged", async () => {
+      const db = await setup();
+      const other = await ensureWorkout(db, '2026-11-04');
+      const pushup = await findByName(db, 'Push-up');
+      await addExerciseToWorkout(db, other.id, pushup, { targetSets: 1 });
+      const w = (await getWorkout(db, '2026-11-04'))!;
+      await updateSet(db, w.exercises[0].sets[0].id, { reps: 20, completed: true });
+      await renderWithDb(<WorkoutView date={MON} />, db);
+      await fireEvent.press(await screen.findByLabelText('Swap day'));
+      const wed = await screen.findByLabelText('Swap with Wed, Nov 4');
+      expect(wed.props.accessibilityState).toMatchObject({ disabled: true });
+      expect(within(wed).getByText('Already logged')).toBeTruthy();
+    });
+
+    it('is not offered once something is logged today', async () => {
+      const db = await setup();
+      const w = await ensureWorkout(db, MON);
+      await updateSet(db, w.exercises[0].sets[0].id, { reps: 10, completed: true });
+      await renderWithDb(<WorkoutView date={MON} />, db);
+      await screen.findByText('Bench Press');
+      expect(screen.queryByLabelText('Swap day')).toBeNull();
+    });
+  });
 });
 
