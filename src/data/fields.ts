@@ -2,11 +2,11 @@ import type { CategoryKind } from './types';
 
 /**
  * What an exercise records. Each one is stored in a place (`key`, a column of `sets`); some share
- * one, like Steps and Routes (both counts) or Weight and Added weight, so an exercise records at
+ * one, like Steps and Routes (both counts), so an exercise records at
  * most one of each. This list is the standard order fields are shown in.
  */
 export const FIELD_IDS = [
-  'weight', 'reps', 'addedWeight', 'duration', 'distance', 'shortDistance', 'elevation',
+  'weight', 'reps', 'duration', 'distance', 'shortDistance', 'elevation',
   'steps', 'runs', 'routes', 'rounds', 'floors', 'holes', 'score', 'difficulty',
 ] as const;
 export type FieldId = (typeof FIELD_IDS)[number];
@@ -36,7 +36,6 @@ const count = (id: FieldId, label: string): FieldDef => ({ id, label, key: 'coun
 export const FIELDS: Record<FieldId, FieldDef> = {
   weight: { id: 'weight', label: 'Weight', key: 'weight', input: 'weight' },
   reps: { id: 'reps', label: 'Reps', key: 'reps', input: 'reps', noun: 'reps', target: 'targetReps' },
-  addedWeight: { id: 'addedWeight', label: 'Added weight', key: 'weight', input: 'weight' },
   duration: { id: 'duration', label: 'Time', key: 'durationMin', input: 'duration', target: 'targetDurationMin' },
   distance: { id: 'distance', label: 'Distance', key: 'distance', input: 'distance', target: 'targetDistance' },
   shortDistance: { id: 'shortDistance', label: 'Distance', key: 'distance', input: 'shortDistance', target: 'targetDistance' },
@@ -60,7 +59,7 @@ export const DEFAULT_FIELDS: Record<CategoryKind, readonly FieldId[]> = {
 
 /** The fields each kind of category can record, offered when creating an exercise. Standard order. */
 export const FIELD_CHOICES: Record<CategoryKind, readonly FieldId[]> = {
-  strength: ['weight', 'reps', 'addedWeight', 'duration', 'shortDistance'],
+  strength: ['weight', 'reps', 'duration', 'shortDistance'],
   cardio: [
     'duration', 'distance', 'shortDistance', 'elevation', 'steps', 'runs', 'routes', 'rounds', 'floors', 'holes', 'score', 'difficulty',
   ],

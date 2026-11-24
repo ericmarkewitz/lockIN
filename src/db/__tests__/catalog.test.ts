@@ -81,9 +81,7 @@ describe('CATALOG', () => {
 
   it.each([
     ['Weighted Plank', ['weight', 'duration']], ['Farmer Carry', ['weight', 'shortDistance']],
-    ['Push-up', ['reps', 'addedWeight']], ['Pull-up', ['reps', 'addedWeight']], ['Dip', ['reps', 'addedWeight']],
-    ['Crunch', ['reps', 'addedWeight']], ['Straight-Leg Sit-up', ['reps', 'addedWeight']],
-    ['Ab Wheel Rollout', ['reps', 'addedWeight']], ['Bird Dog', ['reps', 'addedWeight']], ['Dead Bug', ['reps', 'addedWeight']],
+    ['Push-up', undefined], ['Pull-up', undefined], ['Dip', undefined], ['Crunch', undefined],
     ['Walking', ['duration', 'distance', 'steps']], ['Hiking', ['duration', 'distance', 'elevation']],
     ['Ski Touring', ['duration', 'distance', 'elevation']], ['Downhill Skiing', ['duration', 'elevation', 'runs']],
     ['Snowshoeing', ['duration', 'distance', 'elevation']], ['Biking', ['duration', 'distance', 'elevation']],

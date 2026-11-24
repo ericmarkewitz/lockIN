@@ -81,7 +81,7 @@ export const formatEntry = (values: Pick<WorkoutSet, SetValueKey>, fields: reado
   fields.map((f) => formatField(f, fieldValue(values, f), units)).filter(Boolean).join(fields.includes('weight') ? ' × ' : ' ');
 
 /**
- * "135×10, 135×8", "30 min 3.1 mi", "45 lb × 1 min" or "12 reps +25 lb": each set's values for
+ * "135×10, 135×8", "30 min 3.1 mi", "45 lb × 1 min": each set's values for
  * the exercise's fields. Always in the user's units, even for sets entered in the other one.
  */
 export function formatSets(sets: WorkoutSet[], fields: readonly FieldId[], units: Units): string {

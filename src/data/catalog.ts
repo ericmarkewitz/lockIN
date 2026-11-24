@@ -26,9 +26,6 @@ const lifts = (subcategory: LiftSubcategory, ...entries: LiftEntry[]): CatalogEx
 const plain = (...entries: (string | CatalogExercise)[]): CatalogExercise[] =>
   entries.map((n) => (typeof n === 'string' ? { name: n } : n));
 
-/** Bodyweight lifts log reps, with any weight added (a vest, a plate) as an extra. */
-const bodyweight = (name: string, ...also: LiftSubcategory[]): Omit<CatalogExercise, 'subcategory'> =>
-  ({ name, ...(also.length && { also }), fields: ['reps', 'addedWeight'] });
 /** Cardio that climbs: time, distance and elevation gain. */
 const uphill = (name: string): CatalogExercise => ({ name, fields: ['duration', 'distance', 'elevation'] });
 
@@ -55,8 +52,8 @@ export const CATALOG: CatalogCategory[] = [
     kind: 'strength',
     exercises: [
       ...lifts('Chest', 'Bench Press', 'Incline Bench Press', ['Close-Grip Bench Press', 'Arms'], 'Pec Fly',
-        bodyweight('Push-up', 'Arms'), bodyweight('Dip', 'Arms'), 'Chest Press'),
-      ...lifts('Back', ['Deadlift', 'Legs'], 'Bent-Over Row', bodyweight('Pull-up', 'Arms'), 'Lat Pulldown',
+        ['Push-up', 'Arms'], ['Dip', 'Arms'], 'Chest Press'),
+      ...lifts('Back', ['Deadlift', 'Legs'], 'Bent-Over Row', ['Pull-up', 'Arms'], 'Lat Pulldown',
         'Seated Cable Row', 'Chest-Supported Row', ['Lat Pullover', 'Chest'], 'Kelso Shrug'),
       ...lifts('Shoulders', 'Overhead Press', 'Lateral Raise', 'Arnold Press', ['Rear Delt Fly', 'Back'],
         ['Face Pull', 'Back'], 'Seated Shoulder Press'),
@@ -68,8 +65,7 @@ export const CATALOG: CatalogCategory[] = [
         'Standing Calf Raise', 'Seated Calf Raise', 'Tibialis Raise', 'Hack Squat'),
       ...lifts('Core', { name: 'Weighted Plank', fields: ['weight', 'duration'] },
         { name: 'Farmer Carry', also: ['Arms'], fields: ['weight', 'shortDistance'] }, 'Russian Twist',
-        bodyweight('Crunch'), 'Cable Crunch', bodyweight('Straight-Leg Sit-up'), bodyweight('Ab Wheel Rollout'),
-        bodyweight('Bird Dog'), bodyweight('Dead Bug'), 'Pallof Press'),
+        'Crunch', 'Cable Crunch', 'Straight-Leg Sit-up', 'Ab Wheel Rollout', 'Bird Dog', 'Dead Bug', 'Pallof Press'),
     ],
   },
   {

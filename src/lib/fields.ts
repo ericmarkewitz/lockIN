@@ -51,7 +51,7 @@ const grouped = (n: number) => {
   return `${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}${decimals ? `.${decimals}` : ''}`;
 };
 
-/** A stored value written out with its unit: "135 lb", "+25 lb", "12,000 steps", "Difficulty 7/10". Blank for none. */
+/** A stored value written out with its unit: "135 lb", "12,000 steps", "Difficulty 7/10". Blank for none. */
 export function formatField(id: FieldId, stored: number | null, units: Units): string {
   if (stored === null) return '';
   const f = FIELDS[id];
@@ -60,7 +60,7 @@ export function formatField(id: FieldId, stored: number | null, units: Units): s
   if (f.input === 'difficulty') return `${f.label} ${n}/10`;
   if (id === 'score') return `${f.label} ${n}`;
   if (f.noun) return `${grouped(n)} ${n === 1 ? f.noun.replace(/s$/, '') : f.noun}`;
-  return `${id === 'addedWeight' ? '+' : ''}${grouped(n)} ${fieldUnit(id, units)}`;
+  return `${grouped(n)} ${fieldUnit(id, units)}`;
 }
 
 /**

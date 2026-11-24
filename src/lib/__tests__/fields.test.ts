@@ -6,7 +6,6 @@ const metric = { weight: 'kg', distance: 'km' } as const;
 describe('fieldUnit', () => {
   it('names the unit each field is shown in', () => {
     expect(fieldUnit('weight', metric)).toBe('kg');
-    expect(fieldUnit('addedWeight', imperial)).toBe('lb');
     expect(fieldUnit('distance', metric)).toBe('km');
     expect(fieldUnit('shortDistance', imperial)).toBe('yd');
     expect(fieldUnit('shortDistance', metric)).toBe('m');
@@ -35,7 +34,6 @@ describe('toDisplayField / fromDisplayField', () => {
 describe('formatField', () => {
   it('writes a value with its unit', () => {
     expect(formatField('weight', 135, imperial)).toBe('135 lb');
-    expect(formatField('addedWeight', 25, imperial)).toBe('+25 lb');
     expect(formatField('reps', 10, imperial)).toBe('10 reps');
     expect(formatField('duration', 1.5, imperial)).toBe('1m 30s');
     expect(formatField('distance', 3, metric)).toBe('4.83 km');
@@ -75,7 +73,6 @@ describe('formatTargets', () => {
 describe('defaultTargets', () => {
   it('plans 3 sets of 10 for a lift with reps, 3 sets for one without, and nothing for cardio', () => {
     expect(defaultTargets({ categoryKind: 'strength', fields: ['weight', 'reps'] })).toEqual({ targetSets: 3, targetReps: 10 });
-    expect(defaultTargets({ categoryKind: 'strength', fields: ['reps', 'addedWeight'] })).toEqual({ targetSets: 3, targetReps: 10 });
     expect(defaultTargets({ categoryKind: 'strength', fields: ['weight', 'duration'] })).toEqual({ targetSets: 3 });
     expect(defaultTargets({ categoryKind: 'cardio', fields: ['duration', 'steps'] })).toEqual({});
   });

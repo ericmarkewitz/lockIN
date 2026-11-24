@@ -331,20 +331,11 @@ describe('SetRow for exercises that record something else', () => {
   });
 
   it('heads the columns with what the lift records', async () => {
-    await render(<SetHeader fields={['reps', 'addedWeight']} />);
-    expect(screen.getByText('Reps', { includeHiddenElements: true })).toBeTruthy();
-    expect(screen.getByText('Added weight', { includeHiddenElements: true })).toBeTruthy();
+    await render(<SetHeader fields={['weight', 'duration']} />);
+    expect(screen.getByText('Weight', { includeHiddenElements: true })).toBeTruthy();
+    expect(screen.getByText('Time', { includeHiddenElements: true })).toBeTruthy();
   });
 
-  it('logs a bodyweight set as reps first, then any added weight', async () => {
-    const onChange = jest.fn();
-    await render(<SetRow kind="strength" fields={['reps', 'addedWeight']} set={set} unit="lb" onChange={onChange} onRemove={jest.fn()} />);
-    const input = screen.getByLabelText('Added weight for set 2');
-    await fireEvent.changeText(input, '25');
-    await fireEvent(input, 'blur');
-    expect(onChange).toHaveBeenCalledWith({ weight: 25 });
-    expect(screen.getByLabelText('Reps for set 2')).toBeTruthy();
-  });
 
   it('types a carry distance in yards or meters, stored as miles', async () => {
     const onChange = jest.fn();

@@ -22,12 +22,11 @@ describe('parseFields', () => {
 describe('normalizeFields', () => {
   it('puts fields in their standard order', () => {
     expect(normalizeFields(['steps', 'distance', 'duration'], 'cardio')).toEqual(['duration', 'distance', 'steps']);
-    expect(normalizeFields(['addedWeight', 'reps'], 'strength')).toEqual(['reps', 'addedWeight']);
+    expect(normalizeFields(['reps', 'weight'], 'strength')).toEqual(['weight', 'reps']);
   });
 
   it('keeps only the first of two fields stored in the same place', () => {
     expect(normalizeFields(['steps', 'routes'], 'cardio')).toEqual(['steps']);
-    expect(normalizeFields(['weight', 'addedWeight', 'reps'], 'strength')).toEqual(['weight', 'reps']);
   });
 
   it('rejects a field the category does not offer', () => {
@@ -54,7 +53,6 @@ describe('toggleField', () => {
 
   it('swaps out a field stored in the same place', () => {
     expect(toggleField(['duration', 'steps'], 'routes', 'cardio')).toEqual(['duration', 'routes']);
-    expect(toggleField(['weight', 'reps'], 'addedWeight', 'strength')).toEqual(['reps', 'addedWeight']);
   });
 });
 

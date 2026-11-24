@@ -26,7 +26,7 @@ const dayLabel = (date: string) => `${DAY_NAMES[parseDateKey(date).getDay()].sli
 
 /** Whether a lift records weight × reps, so it has a best set, an estimated 1RM and a trend. */
 const liftsForReps = (e: LoggedExercise) =>
-  e.kind === 'strength' && e.fields.includes('reps') && (e.fields.includes('weight') || e.fields.includes('addedWeight'));
+  e.kind === 'strength' && e.fields.includes('reps') && e.fields.includes('weight');
 
 /**
  * A session in a line, from what the exercise records: a lift's best set and 1RM, or for a hold or

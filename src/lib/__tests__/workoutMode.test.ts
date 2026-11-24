@@ -127,9 +127,6 @@ describe('formatSets', () => {
     expect(formatSets([set(1, { weight: 70, distance: 40 / 1760 })], ['weight', 'shortDistance'], units)).toBe('70 lb × 40 yd');
   });
 
-  it('shows a bodyweight set as reps, plus any weight added', () => {
-    expect(formatSets([set(1, { reps: 12 }), set(2, { reps: 8, weight: 25 })], ['reps', 'addedWeight'], units)).toBe('12 reps, 8 reps +25 lb');
-  });
 
   it('marks a set with nothing in it', () => {
     expect(formatSets([set(1)], ['duration', 'routes'], units)).toBe('–');
