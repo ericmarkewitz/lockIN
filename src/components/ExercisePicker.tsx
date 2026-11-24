@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { OTHER_SUBCATEGORY, addExercise, groupBySubcategory, listCategoriesWithExercises, searchExercises } from '@/data/exercises';
+import { DEFAULT_FIELDS, type FieldId } from '@/data/fields';
 import type { Category, Exercise } from '@/data/types';
 import { useDb } from '@/db/DbContext';
 import { useLoad } from '@/hooks/useLoad';
 import { tint, useTheme, type Theme } from '@/theme';
 import { EditExerciseSheet } from './EditExerciseSheet';
+import { FieldChips } from './FieldChips';
 import { categoryIcon, Icon, sym } from './Icon';
 import { keyboardAvoidance } from './KeyboardAvoider';
 import { ExerciseMotion } from './motion/ExerciseMotion';
@@ -149,6 +151,7 @@ export function ExercisePicker({
   const [catId, setCatId] = useState<number | null>(null);
   const [subcategory, setSubcategory] = useState<string | null>(null); // null shows the whole category
   const [pickedGroups, setPickedGroups] = useState<string[] | null>(null); // null: just the tab's group
+  const [pickedFields, setPickedFields] = useState<FieldId[] | null>(null); // null: the category's default
   const [query, setQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Exercise | null>(null);
@@ -159,6 +162,7 @@ export function ExercisePicker({
   const hasOther = groups.some((g) => g.title === OTHER_SUBCATEGORY);
   const tabGroup = subcategory === OTHER_SUBCATEGORY ? null : subcategory;
   const newGroups = pickedGroups ?? (tabGroup ? [tabGroup] : []);
+  const newFields = pickedFields ?? (active ? [...DEFAULT_FIELDS[active.kind]] : []);
   const name = query.trim();
   const searching = name.length > 0;
   const results = searching && cats && active ? searchExercises(cats, active.id, name) : null;
@@ -166,6 +170,7 @@ export function ExercisePicker({
   const selectCategory = (id: number) => {
     setCatId(id);
     selectSubcategory(null);
+    setPickedFields(null);
   };
   const selectSubcategory = (s: string | null) => {
     setSubcategory(s);
@@ -189,6 +194,7 @@ export function ExercisePicker({
   const pick = (e: Exercise) => {
     search('');
     setPickedGroups(null);
+    setPickedFields(null);
     onPick(e);
   };
 
@@ -196,7 +202,7 @@ export function ExercisePicker({
     if (!active) return;
     try {
       const [main = null, ...alsoIn] = active.subcategories.length ? newGroups : [];
-      const ex = await addExercise(db, active.id, name, main, alsoIn);
+      const ex = await addExercise(db, active.id, name, main, alsoIn, newFields);
       await reload();
       pick(ex);
     } catch (e) {
@@ -294,6 +300,7 @@ export function ExercisePicker({
                 {!results.exact && active.subcategories.length > 0 && (
                   <MuscleGroupChips options={active.subcategories} picked={newGroups} onToggle={toggleGroup} kind={active.kind} t={t} />
                 )}
+                {!results.exact && <FieldChips kind={active.kind} picked={newFields} onChange={setPickedFields} t={t} />}
                 {error && <Text style={[styles.error, { color: t.danger }]}>{error}</Text>}
                 {results.here.length > 0 ? (
                   <>

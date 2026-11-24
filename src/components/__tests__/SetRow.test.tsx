@@ -1,10 +1,11 @@
 import { fireEvent, render, screen, within } from '@testing-library/react-native';
 
-import { SetRow } from '../SetRow';
+import { SetHeader, SetRow } from '../SetRow';
 import type { WorkoutSet } from '@/data/types';
 
 const set: WorkoutSet = {
   id: 1, setNumber: 2, targetReps: 10, reps: null, weight: null, durationMin: null, distance: null,
+  count: null, elevation: null, score: null, difficulty: null,
   weightUnit: null, distanceUnit: null, completed: false, isLogged: false,
 };
 
@@ -311,5 +312,113 @@ describe('SetRow weight in the other unit', () => {
     await render(<SetRow kind="strength" set={{ ...set, weightUnit: 'kg' }} unit="lb" onChange={onChange} onRemove={jest.fn()} />);
     await fireEvent.press(screen.getByLabelText('Weight unit for set 2'));
     expect(onChange).toHaveBeenCalledWith({ weightUnit: 'lb', weight: null });
+  });
+});
+
+describe('SetRow for exercises that record something else', () => {
+  const entry = { ...set, setNumber: 1, targetReps: null };
+
+  it('logs a weighted hold as weight and time, with no reps', async () => {
+    const onChange = jest.fn();
+    await render(<SetRow kind="strength" fields={['weight', 'duration']} set={set} targetDurationMin={1} unit="lb" onChange={onChange} onRemove={jest.fn()} />);
+    expect(screen.queryByLabelText('Reps for set 2')).toBeNull();
+    expect(screen.getByLabelText('Weight for set 2')).toBeTruthy();
+    const time = screen.getByLabelText('Time for set 2');
+    expect(time.props.accessibilityValue).toEqual({ text: 'Not logged, target 1 min' });
+    await fireEvent.press(time);
+    await fireEvent.press(screen.getByLabelText('Done'));
+    expect(onChange).toHaveBeenCalledWith({ durationMin: 1 });
+  });
+
+  it('heads the columns with what the lift records', async () => {
+    await render(<SetHeader fields={['reps', 'addedWeight']} />);
+    expect(screen.getByText('Reps', { includeHiddenElements: true })).toBeTruthy();
+    expect(screen.getByText('Added weight', { includeHiddenElements: true })).toBeTruthy();
+  });
+
+  it('logs a bodyweight set as reps first, then any added weight', async () => {
+    const onChange = jest.fn();
+    await render(<SetRow kind="strength" fields={['reps', 'addedWeight']} set={set} unit="lb" onChange={onChange} onRemove={jest.fn()} />);
+    const input = screen.getByLabelText('Added weight for set 2');
+    await fireEvent.changeText(input, '25');
+    await fireEvent(input, 'blur');
+    expect(onChange).toHaveBeenCalledWith({ weight: 25 });
+    expect(screen.getByLabelText('Reps for set 2')).toBeTruthy();
+  });
+
+  it('types a carry distance in yards or meters, stored as miles', async () => {
+    const onChange = jest.fn();
+    await render(<SetRow kind="strength" fields={['weight', 'shortDistance']} set={set} unit="lb" distanceUnit="km" onChange={onChange} onRemove={jest.fn()} />);
+    const input = screen.getByLabelText('Distance for set 2');
+    await fireEvent.changeText(input, '40');
+    await fireEvent(input, 'blur');
+    expect(onChange).toHaveBeenCalledWith({ distance: expect.closeTo(40 / 1609.344, 9) });
+    expect(screen.getByLabelText('Distance unit for set 2').props.accessibilityValue).toEqual({ text: 'm' });
+  });
+
+  it('switches a short distance between yards and meters, keeping the typed number', async () => {
+    const onChange = jest.fn();
+    await render(<SetRow kind="cardio" fields={['duration', 'shortDistance']} exerciseName="Swimming" set={entry} unit="lb" distanceUnit="mi" onChange={onChange} />);
+    await fireEvent.changeText(screen.getByLabelText('Swimming distance'), '500');
+    await fireEvent.press(screen.getByLabelText('Swimming distance unit'));
+    expect(onChange).toHaveBeenCalledWith({ distanceUnit: 'km', distance: expect.closeTo(500 / 1609.344, 9) });
+  });
+
+  it('logs steps as a whole number', async () => {
+    const onChange = jest.fn();
+    await render(<SetRow kind="cardio" fields={['duration', 'distance', 'steps']} exerciseName="Walking" set={entry} unit="lb" onChange={onChange} />);
+    const steps = screen.getByLabelText('Walking steps');
+    await fireEvent.changeText(steps, '8500.6');
+    await fireEvent(steps, 'blur');
+    expect(onChange).toHaveBeenCalledWith({ count: 8501 });
+    expect(screen.getByText('steps')).toBeTruthy();
+  });
+
+  it('shows the elevation unit of the distance beside it, switched with the distance', async () => {
+    await render(
+      <SetRow kind="cardio" fields={['duration', 'distance', 'elevation']} exerciseName="Hiking" set={{ ...entry, elevation: 1000 }} unit="lb" distanceUnit="km" onChange={jest.fn()} />,
+    );
+    expect(screen.getByLabelText('Hiking elevation').props.value).toBe('304.8');
+    expect(screen.getByText('m')).toBeTruthy();
+    expect(screen.queryByLabelText('Hiking elevation unit')).toBeNull();
+  });
+
+  it('can switch elevation units itself when there is no distance', async () => {
+    const onChange = jest.fn();
+    await render(<SetRow kind="cardio" fields={['duration', 'elevation', 'runs']} exerciseName="Downhill Skiing" set={entry} unit="lb" distanceUnit="mi" onChange={onChange} />);
+    await fireEvent.changeText(screen.getByLabelText('Downhill Skiing elevation'), '600');
+    await fireEvent.press(screen.getByLabelText('Downhill Skiing elevation unit'));
+    expect(onChange).toHaveBeenCalledWith({ distanceUnit: 'km', elevation: expect.closeTo(600 / 0.3048, 6) });
+  });
+
+  it('rates difficulty from 1 to 10 on a wheel', async () => {
+    const onChange = jest.fn();
+    await render(<SetRow kind="cardio" fields={['duration', 'routes', 'difficulty']} exerciseName="Climbing" set={entry} unit="lb" onChange={onChange} />);
+    const field = screen.getByLabelText('Climbing difficulty');
+    expect(field.props.accessibilityValue).toEqual({ text: 'Not logged' });
+    await fireEvent.press(field);
+    const wheel = within(screen.getByLabelText('Difficulty'));
+    expect(wheel.queryByText('0')).toBeNull();
+    expect(wheel.getByText('10')).toBeTruthy();
+    await fireEvent.press(wheel.getByText('7'));
+    await fireEvent.press(screen.getByLabelText('Done'));
+    expect(onChange).toHaveBeenCalledWith({ difficulty: 7 });
+  });
+
+  it('counts routes climbed', async () => {
+    const onChange = jest.fn();
+    await render(<SetRow kind="cardio" fields={['duration', 'routes', 'difficulty']} exerciseName="Climbing" set={entry} unit="lb" onChange={onChange} />);
+    await fireEvent.changeText(screen.getByLabelText('Climbing routes'), '9');
+    await fireEvent(screen.getByLabelText('Climbing routes'), 'blur');
+    expect(onChange).toHaveBeenCalledWith({ count: 9 });
+  });
+
+  it('logs a golf score', async () => {
+    const onChange = jest.fn();
+    await render(<SetRow kind="cardio" fields={['duration', 'holes', 'score']} exerciseName="Golf" set={entry} unit="lb" onChange={onChange} />);
+    await fireEvent.changeText(screen.getByLabelText('Golf score'), '84');
+    await fireEvent(screen.getByLabelText('Golf score'), 'blur');
+    expect(onChange).toHaveBeenCalledWith({ score: 84 });
+    expect(screen.getByLabelText('Golf holes')).toBeTruthy();
   });
 });

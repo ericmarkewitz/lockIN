@@ -300,6 +300,21 @@ const MIGRATIONS: ((db: Db) => Promise<void>)[] = [
         );
     `);
   },
+  // Exercises can record more than weight × reps or time and distance: steps, elevation, a count
+  // of runs or routes, a score or a 1–10 difficulty. `fields` lists what an exercise records
+  // (src/data/fields.ts); null keeps its category's default, so nothing changes for existing
+  // exercises. syncCatalog fills it in for the built-ins.
+  async (db) => {
+    await db.execAsync(`
+      ALTER TABLE exercises ADD COLUMN fields TEXT;
+      ALTER TABLE sets ADD COLUMN count INTEGER;
+      ALTER TABLE sets ADD COLUMN elevation REAL;
+      ALTER TABLE sets ADD COLUMN score INTEGER;
+      ALTER TABLE sets ADD COLUMN difficulty INTEGER CHECK (difficulty BETWEEN 1 AND 10);
+      ALTER TABLE plan_items ADD COLUMN target_count INTEGER;
+      ALTER TABLE workout_exercises ADD COLUMN target_count INTEGER;
+    `);
+  },
 ];
 
 export const LATEST_VERSION = MIGRATIONS.length;

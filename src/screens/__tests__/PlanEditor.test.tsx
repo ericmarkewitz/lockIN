@@ -286,4 +286,63 @@ describe('PlanEditor', () => {
       expect(await save()).toBe(3);
     });
   });
+
+  describe('targets for exercises that record something else', () => {
+    async function planned(name: string, targets: Record<string, number> = {}) {
+      const db = await createTestDb();
+      await setPlanDay(db, 3, { isRest: false, items: [{ exerciseId: await findByName(db, name), ...targets }] });
+      const onSaved = jest.fn();
+      await renderWithDb(<PlanEditor onSaved={onSaved} />, db);
+      await screen.findByText(name);
+      const save = async () => {
+        await fireEvent.press(screen.getByText('Save plan'));
+        await waitFor(() => expect(onSaved).toHaveBeenCalled());
+        return (await getPlan(db)).find((d) => d.weekday === 3)!.items[0];
+      };
+      return save;
+    }
+
+    it('plans a step count for a walk, alongside time and distance', async () => {
+      const save = await planned('Walking', { targetCount: 8000 });
+      expect(screen.getByLabelText('3 Walking minutes')).toBeTruthy();
+      expect(screen.getByLabelText('3 Walking distance')).toBeTruthy();
+      const steps = screen.getByLabelText('3 Walking steps');
+      expect(steps.props.value).toBe('8000');
+      await fireEvent.changeText(steps, '10000');
+      expect(await save()).toMatchObject({ targetCount: 10000 });
+    });
+
+    it('plans routes but no distance for climbing', async () => {
+      const save = await planned('Climbing');
+      expect(screen.queryByLabelText('3 Climbing distance')).toBeNull();
+      await fireEvent.changeText(screen.getByLabelText('3 Climbing routes'), '12');
+      expect(await save()).toMatchObject({ targetCount: 12, targetDistance: null });
+    });
+
+    it('plans sets and a hold time for a plank, with no reps', async () => {
+      const save = await planned('Weighted Plank', { targetSets: 3, targetReps: 10 });
+      expect(screen.queryByLabelText('3 Weighted Plank sets and reps')).toBeNull();
+      expect(within(screen.getByLabelText('3 Weighted Plank sets')).getByText('3 sets')).toBeTruthy();
+      await fireEvent.press(screen.getByLabelText('3 Weighted Plank minutes'));
+      await fireEvent.press(within(screen.getByLabelText('Minutes')).getByText('1'));
+      await fireEvent.press(screen.getByLabelText('Done'));
+      expect(await save()).toMatchObject({ targetSets: 3, targetReps: null, targetDurationMin: 1 });
+    });
+
+    it('plans a swim distance in yards or meters', async () => {
+      const save = await planned('Swimming');
+      expect(screen.getByLabelText('3 Swimming distance unit').props.accessibilityValue).toEqual({ text: 'yd' });
+      await fireEvent.changeText(screen.getByLabelText('3 Swimming distance'), '880');
+      expect((await save()).targetDistance).toBeCloseTo(0.5, 9);
+    });
+
+    it('starts a newly added plank on 3 sets and no reps', async () => {
+      const db = await createTestDb();
+      await renderWithDb(<PlanEditor onSaved={jest.fn()} />, db);
+      await fireEvent.press(await screen.findByLabelText('Add exercise to Monday'));
+      await fireEvent.press((await screen.findAllByLabelText('Add Weighted Plank'))[0]);
+      expect(within(await screen.findByLabelText('1 Weighted Plank sets')).getByText('3 sets')).toBeTruthy();
+    });
+  });
 });
+

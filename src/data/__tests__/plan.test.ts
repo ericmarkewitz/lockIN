@@ -78,3 +78,13 @@ describe('weekly plan', () => {
     expect(await isPlanComplete(db)).toBe(true);
   });
 });
+
+describe('plan targets for what an exercise records', () => {
+  it('saves a count target and says what each item records', async () => {
+    const db = await createTestDb();
+    const walk = await findByName(db, 'Walking');
+    await setPlanDay(db, 2, { isRest: false, items: [{ exerciseId: walk, targetDurationMin: 30, targetCount: 10000 }] });
+    const [item] = (await getPlan(db)).find((d) => d.weekday === 2)!.items;
+    expect(item).toMatchObject({ targetDurationMin: 30, targetCount: 10000, fields: ['duration', 'distance', 'steps'] });
+  });
+});

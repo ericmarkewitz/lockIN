@@ -502,4 +502,49 @@ describe('WorkoutView', () => {
       expect(screen.queryByLabelText('Reorder Squat')).toBeNull();
     });
   });
+
+  describe('exercises that record something else', () => {
+    it('logs steps for a walk and shows its step target', async () => {
+      const db = await createTestDb();
+      await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: await findByName(db, 'Walking'), targetDurationMin: 45, targetCount: 8000 }] });
+      await renderWithDb(<WorkoutView date={MON} />, db);
+      expect(await screen.findByText('Cardio · 45 min · 8,000 steps')).toBeTruthy();
+      await fireEvent.changeText(screen.getByLabelText('Walking steps'), '9200');
+      await fireEvent(screen.getByLabelText('Walking steps'), 'blur');
+      await waitFor(async () => expect((await getWorkout(db, MON))!.exercises[0].sets[0].count).toBe(9200));
+    });
+
+    it('logs a plank as weight and time per set, without reps', async () => {
+      const db = await createTestDb();
+      await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: await findByName(db, 'Weighted Plank'), targetSets: 2, targetDurationMin: 1 }] });
+      await renderWithDb(<WorkoutView date={MON} />, db);
+      expect(await screen.findByText('Lifts · Core · 2 sets · 1 min')).toBeTruthy();
+      expect(screen.getByLabelText('Time for set 2')).toBeTruthy();
+      expect(screen.queryByLabelText('Reps for set 1')).toBeNull();
+      expect(screen.getAllByText('Time', { includeHiddenElements: true }).length).toBeGreaterThan(0);
+    });
+
+    it('shows last time in what the exercise records', async () => {
+      const db = await createTestDb();
+      await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: await findByName(db, 'Climbing') }] });
+      const prev = await ensureWorkout(db, '2026-10-26');
+      await updateSet(db, prev.exercises[0].sets[0].id, { durationMin: 90, count: 9, difficulty: 6 });
+      await renderWithDb(<WorkoutView date={MON} />, db);
+      expect(await screen.findByText('Last (2026-10-26): 1h 30m 9 routes Difficulty 6/10')).toBeTruthy();
+      expect(screen.getByLabelText('Climbing routes')).toBeTruthy();
+      expect(screen.getByLabelText('Climbing difficulty')).toBeTruthy();
+    });
+
+    it('plans sets but no reps for a lift added from the picker that has none', async () => {
+      const db = await setup();
+      await renderWithDb(<WorkoutView date={MON} />, db);
+      await fireEvent.press(await screen.findByLabelText('Add exercise'));
+      await fireEvent.press((await screen.findAllByLabelText('Add Weighted Plank'))[0]);
+      await screen.findByText('Weighted Plank');
+      const plank = (await getWorkout(db, MON))!.exercises.find((e) => e.exerciseName === 'Weighted Plank')!;
+      expect(plank).toMatchObject({ targetSets: 3, targetReps: null });
+      expect(plank.sets).toHaveLength(3);
+    });
+  });
 });
+

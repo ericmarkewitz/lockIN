@@ -8,6 +8,7 @@ import { DAY_NAMES } from '@/lib/calendar';
 import { todayKey } from '@/lib/dates';
 import { useTheme } from '@/theme';
 import { ConfirmDialog } from './ConfirmDialog';
+import { FieldChips } from './FieldChips';
 import { MuscleGroupChips, subcategoryNoun, toggled } from './MuscleGroupChips';
 import { Button } from './ui';
 
@@ -31,7 +32,7 @@ export function removalMessage({ plannedWeekdays, loggedWorkouts }: ExerciseUsag
   return parts.join(' ') || "It isn't in your plan and hasn't been logged.";
 }
 
-/** Renames a custom exercise, changes its subcategories, or removes it. */
+/** Renames a custom exercise, changes its subcategories and what it records, or removes it. */
 export function EditExerciseSheet({ exercise, subcategories, onSaved, onRemoved, onClose }: {
   exercise: Exercise;
   /** The subcategories its category offers; empty hides the chips. */
@@ -44,13 +45,14 @@ export function EditExerciseSheet({ exercise, subcategories, onSaved, onRemoved,
   const t = useTheme();
   const [name, setName] = useState(exercise.name);
   const [groups, setGroups] = useState(() => [exercise.subcategory, ...exercise.alsoIn].filter((s): s is string => !!s));
+  const [fields, setFields] = useState(exercise.fields);
   const [error, setError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<string | null>(null);
 
   const save = async () => {
     try {
       const [main = null, ...alsoIn] = groups;
-      onSaved(await updateExercise(db, exercise.id, { name, subcategory: main, alsoIn }));
+      onSaved(await updateExercise(db, exercise.id, { name, subcategory: main, alsoIn, fields }));
     } catch (e) {
       setError((e as Error).message);
     }
@@ -83,6 +85,7 @@ export function EditExerciseSheet({ exercise, subcategories, onSaved, onRemoved,
               <MuscleGroupChips options={subcategories} picked={groups} onToggle={(s) => setGroups(toggled(groups, s))} kind={exercise.categoryKind} t={t} />
             </View>
           )}
+          <FieldChips kind={exercise.categoryKind} picked={fields} onChange={setFields} t={t} />
           {error && <Text style={{ color: t.danger }}>{error}</Text>}
           <View style={styles.actions}>
             <Button title="Cancel" label="Cancel editing" variant="secondary" onPress={onClose} style={styles.action} />

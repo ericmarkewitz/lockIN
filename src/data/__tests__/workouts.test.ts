@@ -675,3 +675,64 @@ describe('replaceWorkoutExercise', () => {
     await expect(replaceWorkoutExercise(db, w.exercises[0].id, await findByName(db, 'Running'))).rejects.toThrow(/category/i);
   });
 });
+
+describe('exercises that record more than weight, reps, time and distance', () => {
+  async function walkOn(db: Db, date: string, targets: { targetDurationMin?: number; targetCount?: number } = {}) {
+    const walk = await findByName(db, 'Walking');
+    await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: walk, ...targets }] });
+    return (await ensureWorkout(db, date)).exercises[0];
+  }
+
+  it('tells each workout exercise what it records', async () => {
+    const db = await createTestDb();
+    const walk = await walkOn(db, MON);
+    expect(walk.fields).toEqual(['duration', 'distance', 'steps']);
+    await addExerciseToWorkout(db, (await getWorkout(db, MON))!.id, await findByName(db, 'Bench Press'), { targetSets: 1 });
+    expect((await getWorkout(db, MON))!.exercises[1].fields).toEqual(['weight', 'reps']);
+  });
+
+  it('carries a count target from the plan to the day', async () => {
+    const db = await createTestDb();
+    const walk = await walkOn(db, MON, { targetDurationMin: 45, targetCount: 8000 });
+    expect(walk).toMatchObject({ targetDurationMin: 45, targetCount: 8000 });
+  });
+
+  it('logs steps, elevation, a score and a difficulty, each counting as logged on its own', async () => {
+    const db = await createTestDb();
+    const walk = await walkOn(db, MON);
+    for (const patch of [{ count: 9500 }, { elevation: 300 }, { score: 84 }, { difficulty: 7 }]) {
+      await updateSet(db, walk.sets[0].id, { count: null, elevation: null, score: null, difficulty: null, ...patch });
+      const set = (await getWorkout(db, MON))!.exercises[0].sets[0];
+      expect(set).toMatchObject({ count: null, elevation: null, score: null, difficulty: null, ...patch, isLogged: true });
+    }
+  });
+
+  it('only takes a whole-number difficulty from 1 to 10, and whole counts and scores', async () => {
+    const db = await createTestDb();
+    const { sets: [set] } = await walkOn(db, MON);
+    await expect(updateSet(db, set.id, { difficulty: 0 })).rejects.toThrow('Difficulty is from 1 to 10');
+    await expect(updateSet(db, set.id, { difficulty: 11 })).rejects.toThrow('Difficulty is from 1 to 10');
+    await expect(updateSet(db, set.id, { difficulty: 6.5 })).rejects.toThrow('Difficulty is from 1 to 10');
+    await expect(updateSet(db, set.id, { count: 2.5 })).rejects.toThrow('count must be a whole number');
+    await expect(updateSet(db, set.id, { score: 3.2 })).rejects.toThrow('score must be a whole number');
+    await expect(updateSet(db, set.id, { elevation: -10 })).rejects.toThrow('elevation cannot be negative');
+  });
+
+  it('keeps the count target when swapping in another exercise', async () => {
+    const db = await createTestDb();
+    const climb = await findByName(db, 'Climbing');
+    await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: climb, targetDurationMin: 60, targetCount: 12 }] });
+    const w = await ensureWorkout(db, MON);
+    await replaceWorkoutExercise(db, w.exercises[0].id, await findByName(db, 'HIIT'));
+    expect((await getWorkout(db, MON))!.exercises[0]).toMatchObject({ exerciseName: 'HIIT', targetDurationMin: 60, targetCount: 12 });
+  });
+
+  it('gives a timed lift numbered sets but no rep target', async () => {
+    const db = await createTestDb();
+    const plank = await findByName(db, 'Weighted Plank');
+    await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: plank, targetSets: 3, targetDurationMin: 1 }] });
+    const ex = (await ensureWorkout(db, MON)).exercises[0];
+    expect(ex).toMatchObject({ fields: ['weight', 'duration'], targetDurationMin: 1 });
+    expect(ex.sets.map((s) => s.targetReps)).toEqual([null, null, null]);
+  });
+});

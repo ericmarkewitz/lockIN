@@ -5,6 +5,7 @@ import { Keyboard, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, Vi
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { SafeAreaInsetsContext, type EdgeInsets } from 'react-native-safe-area-context';
 
+import { DifficultyButton } from '@/components/DifficultyButton';
 import { DurationButton } from '@/components/DurationButton';
 import { ExerciseMedia } from '@/components/ExerciseMedia';
 import { categoryIcon, Icon, sym, type SymbolName } from '@/components/Icon';
@@ -15,21 +16,20 @@ import { UnitPill } from '@/components/UnitPill';
 import { Segmented } from '@/components/ui';
 import { findSimilarExercises } from '@/data/exercises';
 import { getRestSeconds, type Units } from '@/data/settings';
+import { FIELDS, type FieldId, type FieldInput } from '@/data/fields';
 import type { WorkoutExercise, WorkoutSet } from '@/data/types';
 import {
   loadDay, reorderWorkoutExercises, replaceWorkoutExercise, setWorkoutNotes, shownExercises, updateSet, type SetPatch,
 } from '@/data/workouts';
 import { useDb } from '@/db/DbContext';
 import { useLoad } from '@/hooks/useLoad';
-import { formatDuration } from '@/lib/duration';
+import { fieldUnit, formatTargets, fromDisplayField, toDisplayField } from '@/lib/fields';
 import { parseNumber } from '@/lib/numbers';
 import { moveItem } from '@/lib/reorder';
-import {
-  fromDisplayDistance, fromDisplayWeight, otherDistanceUnit, otherWeightUnit, toDisplayDistance, toDisplayWeight,
-} from '@/lib/units';
+import { otherDistanceUnit, otherWeightUnit } from '@/lib/units';
 import { MAX_REPS } from '@/lib/wheel';
 import {
-  firstOpenStep, formatSets, groupThousands, nextOpenStep, suggestEntry, workoutSteps, workoutVolume, type Step,
+  firstOpenStep, formatEntry, formatSets, groupThousands, nextOpenStep, suggestEntry, workoutSteps, workoutVolume, type Step,
 } from '@/lib/workoutMode';
 import { accentGradient, tint, useTheme } from '@/theme';
 
@@ -47,6 +47,10 @@ const useInsets = () => useContext(SafeAreaInsetsContext) ?? NO_INSETS;
 type Cursor = number | 'finish' | { exercise: number } | null;
 
 const WEIGHT_STEP = { lb: 5, kg: 2.5 } as const;
+/** Fields typed as whole numbers. */
+const WHOLE: readonly FieldInput[] = ['reps', 'count'];
+/** Fields whose unit follows the set's distance unit: miles or km, yards or meters, feet or meters. */
+const DISTANCE_LIKE: readonly FieldInput[] = ['distance', 'shortDistance', 'elevation'];
 /** When a rest that starts now ends. Kept out of the component: it reads the clock. */
 const restUntil = (seconds: number) => Date.now() + seconds * 1000;
 const show = (n: number | null) => (n === null ? '' : String(Math.round(n * 100) / 100));
@@ -222,6 +226,7 @@ export function WorkoutMode({ date }: { date: string }) {
       {switching && step && (
         <SwitchSheet
           current={step.exercise}
+          units={units}
           planned={alternatives}
           inDay={workout.exercises.map((e) => e.exerciseId)}
           onPick={switchTo}
@@ -240,9 +245,10 @@ type SwitchMode = 'order' | 'swap';
  * one (Change order), or do a different exercise for the same muscles instead (Swap exercise).
  */
 function SwitchSheet({
-  current, planned, inDay, onPick, onSwap, onClose,
+  current, units, planned, inDay, onPick, onSwap, onClose,
 }: {
   current: WorkoutExercise;
+  units: Units;
   /** The day's other exercises with sets left. */
   planned: WorkoutExercise[];
   /** Every exercise in the day, left out of the swap list. */
@@ -292,7 +298,7 @@ function SwitchSheet({
                 const n = e.sets.filter((x) => !x.completed).length;
                 const detail = e.categoryKind === 'strength'
                   ? `${n} ${n === 1 ? 'set' : 'sets'} left`
-                  : formatDuration(e.targetDurationMin) || e.categoryName;
+                  : formatTargets(e, units)[0] ?? e.categoryName;
                 return row(e.id, `Switch to ${e.exerciseName}`, e.exerciseName, e.isCustom, detail, () => onPick(e));
               })
               : similar?.map((e) => row(e.id, `Swap in ${e.name}`, e.name, e.isCustom, e.subcategory, () => onSwap(e.id)))}
@@ -370,29 +376,55 @@ function StepView({
   const t = useTheme();
   const { exercise, set, setIndex } = step;
   const isStrength = exercise.categoryKind === 'strength';
+  const { fields } = exercise;
   const subject = isStrength ? `set ${set.setNumber}` : exercise.exerciseName;
 
   // The entry starts from the suggestion; this view is keyed by set, so it resets each set.
   const [initial] = useState(() => suggestEntry(exercise, setIndex, last, units));
   const [weightUnit, setWeightUnit] = useState(initial.weightUnit);
-  const [weight, setWeight] = useState(show(toDisplayWeight(initial.weight, initial.weightUnit)));
-  const [reps, setReps] = useState(show(initial.reps));
-  const [durationMin, setDurationMin] = useState(initial.durationMin);
   const [distanceUnit, setDistanceUnit] = useState(initial.distanceUnit);
-  const [distance, setDistance] = useState(show(toDisplayDistance(initial.distance, initial.distanceUnit)));
+  const shown: Units = { weight: weightUnit, distance: distanceUnit };
+  // Typed numbers by field; a switched unit keeps the number, which then means the other unit.
+  const [texts, setTexts] = useState<Partial<Record<FieldId, string>>>(() => Object.fromEntries(
+    fields.map((f) => [f, show(toDisplayField(f, initial[FIELDS[f].key], { weight: initial.weightUnit, distance: initial.distanceUnit }))]),
+  ));
+  const [durationMin, setDurationMin] = useState(initial.durationMin);
+  const [difficulty, setDifficulty] = useState(initial.difficulty);
+  const typed = (f: FieldId) => {
+    const n = parseNumber(texts[f] ?? '');
+    return n !== null && WHOLE.includes(FIELDS[f].input) ? Math.round(n) : n;
+  };
+  const setText = (f: FieldId) => (text: string) => setTexts((all) => ({ ...all, [f]: text }));
+  /** What's entered for a field, stored the way it's saved. */
+  const entered = (f: FieldId): number | null => {
+    const { input } = FIELDS[f];
+    if (input === 'duration') return durationMin;
+    if (input === 'difficulty') return difficulty;
+    return fromDisplayField(f, typed(f), shown);
+  };
 
-  const stepWeight = (dir: 1 | -1) =>
-    setWeight(show(Math.max(0, (parseNumber(weight) ?? 0) + dir * WEIGHT_STEP[weightUnit])));
+  const stepWeight = (f: FieldId, dir: 1 | -1) =>
+    setText(f)(show(Math.max(0, (typed(f) ?? 0) + dir * WEIGHT_STEP[weightUnit])));
   const stepReps = (dir: 1 | -1) =>
-    setReps(show(Math.min(MAX_REPS, Math.max(0, Math.round(parseNumber(reps) ?? 0) + dir))));
+    setText('reps')(show(Math.min(MAX_REPS, Math.max(0, (typed('reps') ?? 0) + dir))));
+
+  /** Each field's value as it will be saved. */
+  const entryPatch = (): SetPatch => Object.fromEntries(fields.map((f) => [FIELDS[f].key, entered(f)]));
+  /** What's entered so far, with nothing for the fields the exercise doesn't record. */
+  const entryValues = () => ({
+    weight: null, reps: null, durationMin: null, distance: null, count: null, elevation: null, score: null, difficulty: null,
+    ...entryPatch(),
+  });
 
   /** "Up next: Set 2 of 3 · 135 lb × 10", naming the exercise when it's a new one. */
   const upNext = (newExercise: boolean) => {
-    const w = parseNumber(weight);
-    const r = parseNumber(reps);
-    const what = isStrength
-      ? [`Set ${set.setNumber} of ${exercise.sets.length}`, w !== null && r !== null ? `${show(w)} ${weightUnit} × ${r}` : r !== null ? `${r} reps` : null]
-      : [durationMin !== null ? formatDuration(durationMin) : null];
+    const w = typed('weight');
+    const r = typed('reps');
+    // Weight × reps reads as before; anything else is each value entered so far.
+    const detail = fields.includes('weight') && fields.includes('reps')
+      ? (w !== null && r !== null ? `${show(w)} ${weightUnit} × ${r}` : r !== null ? `${r} reps` : null)
+      : formatEntry(entryValues(), fields, shown) || null;
+    const what = isStrength ? [`Set ${set.setNumber} of ${exercise.sets.length}`, detail] : [detail];
     const parts = [newExercise || !isStrength ? exercise.exerciseName : null, ...what].filter(Boolean);
     return `Up next: ${parts.join(' · ')}`;
   };
@@ -400,24 +432,101 @@ function StepView({
   const done = () => {
     // A unit is only stored when it differs from the setting (or already was), as in the day view.
     const keep = <U,>(unit: U, setting: U, stored: U | null) => (unit !== setting || stored !== null ? unit : undefined);
-    if (isStrength) {
-      const r = parseNumber(reps);
-      onDone({
-        weight: fromDisplayWeight(parseNumber(weight), weightUnit),
-        reps: r === null ? null : Math.round(r),
-        weightUnit: keep(weightUnit, units.weight, set.weightUnit),
-      });
-    } else {
-      onDone({
-        durationMin,
-        ...(exercise.categoryKind === 'cardio' && {
-          distance: fromDisplayDistance(parseNumber(distance), distanceUnit),
-          distanceUnit: keep(distanceUnit, units.distance, set.distanceUnit),
-        }),
-      });
-    }
+    const inputs = fields.map((f) => FIELDS[f].input);
+    onDone({
+      ...entryPatch(),
+      ...(inputs.includes('weight') && { weightUnit: keep(weightUnit, units.weight, set.weightUnit) }),
+      ...(inputs.some((i) => DISTANCE_LIKE.includes(i)) && { distanceUnit: keep(distanceUnit, units.distance, set.distanceUnit) }),
+    });
   };
 
+  // One switch for the distance unit, on the first field that follows it; the rest show its unit.
+  const switchesDistance = fields.find((f) => DISTANCE_LIKE.includes(FIELDS[f].input));
+  // Three tiles share the row, so their numbers are set smaller to fit.
+  const compact = fields.length > 2;
+  const tile = (f: FieldId) => {
+    const def = FIELDS[f];
+    if (def.input === 'duration') {
+      return (
+        <Tile key={f} label={def.label}>
+          <DurationButton
+            label={isStrength ? 'Time' : 'Duration'}
+            title={exercise.exerciseName}
+            value={durationMin}
+            target={exercise.targetDurationMin}
+            onChange={setDurationMin}
+            style={styles.duration}
+            textStyle={compact ? styles.durationTextSmall : styles.durationText}
+          />
+        </Tile>
+      );
+    }
+    if (def.input === 'difficulty') {
+      return (
+        <Tile key={f} label={def.label} unit={<Text style={[styles.unitText, { color: t.muted }]}>/10</Text>}>
+          <DifficultyButton
+            label="Difficulty rating"
+            title={exercise.exerciseName}
+            value={difficulty}
+            onChange={setDifficulty}
+            style={styles.duration}
+            textStyle={compact ? styles.durationTextSmall : styles.durationText}
+          />
+        </Tile>
+      );
+    }
+    if (def.input === 'weight') {
+      return (
+        <NumberTile
+          key={f}
+          label={def.label}
+          value={texts[f] ?? ''}
+          onChangeText={setText(f)}
+          less="Less weight"
+          more="More weight"
+          onStep={(dir) => stepWeight(f, dir)}
+          compact={compact}
+          unit={
+            <UnitPill
+              label={`${def.label} unit`}
+              unit={weightUnit}
+              // The number stays as typed and now means the other unit, as in the day view.
+              onPress={() => setWeightUnit(otherWeightUnit(weightUnit))}
+            />
+          }
+        />
+      );
+    }
+    if (def.input === 'reps') {
+      return (
+        <NumberTile
+          key={f} label="Reps" value={texts.reps ?? ''} onChangeText={setText('reps')}
+          less="Fewer reps" more="More reps" onStep={stepReps} integer compact={compact}
+        />
+      );
+    }
+    const unit = fieldUnit(f, shown);
+    return (
+      <Tile
+        key={f}
+        label={def.label}
+        unit={f === switchesDistance
+          ? <UnitPill label={`${def.label} unit`} unit={unit} onPress={() => setDistanceUnit(otherDistanceUnit(distanceUnit))} />
+          : !!unit && !def.noun && <Text style={[styles.unitText, { color: t.muted }]}>{unit}</Text>}
+      >
+        <TextInput
+          accessibilityLabel={def.label}
+          value={texts[f] ?? ''}
+          onChangeText={setText(f)}
+          keyboardType={WHOLE.includes(def.input) ? 'number-pad' : 'decimal-pad'}
+          selectTextOnFocus
+          placeholder="–"
+          placeholderTextColor={t.muted}
+          style={[styles.tileInput, compact && styles.tileInputSmall, { color: t.text }]}
+        />
+      </Tile>
+    );
+  };
   return (
     <Animated.View entering={FadeIn.duration(240)} style={styles.fill}>
       {rest ? (
@@ -446,6 +555,7 @@ function StepView({
           <Hero
             top={top}
             exercise={exercise}
+            units={units}
             label={`Exercise ${step.exerciseIndex + 1} of ${exerciseCount}`}
             upcoming={upcoming}
             onSwitch={onSwitch}
@@ -462,64 +572,11 @@ function StepView({
               <View style={styles.lastRow}>
                 <Icon name={sym('clock.arrow.circlepath', 'history')} size={11} color={t.muted} fallback="↺" />
                 <Text style={{ color: t.muted, fontSize: 12, fontWeight: '600', flexShrink: 1 }} numberOfLines={1}>
-                  Last time: {formatSets(last.sets, exercise.categoryKind, units)}
+                  Last time: {formatSets(last.sets, fields, units)}
                 </Text>
               </View>
             )}
-            <View style={styles.tiles}>
-              {isStrength ? (
-                <>
-                  <NumberTile
-                    label="Weight"
-                    value={weight}
-                    onChangeText={setWeight}
-                    less="Less weight"
-                    more="More weight"
-                    onStep={stepWeight}
-                    unit={
-                      <UnitPill
-                        label="Weight unit"
-                        unit={weightUnit}
-                        // The number stays as typed and now means the other unit, as in the day view.
-                        onPress={() => setWeightUnit(otherWeightUnit(weightUnit))}
-                      />
-                    }
-                  />
-                  <NumberTile label="Reps" value={reps} onChangeText={setReps} less="Fewer reps" more="More reps" onStep={stepReps} integer />
-                </>
-              ) : (
-                <>
-                  <Tile label="Time">
-                    <DurationButton
-                      label="Duration"
-                      title={exercise.exerciseName}
-                      value={durationMin}
-                      target={exercise.targetDurationMin}
-                      onChange={setDurationMin}
-                      style={styles.duration}
-                      textStyle={styles.durationText}
-                    />
-                  </Tile>
-                  {exercise.categoryKind === 'cardio' && (
-                    <Tile
-                      label="Distance"
-                      unit={<UnitPill label="Distance unit" unit={distanceUnit} onPress={() => setDistanceUnit(otherDistanceUnit(distanceUnit))} />}
-                    >
-                      <TextInput
-                        accessibilityLabel="Distance"
-                        value={distance}
-                        onChangeText={setDistance}
-                        keyboardType="decimal-pad"
-                        selectTextOnFocus
-                        placeholder="–"
-                        placeholderTextColor={t.muted}
-                        style={[styles.tileInput, { color: t.text }]}
-                      />
-                    </Tile>
-                  )}
-                </>
-              )}
-            </View>
+            <View style={styles.tiles}>{fields.map(tile)}</View>
             <View style={styles.actions}>
               <RoundAction
                 label={isStrength ? 'Previous set' : 'Previous'}
@@ -552,9 +609,9 @@ function StepView({
  * The figure is sized to the space measured, so a small phone still fits the whole set.
  */
 function Hero({
-  top, exercise, label, upcoming, onSwitch, children,
+  top, exercise, units, label, upcoming, onSwitch, children,
 }: {
-  top?: ReactNode; exercise: WorkoutExercise; label: string; upcoming?: WorkoutExercise; onSwitch?: () => void; children?: ReactNode;
+  top?: ReactNode; exercise: WorkoutExercise; units: Units; label: string; upcoming?: WorkoutExercise; onSwitch?: () => void; children?: ReactNode;
 }) {
   const t = useTheme();
   // The figure gets whatever room the name and the set leave; its glow is 1.15× the figure.
@@ -592,7 +649,7 @@ function Hero({
         </Pressable>
         {onSwitch && <SwitchButton onPress={onSwitch} />}
       </View>
-      {upcoming && <UpNext exercise={upcoming} />}
+      {upcoming && <UpNext exercise={upcoming} units={units} />}
       {children}
     </Animated.View>
   );
@@ -693,10 +750,12 @@ function Tile({ label, unit, children }: { label: string; unit?: ReactNode; chil
 
 /** A number in a tile with − and + underneath, sized for sweaty thumbs. */
 function NumberTile({
-  label, value, onChangeText, less, more, onStep, unit, integer,
+  label, value, onChangeText, less, more, onStep, unit, integer, compact,
 }: {
   label: string; value: string; onChangeText: (s: string) => void; less: string; more: string;
   onStep: (dir: 1 | -1) => void; unit?: ReactNode; integer?: boolean;
+  /** Smaller numbers, for three tiles in a row. */
+  compact?: boolean;
 }) {
   const t = useTheme();
   const button = (a11y: string, icon: SymbolName, fallback: string, dir: 1 | -1) => (
@@ -723,7 +782,7 @@ function NumberTile({
         selectTextOnFocus
         placeholder="–"
         placeholderTextColor={tint(t.muted, 0.5)}
-        style={[styles.tileInput, { color: t.text }]}
+        style={[styles.tileInput, compact && styles.tileInputSmall, { color: t.text }]}
       />
       <View style={styles.tileButtons}>
         {button(less, sym('minus', 'remove'), '−', -1)}
@@ -781,11 +840,13 @@ function Badge({ icon, fallback, color, size = 72 }: { icon: SymbolName; fallbac
 }
 
 /** A line along the bottom of the picture naming what comes after this exercise. */
-function UpNext({ exercise }: { exercise: WorkoutExercise }) {
+function UpNext({ exercise, units }: { exercise: WorkoutExercise; units: Units }) {
   const t = useTheme();
+  const n = exercise.sets.length;
+  const reps = exercise.fields.includes('reps') && exercise.targetReps;
   const detail = exercise.categoryKind === 'strength'
-    ? `${exercise.sets.length} ${exercise.sets.length === 1 ? 'set' : 'sets'}${exercise.targetReps ? ` × ${exercise.targetReps}` : ''}`
-    : formatDuration(exercise.targetDurationMin) || exercise.categoryName;
+    ? `${n} ${n === 1 ? 'set' : 'sets'}${reps ? ` × ${reps}` : ''}`
+    : formatTargets(exercise, units)[0] ?? exercise.categoryName;
   return (
     <View accessible accessibilityLabel={`Next: ${exercise.exerciseName}`} style={[styles.upNext, { backgroundColor: tint(t.card, 0.55), borderColor: tint(t.text, 0.06) }]}>
       <Thumb exercise={exercise} size={32} />
@@ -806,7 +867,8 @@ function FinishView({
   const glass = { bg: tint(t.card, 0.55), border: tint(t.text, 0.06) };
   const done = steps.filter((s) => s.set.completed).length;
   const open = steps.length - done;
-  const lifts = exercises.some((e) => e.categoryKind === 'strength');
+  // Volume is weight × reps, so it's only shown when something was lifted for reps.
+  const lifts = exercises.some((e) => e.categoryKind === 'strength' && e.fields.includes('reps') && e.fields.some((f) => FIELDS[f].input === 'weight'));
   const stats = [
     { label: 'Sets', value: `${done}/${steps.length}` },
     ...(lifts ? [{ label: `Volume (${units.weight})`, value: groupThousands(workoutVolume(steps, units.weight)) }] : []),
@@ -920,6 +982,8 @@ const styles = StyleSheet.create({
   duration: { minHeight: 44, backgroundColor: 'transparent' },
   // Matches the big numbers in the other tiles.
   durationText: { fontSize: 34, fontWeight: '900', letterSpacing: -1.5 },
+  durationTextSmall: { fontSize: 24, fontWeight: '900', letterSpacing: -1 },
+  unitText: { fontSize: 12, fontWeight: '700' },
   lastRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: -4, paddingHorizontal: 4 },
   tiles: { flexDirection: 'row', gap: 8 },
   tile: { flex: 1, minWidth: 0, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, padding: 10, gap: 4 },
@@ -927,6 +991,7 @@ const styles = StyleSheet.create({
   tileInput: {
     textAlign: 'center', fontSize: 38, fontWeight: '900', letterSpacing: -1.5, fontVariant: ['tabular-nums'], paddingVertical: 0, minHeight: 44,
   },
+  tileInputSmall: { fontSize: 26, letterSpacing: -1 },
   tileButtons: { flexDirection: 'row', gap: 6 },
   tileButton: { flex: 1, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   cta: { height: 60, borderRadius: 30, flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch' },

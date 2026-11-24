@@ -53,7 +53,10 @@ describe('ExportScreen', () => {
   it('writes a CSV with only the selected fields and shares it', async () => {
     const db = await setup();
     await renderWithDb(<ExportScreen today="2026-11-04" />, db);
-    for (const label of ['Weekday', 'Category', 'Subcategory', 'Set number', 'Duration', 'Distance', 'Completed', 'Workout notes', 'Reps']) {
+    for (const label of [
+      'Weekday', 'Category', 'Subcategory', 'Set number', 'Duration', 'Distance', 'Elevation gain', 'Count (steps, routes…)',
+      'What was counted', 'Score', 'Difficulty', 'Completed', 'Workout notes', 'Reps',
+    ]) {
       await fireEvent.press(screen.getByLabelText(`Include ${label}`));
     }
     await fireEvent.press(screen.getByText('Export CSV'));
@@ -111,7 +114,10 @@ describe('ExportScreen', () => {
   it('refuses to export with no fields selected', async () => {
     const db = await setup();
     await renderWithDb(<ExportScreen today="2026-11-04" />, db);
-    for (const label of ['Date','Weekday','Category','Subcategory','Exercise','Set number','Reps','Weight','Duration','Distance','Completed','Workout notes']) {
+    for (const label of [
+      'Date', 'Weekday', 'Category', 'Subcategory', 'Exercise', 'Set number', 'Reps', 'Weight', 'Duration', 'Distance',
+      'Elevation gain', 'Count (steps, routes…)', 'What was counted', 'Score', 'Difficulty', 'Completed', 'Workout notes',
+    ]) {
       await fireEvent.press(screen.getByLabelText(`Include ${label}`));
     }
     await fireEvent.press(screen.getByText('Export CSV'));

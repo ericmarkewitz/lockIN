@@ -1,11 +1,17 @@
 import type { DistanceUnit, WeightUnit } from '@/data/settings';
 
 /**
- * Weights are stored in pounds and distances in miles. These convert at the edges
- * (display, entry, export). Distances logged before units existed are read as miles.
+ * Weights are stored in pounds, distances in miles and elevation in feet. These convert at the
+ * edges (display, entry, export). Distances logged before units existed are read as miles.
+ *
+ * A short distance (a swim, a row, a carry) is stored in miles too, and shown in yards with the
+ * mi setting or meters with km; elevation is shown in feet or meters the same way.
  */
 const LB_PER_KG = 2.20462262185;
 const KM_PER_MI = 1.609344;
+const YD_PER_MI = 1760;
+const M_PER_MI = KM_PER_MI * 1000;
+const M_PER_FT = 0.3048;
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -41,3 +47,30 @@ export function formatDistance(mi: number | null, unit: DistanceUnit): string {
 
 export const otherWeightUnit = (u: WeightUnit): WeightUnit => (u === 'lb' ? 'kg' : 'lb');
 export const otherDistanceUnit = (u: DistanceUnit): DistanceUnit => (u === 'mi' ? 'km' : 'mi');
+
+export const shortDistanceUnit = (u: DistanceUnit) => (u === 'mi' ? 'yd' : 'm');
+export const elevationUnit = (u: DistanceUnit) => (u === 'mi' ? 'ft' : 'm');
+
+/** Stored miles -> yards or meters, rounded to 2 decimals for display. */
+export function toDisplayShortDistance(mi: number | null, unit: DistanceUnit): number | null {
+  if (mi === null) return null;
+  return round2(mi * (unit === 'km' ? M_PER_MI : YD_PER_MI));
+}
+
+/** Yards or meters as typed -> miles, at full precision. */
+export function fromDisplayShortDistance(value: number | null, unit: DistanceUnit): number | null {
+  if (value === null) return null;
+  return value / (unit === 'km' ? M_PER_MI : YD_PER_MI);
+}
+
+/** Stored feet -> feet or meters, rounded to 2 decimals for display. */
+export function toDisplayElevation(ft: number | null, unit: DistanceUnit): number | null {
+  if (ft === null) return null;
+  return round2(unit === 'km' ? ft * M_PER_FT : ft);
+}
+
+/** Feet or meters as typed -> feet, at full precision. */
+export function fromDisplayElevation(value: number | null, unit: DistanceUnit): number | null {
+  if (value === null) return null;
+  return unit === 'km' ? value / M_PER_FT : value;
+}

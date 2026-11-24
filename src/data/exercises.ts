@@ -1,4 +1,5 @@
 import type { Db } from '@/db/types';
+import { normalizeFields, parseFields, serializeFields, type FieldId } from './fields';
 import { LOGGED_SET } from './logged';
 import { isPlanComplete, markPlanComplete } from './plan';
 import { refreshUntouchedWorkouts } from './workouts';
@@ -38,7 +39,7 @@ export function groupBySubcategory(category: Category): ExerciseGroup[] {
 }
 
 type Row = {
-  id: number; category_id: number; name: string; is_custom: number; subcategory: string | null;
+  id: number; category_id: number; name: string; is_custom: number; subcategory: string | null; fields: string | null;
   category_name: string; category_kind: CategoryKind;
 };
 
@@ -51,6 +52,7 @@ const toExercise = (r: Row, alsoIn: string[]): Exercise => ({
   categoryKind: r.category_kind,
   subcategory: r.subcategory,
   alsoIn,
+  fields: parseFields(r.fields, r.category_kind),
 });
 
 /** Each exercise's extra subcategories, in display order. */
@@ -69,7 +71,7 @@ async function loadAlsoIn(db: Db, exerciseId?: number): Promise<Map<number, stri
   return map;
 }
 
-const SELECT = `SELECT e.id, e.category_id, e.name, e.is_custom, e.subcategory, c.name AS category_name, c.kind AS category_kind
+const SELECT = `SELECT e.id, e.category_id, e.name, e.is_custom, e.subcategory, e.fields, c.name AS category_name, c.kind AS category_kind
   FROM exercises e JOIN categories c ON c.id = e.category_id`;
 
 export async function findExercise(db: Db, id: number): Promise<Exercise | null> {
@@ -112,9 +114,17 @@ async function customExercise(db: Db, id: number): Promise<Exercise> {
   return ex;
 }
 
+/** `fields` checked against the category's kind and ready to store; null keeps the category's default. */
+async function storedFields(db: Db, categoryId: number, fields: readonly FieldId[] | undefined): Promise<string | null> {
+  if (fields === undefined) return null;
+  const cat = await db.getFirstAsync<{ kind: CategoryKind }>('SELECT kind FROM categories WHERE id = ?', [categoryId]);
+  if (!cat) throw new Error('Category not found');
+  return serializeFields(normalizeFields(fields, cat.kind));
+}
+
 /**
  * Adds a custom exercise. If one of that name was removed but kept for its logged workouts, it
- * comes back instead, with the name and muscle groups given here.
+ * comes back instead, with the name, muscle groups and fields given here.
  */
 export async function addExercise(
   db: Db,
@@ -123,19 +133,22 @@ export async function addExercise(
   subcategory: string | null = null,
   /** More muscle groups to list it under; repeats and `subcategory` itself are ignored. */
   alsoIn: string[] = [],
+  /** What it records (see `FIELD_CHOICES`); left out, its category's default. */
+  fields?: readonly FieldId[],
 ): Promise<Exercise> {
   const name = rawName.trim();
   if (!name) throw new Error('Exercise name is required');
+  const stored = await storedFields(db, categoryId, fields);
   const dupe = await sameName(db, categoryId, name);
   if (dupe && !dupe.is_hidden) throw new Error(`"${name}" already exists in this category`);
   let id = dupe?.id ?? 0;
   await db.withTransactionAsync(async () => {
     if (dupe) {
-      await db.runAsync('UPDATE exercises SET name = ?, subcategory = ?, is_hidden = 0 WHERE id = ?', [name, subcategory, id]);
+      await db.runAsync('UPDATE exercises SET name = ?, subcategory = ?, fields = ?, is_hidden = 0 WHERE id = ?', [name, subcategory, stored, id]);
     } else {
       ({ lastInsertRowId: id } = await db.runAsync(
-        'INSERT INTO exercises (category_id, name, is_custom, subcategory) VALUES (?, ?, 1, ?)',
-        [categoryId, name, subcategory],
+        'INSERT INTO exercises (category_id, name, is_custom, subcategory, fields) VALUES (?, ?, 1, ?, ?)',
+        [categoryId, name, subcategory, stored],
       ));
     }
     await setAlsoIn(db, id, subcategory, alsoIn);
@@ -143,9 +156,13 @@ export async function addExercise(
   return (await findExercise(db, id))!;
 }
 
-export type ExerciseEdit = { name: string; subcategory: string | null; alsoIn: string[] };
+export type ExerciseEdit = {
+  name: string; subcategory: string | null; alsoIn: string[];
+  /** What it records from now on; left out, unchanged. Values already logged are kept either way. */
+  fields?: readonly FieldId[];
+};
 
-/** Renames a custom exercise and sets its muscle groups. Workouts it was logged in show the new name. */
+/** Renames a custom exercise and sets its muscle groups and fields. Workouts it was logged in show the new name. */
 export async function updateExercise(db: Db, id: number, edit: ExerciseEdit): Promise<Exercise> {
   const ex = await customExercise(db, id);
   const name = edit.name.trim();
@@ -156,8 +173,10 @@ export async function updateExercise(db: Db, id: number, edit: ExerciseEdit): Pr
       ? `You removed an exercise called "${name}". Create it again from search to bring it back.`
       : `"${name}" already exists in this category`);
   }
+  const fields = edit.fields === undefined ? undefined : await storedFields(db, ex.categoryId, edit.fields);
   await db.withTransactionAsync(async () => {
     await db.runAsync('UPDATE exercises SET name = ?, subcategory = ? WHERE id = ?', [name, edit.subcategory, id]);
+    if (fields !== undefined) await db.runAsync('UPDATE exercises SET fields = ? WHERE id = ?', [fields, id]);
     await setAlsoIn(db, id, edit.subcategory, edit.alsoIn);
   });
   return (await findExercise(db, id))!;

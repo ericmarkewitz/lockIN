@@ -11,8 +11,10 @@ import { useDb } from '@/db/DbContext';
 import { useLoad } from '@/hooks/useLoad';
 import { DAY_NAMES } from '@/lib/calendar';
 import { parseDateKey } from '@/lib/dates';
-import { formatDistance, toDisplayWeight } from '@/lib/units';
+import { fieldFor } from '@/data/fields';
+import { toDisplayWeight } from '@/lib/units';
 import { formatDuration } from '@/lib/duration';
+import { formatField } from '@/lib/fields';
 import { tint, useTheme } from '@/theme';
 import { KindIcon } from '@/components/calendar/KindIcon';
 import { LiftProgress, recentTrend } from '@/components/history/LiftProgress';
@@ -22,14 +24,30 @@ type Tab = 'stats' | 'workouts' | 'exercises';
 
 const dayLabel = (date: string) => `${DAY_NAMES[parseDateKey(date).getDay()].slice(0, 3)} ${date}`;
 
-function sessionSummary(s: ExerciseSession, units: Units, kind: LoggedExercise['kind']): string {
+/** Whether a lift records weight × reps, so it has a best set, an estimated 1RM and a trend. */
+const liftsForReps = (e: LoggedExercise) =>
+  e.kind === 'strength' && e.fields.includes('reps') && (e.fields.includes('weight') || e.fields.includes('addedWeight'));
+
+/**
+ * A session in a line, from what the exercise records: a lift's best set and 1RM, or for a hold or
+ * carry its heaviest weight and longest hold; then time, distance, elevation, a count, score and difficulty.
+ */
+function sessionSummary(s: ExerciseSession, units: Units, exercise: LoggedExercise): string {
+  const { kind, fields } = exercise;
   const unit = units.weight;
   const parts: string[] = [];
   if (s.best) parts.push(`Best ${toDisplayWeight(s.best.weight, unit)} ${unit} × ${s.best.reps}`);
   if (s.estimatedOneRepMax !== null) parts.push(`Est. 1RM ${toDisplayWeight(s.estimatedOneRepMax, unit)} ${unit}`);
-  if (s.durationMin !== null) parts.push(formatDuration(s.durationMin));
-  if (s.distance !== null) parts.push(formatDistance(s.distance, units.distance));
-  if (parts.length) return parts.join(' · ');
+  if (!s.best && s.heaviest !== null) parts.push(`Heaviest ${formatField('weight', s.heaviest, units)}`);
+  if (kind === 'strength' && s.longestMin !== null) parts.push(`Longest ${formatDuration(s.longestMin)}`);
+  else if (s.durationMin !== null) parts.push(formatDuration(s.durationMin));
+  parts.push(formatField(fieldFor(fields, 'distance') ?? 'distance', s.distance, units));
+  parts.push(formatField('elevation', s.elevation, units));
+  const counted = fieldFor(fields, 'count');
+  if (counted) parts.push(formatField(counted, s.count, units));
+  parts.push(formatField('score', s.score, units), formatField('difficulty', s.difficulty, units));
+  const shown = parts.filter(Boolean);
+  if (shown.length) return shown.join(' · ');
   return kind === 'strength' ? `${s.setCount} set${s.setCount === 1 ? '' : 's'}` : 'Done';
 }
 
@@ -112,7 +130,7 @@ export function HistoryScreen() {
         <View style={{ gap: 12 }}>
           <Button title="‹ Exercises" label="Back to exercises" variant="secondary" onPress={() => setExercise(null)} style={styles.back} />
           <Text style={[styles.h2, { color: t.text }]}>{exercise.name}</Text>
-          {exercise.kind === 'strength' && sessions.data && (
+          {liftsForReps(exercise) && sessions.data && (
             <LiftProgress name={exercise.name} points={recentTrend(sessions.data)} unit={units.weight} />
           )}
           {(sessions.data ?? []).map((s) => (
@@ -120,7 +138,7 @@ export function HistoryScreen() {
               <DateBlock date={s.date} />
               <View style={styles.rowBody}>
                 <Text style={[styles.rowTitle, { color: t.text }]}>{s.date}</Text>
-                <Text style={{ color: t.muted }}>{sessionSummary(s, units, exercise.kind)}</Text>
+                <Text style={{ color: t.muted }}>{sessionSummary(s, units, exercise)}</Text>
               </View>
             </Card>
           ))}

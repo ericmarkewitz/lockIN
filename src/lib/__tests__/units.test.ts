@@ -1,5 +1,6 @@
 import {
-  formatDistance, fromDisplayDistance, fromDisplayWeight, otherDistanceUnit, otherWeightUnit, toDisplayDistance, toDisplayWeight,
+  elevationUnit, formatDistance, fromDisplayDistance, fromDisplayElevation, fromDisplayShortDistance, fromDisplayWeight,
+  otherDistanceUnit, otherWeightUnit, shortDistanceUnit, toDisplayDistance, toDisplayElevation, toDisplayShortDistance, toDisplayWeight,
 } from '../units';
 
 describe('weight units', () => {
@@ -73,5 +74,33 @@ describe('otherUnit', () => {
     expect(otherWeightUnit('kg')).toBe('lb');
     expect(otherDistanceUnit('mi')).toBe('km');
     expect(otherDistanceUnit('km')).toBe('mi');
+  });
+});
+
+describe('short distances', () => {
+  it('shows stored miles as yards or meters', () => {
+    expect(toDisplayShortDistance(1, 'mi')).toBe(1760);
+    expect(toDisplayShortDistance(1, 'km')).toBe(1609.34);
+    expect(toDisplayShortDistance(null, 'km')).toBeNull();
+    expect(shortDistanceUnit('mi')).toBe('yd');
+    expect(shortDistanceUnit('km')).toBe('m');
+  });
+
+  it('round-trips a typed distance exactly', () => {
+    expect(toDisplayShortDistance(fromDisplayShortDistance(500, 'km'), 'km')).toBe(500);
+    expect(toDisplayShortDistance(fromDisplayShortDistance(40, 'mi'), 'mi')).toBe(40);
+  });
+});
+
+describe('elevation', () => {
+  it('shows stored feet as feet or meters', () => {
+    expect(toDisplayElevation(1000, 'mi')).toBe(1000);
+    expect(toDisplayElevation(1000, 'km')).toBe(304.8);
+    expect(elevationUnit('mi')).toBe('ft');
+    expect(elevationUnit('km')).toBe('m');
+  });
+
+  it('round-trips a typed elevation exactly', () => {
+    expect(toDisplayElevation(fromDisplayElevation(850, 'km'), 'km')).toBe(850);
   });
 });

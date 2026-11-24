@@ -1,5 +1,6 @@
 import { CATALOG, type CatalogCategory, type LiftSubcategory } from '@/data/catalog';
 import { LIFT_SUBCATEGORIES, SUBCATEGORIES } from '@/data/exercises';
+import { normalizeFields, type FieldId } from '@/data/fields';
 import { createTestDb } from '@/test/testDb';
 import { syncCatalog } from '../catalog';
 import type { Db } from '../types';
@@ -70,6 +71,35 @@ describe('CATALOG', () => {
   ])('includes %s: %s', (category, name, subcategory) => {
     const found = CATALOG.find((c) => c.name === category)!.exercises.find((e) => e.name === name);
     expect(found?.subcategory).toBe(subcategory);
+  });
+
+  it("only gives exercises fields their category offers, in standard order", () => {
+    for (const c of CATALOG) {
+      for (const e of c.exercises) if (e.fields) expect(normalizeFields(e.fields, c.kind)).toEqual(e.fields);
+    }
+  });
+
+  it.each([
+    ['Weighted Plank', ['weight', 'duration']], ['Farmer Carry', ['weight', 'shortDistance']],
+    ['Push-up', ['reps', 'addedWeight']], ['Pull-up', ['reps', 'addedWeight']], ['Dip', ['reps', 'addedWeight']],
+    ['Crunch', ['reps', 'addedWeight']], ['Straight-Leg Sit-up', ['reps', 'addedWeight']],
+    ['Ab Wheel Rollout', ['reps', 'addedWeight']], ['Bird Dog', ['reps', 'addedWeight']], ['Dead Bug', ['reps', 'addedWeight']],
+    ['Walking', ['duration', 'distance', 'steps']], ['Hiking', ['duration', 'distance', 'elevation']],
+    ['Ski Touring', ['duration', 'distance', 'elevation']], ['Downhill Skiing', ['duration', 'elevation', 'runs']],
+    ['Snowshoeing', ['duration', 'distance', 'elevation']], ['Biking', ['duration', 'distance', 'elevation']],
+    ['Swimming', ['duration', 'shortDistance']], ['Rowing', ['duration', 'shortDistance']],
+    ['Climbing', ['duration', 'routes', 'difficulty']], ['Stair Stepper', ['duration', 'floors']],
+    ['HIIT', ['duration', 'rounds']], ['Golf', ['duration', 'holes', 'score']],
+    ['Bench Press', undefined], ['Pallof Press', undefined], ['Running', undefined], ['Elliptical', undefined], ['Vinyasa', undefined],
+  ])('has %s record %j', (name, fields) => {
+    const found = CATALOG.flatMap((c) => c.exercises).find((e) => e.name === name)!;
+    expect(found.fields).toEqual(fields as FieldId[] | undefined);
+  });
+
+  it('keeps Farmer Carry listed under arms as well as core', () => {
+    expect(CATALOG[0].exercises.find((e) => e.name === 'Farmer Carry')).toMatchObject({ subcategory: 'Core', also: ['Arms'] });
+    expect(CATALOG[0].exercises.find((e) => e.name === 'Push-up')).toMatchObject({ subcategory: 'Chest', also: ['Arms'] });
+    expect(CATALOG[0].exercises.find((e) => e.name === 'Crunch')?.also).toBeUndefined();
   });
 
   it('files a deadlift under legs as well as back', () => {
@@ -156,6 +186,38 @@ describe('syncCatalog', () => {
       ...c, exercises: c.exercises.map((e) => (e.name === 'Sled Drag' ? { ...e, also: ['Back' as const] } : e)),
     })));
     expect((await extraGroups(db)).filter((r) => r.name.toLowerCase() === 'sled drag')).toEqual([]);
+  });
+
+  describe('fields', () => {
+    const fieldsOf = async (db: Db, name: string) =>
+      (await db.getFirstAsync<{ fields: string | null }>('SELECT fields FROM exercises WHERE name = ?', [name]))!.fields;
+    const withFields = (name: string, fields: FieldId[] | undefined): CatalogCategory[] =>
+      CATALOG.map((c) => ({ ...c, exercises: c.exercises.map((e) => (e.name === name ? { ...e, fields } : e)) }));
+
+    it("stores each built-in's fields, and none for those on their category's default", async () => {
+      const db = await createTestDb();
+      expect(await fieldsOf(db, 'Climbing')).toBe('duration,routes,difficulty');
+      expect(await fieldsOf(db, 'Running')).toBeNull();
+    });
+
+    it("updates a built-in already installed when the catalog changes what it records", async () => {
+      const db = await createTestDb();
+      await syncCatalog(db, withFields('Running', ['duration', 'distance', 'elevation']));
+      expect(await fieldsOf(db, 'Running')).toBe('duration,distance,elevation');
+      await syncCatalog(db, withFields('Running', undefined));
+      expect(await fieldsOf(db, 'Running')).toBeNull();
+    });
+
+    it("leaves a custom exercise with a built-in's name alone", async () => {
+      const db = await createTestDb();
+      await db.runAsync(
+        "INSERT INTO exercises (category_id, name, is_custom, fields) VALUES ((SELECT id FROM categories WHERE name = 'Cardio'), 'rucking', 1, 'duration')",
+      );
+      await syncCatalog(db, withExtra('Cardio', 'Rucking').map((c) => ({
+        ...c, exercises: c.exercises.map((e) => (e.name === 'Rucking' ? { ...e, fields: ['duration', 'distance', 'elevation'] as FieldId[] } : e)),
+      })));
+      expect(await fieldsOf(db, 'rucking')).toBe('duration');
+    });
   });
 
   it('is idempotent', async () => {

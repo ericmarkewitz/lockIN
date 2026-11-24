@@ -1,11 +1,12 @@
 import type { Db } from '@/db/types';
+import { parseFields } from './fields';
 import type { CategoryKind, PlanDay, PlanItemInput } from './types';
 
 type ItemRow = {
   id: number; weekday: number; exercise_id: number; position: number;
   target_sets: number | null; target_reps: number | null;
-  target_duration_min: number | null; target_distance: number | null;
-  exercise_name: string; exercise_is_custom: number; category_name: string; category_kind: CategoryKind;
+  target_duration_min: number | null; target_distance: number | null; target_count: number | null;
+  exercise_name: string; exercise_is_custom: number; exercise_fields: string | null; category_name: string; category_kind: CategoryKind;
 };
 
 export async function getPlan(db: Db): Promise<PlanDay[]> {
@@ -13,7 +14,8 @@ export async function getPlan(db: Db): Promise<PlanDay[]> {
     'SELECT weekday, is_rest FROM plan_days ORDER BY weekday',
   );
   const items = await db.getAllAsync<ItemRow>(
-    `SELECT p.*, e.name AS exercise_name, e.is_custom AS exercise_is_custom, c.name AS category_name, c.kind AS category_kind
+    `SELECT p.*, e.name AS exercise_name, e.is_custom AS exercise_is_custom, e.fields AS exercise_fields,
+       c.name AS category_name, c.kind AS category_kind
      FROM plan_items p JOIN exercises e ON e.id = p.exercise_id JOIN categories c ON c.id = e.category_id
      ORDER BY p.weekday, p.position`,
   );
@@ -34,6 +36,8 @@ export async function getPlan(db: Db): Promise<PlanDay[]> {
         targetReps: i.target_reps,
         targetDurationMin: i.target_duration_min,
         targetDistance: i.target_distance,
+        targetCount: i.target_count,
+        fields: parseFields(i.exercise_fields, i.category_kind),
       })),
   }));
 }
@@ -50,9 +54,12 @@ export async function setPlanDay(
     await db.runAsync('DELETE FROM plan_items WHERE weekday = ?', [weekday]);
     for (const [position, it] of day.items.entries()) {
       await db.runAsync(
-        `INSERT INTO plan_items (weekday, exercise_id, position, target_sets, target_reps, target_duration_min, target_distance)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [weekday, it.exerciseId, position, it.targetSets ?? null, it.targetReps ?? null, it.targetDurationMin ?? null, it.targetDistance ?? null],
+        `INSERT INTO plan_items (weekday, exercise_id, position, target_sets, target_reps, target_duration_min, target_distance, target_count)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          weekday, it.exerciseId, position, it.targetSets ?? null, it.targetReps ?? null, it.targetDurationMin ?? null,
+          it.targetDistance ?? null, it.targetCount ?? null,
+        ],
       );
     }
   });

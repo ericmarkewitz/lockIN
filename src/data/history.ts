@@ -1,5 +1,6 @@
 import type { Db } from '@/db/types';
 import { estimateOneRepMax } from '@/lib/strength';
+import { parseFields, type FieldId } from './fields';
 import { LOGGED_SET } from './logged';
 import type { CategoryKind } from './types';
 
@@ -36,12 +37,16 @@ export async function listLoggedWorkouts(
   return opts.limit ? list.slice(0, opts.limit) : list;
 }
 
-export type LoggedExercise = { id: number; name: string; kind: CategoryKind; sessions: number; lastDate: string };
+export type LoggedExercise = {
+  id: number; name: string; kind: CategoryKind; sessions: number; lastDate: string;
+  /** What it records now, which decides how its sessions are summed up. */
+  fields: FieldId[];
+};
 
 /** Exercises with logged history, most recently performed first. */
 export async function listLoggedExercises(db: Db): Promise<LoggedExercise[]> {
-  return db.getAllAsync<LoggedExercise>(
-    `SELECT e.id, e.name, c.kind, COUNT(DISTINCT w.id) AS sessions, MAX(w.date) AS lastDate
+  const rows = await db.getAllAsync<Omit<LoggedExercise, 'fields'> & { fields: string | null }>(
+    `SELECT e.id, e.name, c.kind, e.fields, COUNT(DISTINCT w.id) AS sessions, MAX(w.date) AS lastDate
      FROM sets s
      JOIN workout_exercises we ON we.id = s.workout_exercise_id
      JOIN workouts w ON w.id = we.workout_id
@@ -51,6 +56,7 @@ export async function listLoggedExercises(db: Db): Promise<LoggedExercise[]> {
      GROUP BY e.id
      ORDER BY lastDate DESC, e.name`,
   );
+  return rows.map((r) => ({ ...r, fields: parseFields(r.fields, r.kind) }));
 }
 
 export type ExerciseSession = {
@@ -60,16 +66,27 @@ export type ExerciseSession = {
   best: { weight: number; reps: number } | null;
   /** Highest Epley estimate across the session's sets. */
   estimatedOneRepMax: number | null;
+  /** Heaviest weight logged, with or without reps: a weighted hold or carry has none. */
+  heaviest: number | null;
+  /** Total time across the session's sets, and the longest one (a lift's longest hold). */
   durationMin: number | null;
+  longestMin: number | null;
   distance: number | null;
+  /** Totals across the session's sets. */
+  count: number | null;
+  elevation: number | null;
+  score: number | null;
+  /** The hardest the session was rated. */
+  difficulty: number | null;
 };
 
 /** One entry per workout the exercise was logged in, newest first. */
 export async function getExerciseHistory(db: Db, exerciseId: number): Promise<ExerciseSession[]> {
   const rows = await db.getAllAsync<{
     date: string; weight: number | null; reps: number | null; duration_min: number | null; distance: number | null;
+    count: number | null; elevation: number | null; score: number | null; difficulty: number | null;
   }>(
-    `SELECT w.date, s.weight, s.reps, s.duration_min, s.distance
+    `SELECT w.date, s.weight, s.reps, s.duration_min, s.distance, s.count, s.elevation, s.score, s.difficulty
      FROM sets s
      JOIN workout_exercises we ON we.id = s.workout_exercise_id
      JOIN workouts w ON w.id = we.workout_id
@@ -77,9 +94,14 @@ export async function getExerciseHistory(db: Db, exerciseId: number): Promise<Ex
      ORDER BY w.date DESC, s.set_number`,
     [exerciseId],
   );
+  const sum = (a: number | null, b: number | null) => (b === null ? a : (a ?? 0) + b);
+  const max = (a: number | null, b: number | null) => (b === null ? a : Math.max(a ?? b, b));
   const sessions = new Map<string, ExerciseSession>();
   for (const r of rows) {
-    const s = sessions.get(r.date) ?? { date: r.date, setCount: 0, best: null, estimatedOneRepMax: null, durationMin: null, distance: null };
+    const s = sessions.get(r.date) ?? {
+      date: r.date, setCount: 0, best: null, estimatedOneRepMax: null, heaviest: null, durationMin: null, longestMin: null,
+      distance: null, count: null, elevation: null, score: null, difficulty: null,
+    };
     s.setCount += 1;
     if (r.weight && r.reps) {
       if (!s.best || r.weight > s.best.weight || (r.weight === s.best.weight && r.reps > s.best.reps)) {
@@ -88,8 +110,15 @@ export async function getExerciseHistory(db: Db, exerciseId: number): Promise<Ex
       const e1 = estimateOneRepMax(r.weight, r.reps);
       if (e1 !== null && (s.estimatedOneRepMax === null || e1 > s.estimatedOneRepMax)) s.estimatedOneRepMax = e1;
     }
-    if (r.duration_min !== null) s.durationMin = (s.durationMin ?? 0) + r.duration_min;
-    if (r.distance !== null) s.distance = Math.round(((s.distance ?? 0) + r.distance) * 1000) / 1000;
+    s.heaviest = max(s.heaviest, r.weight || null);
+    s.durationMin = sum(s.durationMin, r.duration_min);
+    s.longestMin = max(s.longestMin, r.duration_min);
+    // Rounded to hide float noise in the sum; six places keep a swim's yards exact.
+    if (r.distance !== null) s.distance = Math.round(((s.distance ?? 0) + r.distance) * 1e6) / 1e6;
+    s.count = sum(s.count, r.count);
+    s.elevation = sum(s.elevation, r.elevation);
+    s.score = sum(s.score, r.score);
+    s.difficulty = max(s.difficulty, r.difficulty);
     sessions.set(r.date, s);
   }
   return [...sessions.values()];

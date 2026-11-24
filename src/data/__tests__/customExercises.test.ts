@@ -154,3 +154,59 @@ describe('updateExercise', () => {
     await expect(updateExercise(db, ex.id, { name: 'sled push', subcategory: null, alsoIn: [] })).rejects.toThrow(/removed/i);
   });
 });
+
+describe('what an exercise records', () => {
+  const cardioId = async (db: Db) => (await listCategoriesWithExercises(db)).find((c) => c.name === 'Cardio')!.id;
+
+  it("records its category's default unless told otherwise", async () => {
+    const db = await createTestDb();
+    expect((await addExercise(db, await liftsId(db), 'Rack Pull', 'Back')).fields).toEqual(['weight', 'reps']);
+    expect((await addExercise(db, await cardioId(db), 'Rucking')).fields).toEqual(['duration', 'distance']);
+  });
+
+  it('records the fields picked when it was created, in standard order', async () => {
+    const db = await createTestDb();
+    const ex = await addExercise(db, await cardioId(db), 'Bouldering', null, [], ['difficulty', 'routes', 'duration']);
+    expect(ex.fields).toEqual(['duration', 'routes', 'difficulty']);
+    expect((await findExercise(db, ex.id))!.fields).toEqual(['duration', 'routes', 'difficulty']);
+  });
+
+  it("refuses a field its category doesn't offer, or none", async () => {
+    const db = await createTestDb();
+    await expect(addExercise(db, await liftsId(db), 'Sled', 'Legs', [], ['steps'])).rejects.toThrow('Steps is not available');
+    await expect(addExercise(db, await liftsId(db), 'Sled', 'Legs', [], [])).rejects.toThrow('Pick at least one thing to record');
+    expect(await listed(db)).not.toContain('Sled');
+  });
+
+  it('changes what a custom exercise records, keeping what was already logged', async () => {
+    const db = await createTestDb();
+    const ex = await addExercise(db, await liftsId(db), 'Sled Push', 'Legs');
+    await logOn(db, ex.id, PAST);
+    const edited = await updateExercise(db, ex.id, { name: 'Sled Push', subcategory: 'Legs', alsoIn: [], fields: ['weight', 'shortDistance'] });
+    expect(edited.fields).toEqual(['weight', 'shortDistance']);
+    expect((await getWorkout(db, PAST))!.exercises[0].sets[0]).toMatchObject({ reps: 5, weight: 100 });
+  });
+
+  it('keeps its fields when an edit leaves them out', async () => {
+    const db = await createTestDb();
+    const ex = await addExercise(db, await cardioId(db), 'Rucking', null, [], ['duration', 'steps']);
+    expect((await updateExercise(db, ex.id, { name: 'Ruck', subcategory: null, alsoIn: [] })).fields).toEqual(['duration', 'steps']);
+  });
+
+  it('brings back a removed exercise with the fields given', async () => {
+    const db = await createTestDb();
+    const ex = await addExercise(db, await cardioId(db), 'Rucking');
+    await logOn(db, ex.id, PAST);
+    await removeExercise(db, ex.id, TODAY);
+    const back = await addExercise(db, await cardioId(db), 'Rucking', null, [], ['duration', 'elevation']);
+    expect(back).toMatchObject({ id: ex.id, fields: ['duration', 'elevation'] });
+  });
+
+  it('lists built-ins with the fields the catalog gives them', async () => {
+    const db = await createTestDb();
+    const all = (await listCategoriesWithExercises(db)).flatMap((c) => c.exercises);
+    expect(all.find((e) => e.name === 'Walking')!.fields).toEqual(['duration', 'distance', 'steps']);
+    expect(all.find((e) => e.name === 'Bench Press')!.fields).toEqual(['weight', 'reps']);
+    expect((await findExercise(db, await findByName(db, 'Climbing')))!.fields).toEqual(['duration', 'routes', 'difficulty']);
+  });
+});

@@ -4,7 +4,6 @@ import { LATEST_VERSION, SEED_V1, migrate } from '../migrations';
 import { syncCatalog } from '../catalog';
 import type { Db } from '../types';
 import { LIFT_SUBCATEGORIES } from '@/data/exercises';
-import { setPlanDay } from '@/data/plan';
 import { getRangeSummary } from '@/data/workouts';
 import { createTestDb, wrap } from '@/test/testDb';
 
@@ -20,6 +19,12 @@ const UNDO_V12 = `UPDATE categories SET name = 'Yoga & Mobility' WHERE name = 'M
   DELETE FROM exercises WHERE name = 'Reformer Pilates' AND is_custom = 0`;
 const UNDO_V10 = `UPDATE exercises SET name = 'Dumbbell Curl' WHERE name = 'Bicep Curl' AND is_custom = 0;
   UPDATE exercises SET name = 'Barbell Row' WHERE name = 'Bent-Over Row' AND is_custom = 0`;
+
+// v14 runs after every older migration, so each replay below undoes it first.
+const UNDO_V14 = `ALTER TABLE exercises DROP COLUMN fields;
+  ALTER TABLE sets DROP COLUMN count; ALTER TABLE sets DROP COLUMN elevation;
+  ALTER TABLE sets DROP COLUMN score; ALTER TABLE sets DROP COLUMN difficulty;
+  ALTER TABLE plan_items DROP COLUMN target_count; ALTER TABLE workout_exercises DROP COLUMN target_count`;
 
 describe('migrations', () => {
   it('creates the schema and records the version', async () => {
@@ -76,7 +81,7 @@ describe('migrations', () => {
     const db = wrap(raw);
     await migrate(db);
     // Simulate a half-applied earlier run, which can only have the v1 schema.
-    raw.exec(`${UNDO_V12}; ${UNDO_V10}; ${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; ${UNDO_V5}; ${UNDO_V3}; ${UNDO_V2}; PRAGMA user_version = 0`);
+    raw.exec(`${UNDO_V14}; ${UNDO_V12}; ${UNDO_V10}; ${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; ${UNDO_V5}; ${UNDO_V3}; ${UNDO_V2}; PRAGMA user_version = 0`);
     await expect(migrate(db)).resolves.toBeUndefined();
     const cats = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM categories');
     expect(cats?.n).toBe(3);
@@ -86,7 +91,7 @@ describe('migrations', () => {
     const raw = new DatabaseSync(':memory:');
     const db = wrap(raw);
     await migrate(db);
-    raw.exec(`${UNDO_V12}; ${UNDO_V10}; ${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; ${UNDO_V5}; ${UNDO_V3}; ${UNDO_V2}; PRAGMA user_version = 1`);
+    raw.exec(`${UNDO_V14}; ${UNDO_V12}; ${UNDO_V10}; ${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; ${UNDO_V5}; ${UNDO_V3}; ${UNDO_V2}; PRAGMA user_version = 1`);
     await db.runAsync("INSERT INTO workouts (date, notes) VALUES ('2026-11-02', 'kept')");
 
     await migrate(db);
@@ -104,7 +109,7 @@ describe('migrations', () => {
       const raw = new DatabaseSync(':memory:');
       const db = wrap(raw);
       await migrate(db);
-      raw.exec(`${UNDO_V12}; ${UNDO_V10}; ${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; ${UNDO_V5}; ${UNDO_V3}; PRAGMA user_version = 2`);
+      raw.exec(`${UNDO_V14}; ${UNDO_V12}; ${UNDO_V10}; ${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; ${UNDO_V5}; ${UNDO_V3}; PRAGMA user_version = 2`);
       // A v2 install only has the v1 seed; drop what syncCatalog has added since.
       const seeded = SEED_V1.flatMap((c) => c.exercises);
       await db.runAsync(`DELETE FROM exercises WHERE name NOT IN (${seeded.map(() => '?').join(', ')})`, seeded);
@@ -167,7 +172,7 @@ describe('migrations', () => {
       // Put the catalog back the way v3 left it.
       raw.exec(`DELETE FROM exercises WHERE name IN ('Ski Touring', 'Cross-Country Skiing', 'Snowshoeing', 'Climbing');
         UPDATE exercises SET name = 'Skiing' WHERE name = 'Downhill Skiing';
-        ${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; ${UNDO_V5};
+        ${UNDO_V14}; ${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; ${UNDO_V5};
         PRAGMA user_version = 3`);
       await prepare(db);
       await migrate(db);
@@ -228,7 +233,7 @@ describe('migrations', () => {
       const raw = new DatabaseSync(':memory:');
       const db = wrap(raw);
       await migrate(db);
-      raw.exec(`${UNDO_V12}; ${UNDO_V10}; ${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; ${UNDO_V5}; PRAGMA user_version = 4`);
+      raw.exec(`${UNDO_V14}; ${UNDO_V12}; ${UNDO_V10}; ${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; ${UNDO_V5}; PRAGMA user_version = 4`);
       await prepare(db);
       await migrate(db);
       return db;
@@ -268,9 +273,10 @@ describe('migrations', () => {
       const raw = new DatabaseSync(':memory:');
       const db = wrap(raw);
       await migrate(db);
-      raw.exec(`${UNDO_V12}; ${UNDO_V10}; ${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; PRAGMA user_version = 5`);
+      raw.exec(`${UNDO_V14}; ${UNDO_V12}; ${UNDO_V10}; ${UNDO_V8}; ${UNDO_V7}; ${UNDO_V6}; PRAGMA user_version = 5`);
       const bench = (await db.getFirstAsync<{ id: number }>("SELECT id FROM exercises WHERE name = 'Bench Press'"))!.id;
-      await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: bench, targetSets: 3 }] });
+      // Written as SQL: today's setPlanDay expects columns a v5 database doesn't have yet.
+      await db.runAsync('INSERT INTO plan_items (weekday, exercise_id, position, target_sets) VALUES (1, ?, 0, 3)', [bench]);
       await db.runAsync("UPDATE settings SET value = '1' WHERE key = 'plan_complete'");
       await prepare(db);
       await migrate(db);
@@ -324,7 +330,7 @@ describe('migrations', () => {
       const raw = new DatabaseSync(':memory:');
       const db = wrap(raw);
       await migrate(db);
-      raw.exec(`${UNDO_V12}; ${UNDO_V10}; ${UNDO_V8}; ${UNDO_V7}; PRAGMA user_version = 6`);
+      raw.exec(`${UNDO_V14}; ${UNDO_V12}; ${UNDO_V10}; ${UNDO_V8}; ${UNDO_V7}; PRAGMA user_version = 6`);
       await migrate(db);
       expect(
         await db.getFirstAsync("SELECT subcategory FROM exercise_subcategories WHERE exercise_id = ?", [await deadliftId(db)]),
@@ -337,7 +343,7 @@ describe('migrations', () => {
       const raw = new DatabaseSync(':memory:');
       const db = wrap(raw);
       await migrate(db);
-      raw.exec(`${UNDO_V8}; PRAGMA user_version = 7`);
+      raw.exec(`${UNDO_V14}; ${UNDO_V8}; PRAGMA user_version = 7`);
       await db.runAsync("INSERT INTO exercises (category_id, name, is_custom) VALUES (1, 'Sled Push', 1)");
       await migrate(db);
       expect(await db.getFirstAsync('SELECT COUNT(*) AS n FROM exercises WHERE is_hidden != 0')).toEqual({ n: 0 });
@@ -351,7 +357,7 @@ describe('migrations', () => {
       const raw = new DatabaseSync(':memory:');
       const db = wrap(raw);
       await migrate(db);
-      raw.exec(`${UNDO_V12};
+      raw.exec(`${UNDO_V14}; ${UNDO_V12};
         UPDATE categories SET name = 'Yoga' WHERE name = 'Yoga & Mobility';
         INSERT INTO categories (name, kind) VALUES ('Mobility', 'mindbody');
         UPDATE exercises SET category_id = (SELECT id FROM categories WHERE name = 'Mobility')
@@ -451,7 +457,7 @@ describe('migrations', () => {
       const raw = new DatabaseSync(':memory:');
       const db = wrap(raw);
       await migrate(db);
-      raw.exec(`${UNDO_V12}; ${UNDO_V10}; PRAGMA user_version = 9`);
+      raw.exec(`${UNDO_V14}; ${UNDO_V12}; ${UNDO_V10}; PRAGMA user_version = 9`);
       await prepare(db);
       await migrate(db);
       return db;
@@ -510,11 +516,13 @@ describe('migrations', () => {
       const raw = new DatabaseSync(':memory:');
       const db = wrap(raw);
       await migrate(db);
-      raw.exec(`${UNDO_V12}; PRAGMA user_version = 10`);
+      raw.exec(UNDO_V12);
+      // Synced before v14's columns are dropped: today's sync writes them, an old build's wouldn't.
       await syncCatalog(db, [
         { name: 'Yoga', kind: 'mindbody', exercises: ['Vinyasa', 'Hatha', 'Yin', 'Power Yoga'].map((name) => ({ name })) },
         { name: 'Mobility', kind: 'mindbody', exercises: ['Stretching', 'Foam Rolling'].map((name) => ({ name })) },
       ]);
+      raw.exec(`${UNDO_V14}; PRAGMA user_version = 10`);
       await prepare(db);
       await migrate(db);
       return db;
@@ -577,11 +585,11 @@ describe('migrations', () => {
 
     it('changes nothing on an install that never ran an older build', async () => {
       const db = await createTestDb();
-      await db.execAsync(`${UNDO_V12}; PRAGMA user_version = 11`);
+      await db.execAsync(`${UNDO_V14}; ${UNDO_V12}; PRAGMA user_version = 11`);
       await migrate(db);
       const before = await mindBody(db);
       const raw = db as unknown as Db;
-      await raw.execAsync(`${UNDO_V12}; PRAGMA user_version = 10`);
+      await raw.execAsync(`${UNDO_V14}; ${UNDO_V12}; PRAGMA user_version = 10`);
       await migrate(raw);
       expect(await mindBody(db)).toEqual(before);
     });
@@ -593,7 +601,7 @@ describe('migrations', () => {
       const raw = new DatabaseSync(':memory:');
       const db = wrap(raw);
       await migrate(db);
-      raw.exec(`${UNDO_V12}; PRAGMA user_version = 11`);
+      raw.exec(`${UNDO_V14}; ${UNDO_V12}; PRAGMA user_version = 11`);
       await prepare(db);
       await migrate(db);
       return db;
@@ -646,7 +654,7 @@ describe('migrations', () => {
       const raw = new DatabaseSync(':memory:');
       const db = wrap(raw);
       await migrate(db);
-      raw.exec('PRAGMA user_version = 12');
+      raw.exec(`${UNDO_V14}; PRAGMA user_version = 12`);
       await db.runAsync(
         "INSERT INTO plan_history (effective_from, weekday, is_rest, exercise_count, kinds) VALUES ('2026-11-18', 1, 0, 1, 'strength')",
       );
@@ -691,10 +699,63 @@ describe('migrations', () => {
       const raw = new DatabaseSync(':memory:');
       const db = wrap(raw);
       await migrate(db);
-      raw.exec('PRAGMA user_version = 12');
+      raw.exec(`${UNDO_V14}; PRAGMA user_version = 12`);
       await workout(db, '2026-11-16');
       await migrate(db);
       expect(await dates(db)).toEqual(['2026-11-16']);
+    });
+  });
+
+  describe('v14 lets exercises record more than weight, reps, time and distance', () => {
+
+    async function upgradeFromV13(prepare: (db: Db) => Promise<void> = async () => {}) {
+      const raw = new DatabaseSync(':memory:');
+      const db = wrap(raw);
+      await migrate(db);
+      raw.exec(UNDO_V14);
+      raw.exec('PRAGMA user_version = 13');
+      await prepare(db);
+      await migrate(db);
+      return db;
+    }
+    const columns = async (db: Db, table: string) =>
+      (await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${table})`)).map((c) => c.name);
+
+    it('adds the new set values and count targets', async () => {
+      const db = await upgradeFromV13();
+      expect(await columns(db, 'exercises')).toContain('fields');
+      expect(await columns(db, 'sets')).toEqual(expect.arrayContaining(['count', 'elevation', 'score', 'difficulty']));
+      expect(await columns(db, 'plan_items')).toContain('target_count');
+      expect(await columns(db, 'workout_exercises')).toContain('target_count');
+    });
+
+    it('keeps custom exercises on their category defaults and logged sets as they were', async () => {
+      const db = await upgradeFromV13(async (d) => {
+        await d.runAsync("INSERT INTO exercises (category_id, name, is_custom) VALUES ((SELECT id FROM categories WHERE name = 'Cardio'), 'Rucking', 1)");
+        const { lastInsertRowId: w } = await d.runAsync("INSERT INTO workouts (date) VALUES ('2026-11-02')");
+        const { lastInsertRowId: we } = await d.runAsync(
+          "INSERT INTO workout_exercises (workout_id, exercise_id, position) VALUES (?, (SELECT id FROM exercises WHERE name = 'Walking'), 0)", [w],
+        );
+        await d.runAsync('INSERT INTO sets (workout_exercise_id, set_number, duration_min, distance) VALUES (?, 1, 40, 2)', [we]);
+      });
+      expect(await db.getFirstAsync("SELECT fields FROM exercises WHERE name = 'Rucking'")).toEqual({ fields: null });
+      expect(await db.getFirstAsync('SELECT duration_min, distance, count FROM sets')).toEqual({ duration_min: 40, distance: 2, count: null });
+    });
+
+    it('gives the built-ins that record something else their fields', async () => {
+      const db = await upgradeFromV13();
+      const fields = async (name: string) => (await db.getFirstAsync<{ fields: string | null }>('SELECT fields FROM exercises WHERE name = ?', [name]))!.fields;
+      expect(await fields('Walking')).toBe('duration,distance,steps');
+      expect(await fields('Weighted Plank')).toBe('weight,duration');
+      expect(await fields('Bench Press')).toBeNull();
+    });
+
+    it('only accepts a difficulty from 1 to 10', async () => {
+      const db = await createTestDb();
+      const { lastInsertRowId: w } = await db.runAsync("INSERT INTO workouts (date) VALUES ('2026-11-02')");
+      const { lastInsertRowId: we } = await db.runAsync('INSERT INTO workout_exercises (workout_id, exercise_id, position) VALUES (?, 1, 0)', [w]);
+      await expect(db.runAsync('INSERT INTO sets (workout_exercise_id, set_number, difficulty) VALUES (?, 1, 11)', [we])).rejects.toThrow();
+      await db.runAsync('INSERT INTO sets (workout_exercise_id, set_number, difficulty) VALUES (?, 1, 10)', [we]);
     });
   });
 });

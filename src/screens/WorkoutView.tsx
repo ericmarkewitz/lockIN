@@ -16,9 +16,8 @@ import {
 } from '@/data/workouts';
 import { useDb } from '@/db/DbContext';
 import { useLoad } from '@/hooks/useLoad';
-import { formatDuration } from '@/lib/duration';
+import { defaultTargets, formatTargets } from '@/lib/fields';
 import { dropIndexByHeights, moveItem } from '@/lib/reorder';
-import { formatDistance } from '@/lib/units';
 import { formatSets } from '@/lib/workoutMode';
 import { mix, tint, useTheme } from '@/theme';
 
@@ -114,7 +113,7 @@ export function WorkoutView({ date, onDragChange }: Props) {
 
   const addEx = async (e: Exercise) => {
     setPicking(false);
-    await act(() => addExerciseToWorkout(db, workout.id, e.id, e.categoryKind === 'strength' ? { targetSets: 3, targetReps: 10 } : {}));
+    await act(() => addExerciseToWorkout(db, workout.id, e.id, defaultTargets(e)));
   };
 
   const progress = { done: exercises.filter(isFinished).length, total: exercises.length };
@@ -216,11 +215,7 @@ export function WorkoutView({ date, onDragChange }: Props) {
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.exName, { color: t.text }]}>{ex.exerciseName}</Text>
                     <Text style={{ color: t.muted, fontSize: 13 }}>
-                      {ex.categoryName}
-                      {ex.subcategory ? ` · ${ex.subcategory}` : ''}
-                      {ex.categoryKind === 'strength' && ex.targetSets ? ` · ${ex.targetSets}×${ex.targetReps ?? '?'}` : ''}
-                      {ex.targetDurationMin ? ` · ${formatDuration(ex.targetDurationMin)}` : ''}
-                      {ex.targetDistance ? ` · ${formatDistance(ex.targetDistance, units.distance)}` : ''}
+                      {[ex.categoryName, ex.subcategory, ...formatTargets(ex, units)].filter(Boolean).join(' · ')}
                     </Text>
                   </View>
                   {isStrength && (
@@ -242,15 +237,16 @@ export function WorkoutView({ date, onDragChange }: Props) {
                   <View style={[styles.last, { backgroundColor: t.surface }]}>
                     <Icon name={sym('clock.arrow.circlepath', 'history')} size={12} color={t.muted} fallback="↺" />
                     <Text style={{ color: t.muted, fontSize: 12, flexShrink: 1 }}>
-                      {`Last (${last[ex.exerciseId]!.date}): ${formatSets(last[ex.exerciseId]!.sets, ex.categoryKind, units)}`}
+                      {`Last (${last[ex.exerciseId]!.date}): ${formatSets(last[ex.exerciseId]!.sets, ex.fields, units)}`}
                     </Text>
                   </View>
                 )}
-                {isStrength && ex.sets.length > 0 && <SetHeader />}
+                {isStrength && ex.sets.length > 0 && <SetHeader fields={ex.fields} />}
                 {ex.sets.map((x) => (
                   <SetRow
                     key={x.id}
                     kind={ex.categoryKind}
+                    fields={ex.fields}
                     set={x}
                     targetDurationMin={ex.targetDurationMin}
                     unit={units.weight}

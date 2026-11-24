@@ -1,5 +1,6 @@
 import { datesInRange, weekdayOf } from '@/lib/dates';
 import type { Db } from '@/db/types';
+import { parseFields } from './fields';
 import { LOGGED_SET } from './logged';
 import { getPlan, getPlanHistory } from './plan';
 import { DISTANCE_UNITS, getUnits, WEIGHT_UNITS, type DistanceUnit, type WeightUnit } from './settings';
@@ -9,12 +10,14 @@ import type {
 
 type WeRow = {
   id: number; exercise_id: number; position: number; target_sets: number | null; target_reps: number | null;
-  target_duration_min: number | null; target_distance: number | null;
-  exercise_name: string; is_custom: number; category_name: string; category_kind: CategoryKind; subcategory: string | null; has_logged_sets: number;
+  target_duration_min: number | null; target_distance: number | null; target_count: number | null;
+  exercise_name: string; is_custom: number; category_name: string; category_kind: CategoryKind; subcategory: string | null;
+  fields: string | null; has_logged_sets: number;
 };
 type SetRow = {
   id: number; workout_exercise_id: number; set_number: number; target_reps: number | null; reps: number | null;
   weight: number | null; duration_min: number | null; distance: number | null; completed: number; is_logged: number;
+  count: number | null; elevation: number | null; score: number | null; difficulty: number | null;
   weight_unit: WeightUnit | null; distance_unit: DistanceUnit | null;
 };
 
@@ -29,6 +32,10 @@ const toSet = (s: SetRow): WorkoutSet => ({
   weight: s.weight,
   durationMin: s.duration_min,
   distance: s.distance,
+  count: s.count,
+  elevation: s.elevation,
+  score: s.score,
+  difficulty: s.difficulty,
   weightUnit: s.weight_unit,
   distanceUnit: s.distance_unit,
   completed: !!s.completed,
@@ -42,7 +49,7 @@ export async function getWorkout(db: Db, date: string): Promise<Workout | null> 
   );
   if (!w) return null;
   const wes = await db.getAllAsync<WeRow>(
-    `SELECT we.*, e.name AS exercise_name, e.is_custom, e.subcategory, c.name AS category_name, c.kind AS category_kind,
+    `SELECT we.*, e.name AS exercise_name, e.is_custom, e.subcategory, e.fields, c.name AS category_name, c.kind AS category_kind,
        EXISTS (SELECT 1 FROM sets s WHERE s.workout_exercise_id = we.id AND ${LOGGED_SET}) AS has_logged_sets
      FROM workout_exercises we JOIN exercises e ON e.id = we.exercise_id JOIN categories c ON c.id = e.category_id
      WHERE we.workout_id = ? ORDER BY we.position, we.id`,
@@ -65,6 +72,8 @@ export async function getWorkout(db: Db, date: string): Promise<Workout | null> 
     targetReps: we.target_reps,
     targetDurationMin: we.target_duration_min,
     targetDistance: we.target_distance,
+    targetCount: we.target_count,
+    fields: parseFields(we.fields, we.category_kind),
     hasLoggedSets: !!we.has_logged_sets,
     isCustom: !!we.is_custom,
     sets: sets.filter((s) => s.workout_exercise_id === we.id).map(toSet),
@@ -86,9 +95,12 @@ async function insertWorkoutExercise(
   );
   if (!cat) throw new Error(`Unknown exercise ${exerciseId}`);
   const { lastInsertRowId } = await db.runAsync(
-    `INSERT INTO workout_exercises (workout_id, exercise_id, position, target_sets, target_reps, target_duration_min, target_distance)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [workoutId, exerciseId, position, t.targetSets ?? null, t.targetReps ?? null, t.targetDurationMin ?? null, t.targetDistance ?? null],
+    `INSERT INTO workout_exercises (workout_id, exercise_id, position, target_sets, target_reps, target_duration_min, target_distance, target_count)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      workoutId, exerciseId, position, t.targetSets ?? null, t.targetReps ?? null, t.targetDurationMin ?? null,
+      t.targetDistance ?? null, t.targetCount ?? null,
+    ],
   );
   const n = initialSetCount(cat.kind, t);
   for (let i = 1; i <= n; i++) {
@@ -135,6 +147,14 @@ export type SetPatch = {
   weight?: number | null;
   durationMin?: number | null;
   distance?: number | null;
+  /** A whole number: steps, runs, routes or the like. */
+  count?: number | null;
+  /** Feet. */
+  elevation?: number | null;
+  /** A whole number. */
+  score?: number | null;
+  /** A whole number from 1 to 10. */
+  difficulty?: number | null;
   /** The unit `weight`/`distance` were entered in; they are still passed in lb and mi. */
   weightUnit?: WeightUnit | null;
   distanceUnit?: DistanceUnit | null;
@@ -143,8 +163,11 @@ export type SetPatch = {
 
 const SET_COLUMNS: Record<keyof SetPatch, string> = {
   reps: 'reps', weight: 'weight', durationMin: 'duration_min', distance: 'distance',
+  count: 'count', elevation: 'elevation', score: 'score', difficulty: 'difficulty',
   weightUnit: 'weight_unit', distanceUnit: 'distance_unit', completed: 'completed',
 };
+
+const WHOLE_NUMBERS: readonly (keyof SetPatch)[] = ['count', 'score'];
 
 const ALLOWED_UNITS: Partial<Record<keyof SetPatch, readonly string[]>> = { weightUnit: WEIGHT_UNITS, distanceUnit: DISTANCE_UNITS };
 
@@ -156,6 +179,10 @@ export async function updateSet(db: Db, setId: number, patch: SetPatch): Promise
     const v = patch[key];
     if (v === undefined) continue;
     if (typeof v === 'number' && v < 0) throw new Error(`${key} cannot be negative`);
+    if (typeof v === 'number' && WHOLE_NUMBERS.includes(key) && !Number.isInteger(v)) throw new Error(`${key} must be a whole number`);
+    if (key === 'difficulty' && v !== null && !(Number.isInteger(v) && (v as number) >= 1 && (v as number) <= 10)) {
+      throw new Error('Difficulty is from 1 to 10');
+    }
     if (typeof v === 'string' && !ALLOWED_UNITS[key]?.includes(v)) throw new Error(`Unsupported ${key}: ${v}`);
     sets.push(`${SET_COLUMNS[key]} = ?`);
     params.push(key === 'completed' ? (v ? 1 : 0) : v);
@@ -286,6 +313,7 @@ export async function replaceWorkoutExercise(db: Db, workoutExerciseId: number, 
       targetReps: old.target_reps,
       targetDurationMin: old.target_duration_min,
       targetDistance: old.target_distance,
+      targetCount: old.target_count,
     });
     const at = order.indexOf(workoutExerciseId);
     if (keepOld) {
