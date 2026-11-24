@@ -78,6 +78,52 @@ describe('WorkoutMode', () => {
     expect(screen.getByLabelText('3 of 3 sets done')).toBeTruthy();
   });
 
+  describe("previewing the set you're on in the top bar", () => {
+    const preview = () => screen.queryAllByTestId('capsule-preview', { includeHiddenElements: true });
+    const fill = (exercise: string) => screen.getByTestId(`capsule-fill-${exercise}`, { includeHiddenElements: true });
+    const styleOf = (el: { props: Record<string, any> }) => StyleSheet.flatten(el.props.style);
+    const widthOf = (el: { props: Record<string, any> }) => styleOf(el).width;
+
+    it("extends the current exercise's fill, see-through, by the set you're on", async () => {
+      const db = await setup(); // Bench Press 2 sets, Squat 1
+      await setRestSeconds(db, 0);
+      await open(db);
+      expect(preview()).toHaveLength(1);
+      expect(widthOf(preview()[0])).toBe('50%');
+
+      await fireEvent.press(screen.getByLabelText('Done with set 1'));
+      await screen.findByText('Set 2 of 2');
+      expect(widthOf(fill('Bench Press'))).toBe('50%');
+      // One bar from the start, under the solid fill, so the two read as one line.
+      expect(styleOf(preview()[0]).left).toBe(0);
+      expect(widthOf(preview()[0])).toBe('100%');
+    });
+
+    it('shows no preview while resting or once the workout is finished', async () => {
+      const db = await setup();
+      await open(db);
+      await fireEvent.press(screen.getByLabelText('Done with set 1'));
+      await screen.findByLabelText('Rest, 1:30 left');
+      expect(preview()).toHaveLength(0);
+      await fireEvent.press(screen.getByLabelText('Skip rest'));
+      await fireEvent.press(await screen.findByLabelText('Done with set 2'));
+      await fireEvent.press(await screen.findByLabelText('Skip rest'));
+      await fireEvent.press(await screen.findByLabelText('Done with set 1'));
+      await screen.findByText('Workout complete');
+      expect(preview()).toHaveLength(0);
+    });
+
+    it('shows no preview on a set that is already done', async () => {
+      const db = await setup();
+      await setRestSeconds(db, 0);
+      await open(db);
+      await fireEvent.press(screen.getByLabelText('Done with set 1'));
+      await fireEvent.press(await screen.findByLabelText('Previous set'));
+      await screen.findByText('Set 1 of 2');
+      expect(preview()).toHaveLength(0);
+    });
+  });
+
   it('does not count a skipped set as one you are on', async () => {
     const db = await setup();
     await setRestSeconds(db, 0);

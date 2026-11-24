@@ -31,6 +31,8 @@ type Props = {
   onChange: (patch: SetPatch) => void;
   /** Omit for a row that can't be removed on its own (an exercise's only entry). */
   onRemove?: () => void;
+  /** The day's next set to do, whose number is lit with the accent. */
+  isNext?: boolean;
 };
 
 const show = (n: number | null) => (n === null ? '' : String(n));
@@ -152,6 +154,7 @@ export function SetHeader({ fields = DEFAULT_FIELDS.strength }: { fields?: reado
  */
 export function SetRow({
   kind, fields = DEFAULT_FIELDS[kind], set, targetDurationMin = null, unit, distanceUnit = 'mi', exerciseName = 'Exercise', onChange, onRemove,
+  isNext = false,
 }: Props) {
   const t = useTheme();
   const n = set.setNumber;
@@ -222,8 +225,8 @@ export function SetRow({
   return (
     <View style={[styles.row, done && { backgroundColor: tint(t.success, 0.1) }]}>
       {isSet && (
-        <View style={[styles.num, styles.badge, { backgroundColor: done ? t.success : t.surface }]}>
-          <Text style={[styles.numText, { color: done ? t.bg : t.muted }]}>{n}</Text>
+        <View style={[styles.num, styles.badge, { backgroundColor: done ? t.success : isNext ? t.primary : t.surface }]}>
+          <Text style={[styles.numText, { color: done ? t.bg : isNext ? t.onPrimary : t.muted }]}>{n}</Text>
         </View>
       )}
       {fields.map(field)}

@@ -4,12 +4,13 @@ import { Animated, Pressable, StyleSheet, Text, TextInput, View } from 'react-na
 
 import { ChangeRecords } from '@/components/ChangeRecords';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { DayHero } from '@/components/day/DayHero';
 import { DragHandle } from '@/components/DragHandle';
 import { ExercisePicker } from '@/components/ExercisePicker';
 import { ExerciseMotionFor } from '@/components/motion/ExerciseMotion';
 import { Icon, sym } from '@/components/Icon';
 import { SetHeader, SetRow } from '@/components/SetRow';
-import { AddButton, Button, Eyebrow, Toggle, useRaised } from '@/components/ui';
+import { AddButton, Toggle, useRaised } from '@/components/ui';
 import type { Exercise, WorkoutExercise } from '@/data/types';
 import {
   addExerciseToWorkout, addSet, loadDay, removeExerciseFromWorkout, removeSet, reorderWorkoutExercises,
@@ -20,7 +21,7 @@ import { useLoad } from '@/hooks/useLoad';
 import { defaultTargets, formatTargets } from '@/lib/fields';
 import { dropIndexByHeights, moveItem } from '@/lib/reorder';
 import { formatSets } from '@/lib/workoutMode';
-import { mix, tint, useTheme } from '@/theme';
+import { tint, useTheme } from '@/theme';
 
 /** An exercise is finished once it has sets and every one is marked done. */
 const isFinished = (e: WorkoutExercise) => e.sets.length > 0 && e.sets.every((x) => x.completed);
@@ -120,10 +121,11 @@ export function WorkoutView({ date, onDragChange }: Props) {
   };
 
   const progress = { done: exercises.filter(isFinished).length, total: exercises.length };
-  const complete = progress.total > 0 && progress.done === progress.total;
   const allSets = exercises.flatMap((e) => e.sets);
   const canReorder = exercises.length > 1;
   const canStart = !workout.isRest && allSets.some((x) => !x.completed);
+  /** Where workout mode would pick up: the first set not done. */
+  const nextSetId = workout.isRest ? null : allSets.find((x) => !x.completed)?.id ?? null;
 
   const confirmRemoveExercise = (ex: WorkoutExercise) => {
     const remove = () => removeExerciseFromWorkout(db, ex.id);
@@ -134,45 +136,24 @@ export function WorkoutView({ date, onDragChange }: Props) {
 
   return (
     <View style={{ gap: GAP }}>
-      <View style={[styles.summary, { backgroundColor: t.card, borderColor: t.border }, raised]}>
-        {!workout.isRest && (
-          <View accessible accessibilityLabel={`${progress.done} of ${progress.total} exercises done`} style={styles.progress}>
-            <Eyebrow>Progress</Eyebrow>
-            <View style={styles.progressTop}>
-              <Text style={[styles.big, { color: t.text }]}>
-                {progress.done}<Text style={{ color: t.muted }}>/{progress.total}</Text>
-              </Text>
-              <Text style={[styles.progressLabel, { color: complete ? t.success : t.muted }]}>
-                {complete ? 'Workout complete' : progress.total ? 'exercises done' : 'No exercises yet'}
-              </Text>
-            </View>
-            <View style={[styles.track, { backgroundColor: t.surface }]}>
-              <View style={[styles.fill, { backgroundColor: t.success, experimental_backgroundImage: `linear-gradient(90deg, ${mix(t.success, t.primary, 0.35)}, ${t.success})`, width: `${progress.total ? (progress.done / progress.total) * 100 : 0}%` }]} />
-            </View>
-          </View>
-        )}
-        <View style={[styles.restRow, !workout.isRest && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: t.border, paddingTop: 12 }]}>
-          <Icon name={sym('moon.zzz.fill', 'bedtime')} size={16} color={workout.isRest ? t.rest : t.muted} fallback="☾" />
-          <Text style={{ color: t.text, fontWeight: '600', flex: 1 }}>Rest day</Text>
-          <Toggle label="Rest day" value={workout.isRest} onChange={(v) => act(() => setRestDay(db, date, v))} />
-        </View>
+      <DayHero
+        date={date}
+        isRest={workout.isRest}
+        done={progress.done}
+        total={progress.total}
+        setsDone={allSets.filter((x) => x.completed).length}
+        setsTotal={allSets.length}
+        restMessage={exercises.length ? 'Marked as a rest day. Logged sets stay in your history.' : 'Rest and recover. 😴'}
+        start={canStart ? {
+          label: allSets.some((x) => x.isLogged) ? 'Resume workout' : 'Start workout',
+          onPress: () => router.push({ pathname: '/workout/[date]', params: { date } }),
+        } : undefined}
+      />
+      <View style={[styles.restRow, { backgroundColor: t.card, borderColor: t.border }]}>
+        <Icon name={sym('moon.zzz.fill', 'bedtime')} size={16} color={workout.isRest ? t.rest : t.muted} fallback="☾" />
+        <Text style={{ color: t.text, fontWeight: '700', flex: 1 }}>Rest day</Text>
+        <Toggle label="Rest day" value={workout.isRest} onChange={(v) => act(() => setRestDay(db, date, v))} />
       </View>
-
-      {workout.isRest && (
-        <View style={[styles.restBox, { backgroundColor: tint(t.rest, 0.08) }]}>
-          <Icon name={sym('moon.stars.fill', 'nights_stay')} size={30} color={t.rest} fallback="☾" />
-          <Text style={{ color: t.muted, textAlign: 'center' }}>
-            {exercises.length ? 'Marked as a rest day. Logged sets stay in your history.' : 'Rest and recover. 😴'}
-          </Text>
-        </View>
-      )}
-      {canStart && (
-        <Button
-          title={allSets.some((x) => x.isLogged) ? 'Resume workout' : 'Start workout'}
-          onPress={() => router.push({ pathname: '/workout/[date]', params: { date } })}
-          style={styles.start}
-        />
-      )}
       {(!workout.isRest || exercises.length > 0) && (
         <>
           {exercises.map((ex, idx) => {
@@ -222,8 +203,8 @@ export function WorkoutView({ date, onDragChange }: Props) {
                     </Text>
                   </View>
                   {isStrength && (
-                    <View style={[styles.count, { backgroundColor: finished ? tint(t.success, 0.15) : t.surface }]}>
-                      <Text style={[styles.countText, { color: finished ? t.success : t.muted }]}>{exDone}/{ex.sets.length}</Text>
+                    <View style={[styles.count, { backgroundColor: tint(finished ? t.success : t.primary, 0.14) }]}>
+                      <Text style={[styles.countText, { color: finished ? t.success : t.primary }]}>{exDone}/{ex.sets.length}</Text>
                     </View>
                   )}
                   <Pressable
@@ -260,6 +241,7 @@ export function WorkoutView({ date, onDragChange }: Props) {
                     kind={ex.categoryKind}
                     fields={ex.fields}
                     set={x}
+                    isNext={x.id === nextSetId}
                     targetDurationMin={ex.targetDurationMin}
                     unit={units.weight}
                     distanceUnit={units.distance}
@@ -316,15 +298,7 @@ export function WorkoutView({ date, onDragChange }: Props) {
 }
 
 const styles = StyleSheet.create({
-  summary: { borderRadius: 24, borderWidth: StyleSheet.hairlineWidth, padding: 16, gap: 14 },
-  progress: { gap: 6 },
-  progressTop: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
-  big: { fontSize: 40, fontWeight: '900', fontStyle: 'italic', letterSpacing: -1.5, fontVariant: ['tabular-nums'] },
-  progressLabel: { fontSize: 15, fontWeight: '800' },
-  track: { height: 12, borderRadius: 6, overflow: 'hidden', marginTop: 4 },
-  fill: { height: '100%', borderRadius: 6 },
-  restRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  restBox: { alignItems: 'center', gap: 10, padding: 28, borderRadius: 24 },
+  restRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth },
   exCard: { borderRadius: 24, borderWidth: StyleSheet.hairlineWidth, padding: 14, gap: 8 },
   exHead: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingBottom: 4 },
   // The handle keeps a 48pt grab area but tucks into the card's padding and the gap before the
@@ -338,7 +312,6 @@ const styles = StyleSheet.create({
   countText: { fontSize: 13, fontWeight: '900', fontVariant: ['tabular-nums'] },
   trash: { padding: 4 },
   last: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  start: { paddingVertical: 18 },
   notesCard: { borderRadius: 24, borderWidth: StyleSheet.hairlineWidth, padding: 14, gap: 6 },
   notesHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   notesTitle: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.6 },

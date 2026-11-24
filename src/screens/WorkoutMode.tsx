@@ -159,6 +159,7 @@ export function WorkoutMode({ date }: { date: string }) {
       exercises={exercises}
       current={step?.exercise.id ?? null}
       onSet={!!step && !step.set.completed}
+      preview={!!step && !step.set.completed && !rest}
       onEnd={() => router.back()}
     />
   );
@@ -324,11 +325,13 @@ function SwitchSheet({
  * "Set 3 of 3" does. On the finish screen it's the sets done.
  */
 function TopBar({
-  steps, exercises, current, onSet, onEnd,
+  steps, exercises, current, onSet, preview, onEnd,
 }: {
   steps: Step[]; exercises: WorkoutExercise[]; current: number | null;
   /** Whether a set not done yet is showing, which then counts as the one you're on. */
   onSet: boolean;
+  /** Whether to show, see-through, how far the current exercise's capsule fills once this set is done. */
+  preview: boolean;
   onEnd: () => void;
 }) {
   const t = useTheme();
@@ -352,7 +355,17 @@ function TopBar({
           const on = e.id === current;
           return (
             <View key={e.id} style={[styles.capsule, { backgroundColor: on ? tint(t.primary, 0.25) : tint(t.text, 0.1) }]}>
-              <View style={[styles.capsuleFill, { width: `${share * 100}%`, backgroundColor: share === 1 ? t.success : t.primary }]} />
+              {/* Where the fill reaches once the set you're on is done, see-through under the fill, so they read as one line. */}
+              {on && preview && (
+                <View
+                  testID="capsule-preview"
+                  style={[styles.capsulePreview, { width: `${Math.min(1, share + 1 / e.sets.length) * 100}%`, backgroundColor: tint(t.primary, 0.45) }]}
+                />
+              )}
+              <View
+                testID={`capsule-fill-${e.exerciseName}`}
+                style={[styles.capsuleFill, { width: `${share * 100}%`, backgroundColor: share === 1 ? t.success : t.primary }]}
+              />
             </View>
           );
         })}
@@ -573,7 +586,6 @@ function StepView({
               </Text>
               {set.completed && <Pill icon={sym('checkmark.circle.fill', 'check_circle')} fallback="✓" text="Done" color={t.success} />}
               <View style={{ flex: 1 }} />
-              {isStrength && <SetDots sets={exercise.sets} current={setIndex} />}
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={`Change what ${exercise.exerciseName} records`}
@@ -728,25 +740,6 @@ function RoundAction({
     >
       {children}
     </Pressable>
-  );
-}
-
-/** A dot per set: done sets fill green, the current one stretches into a bar. */
-function SetDots({ sets, current }: { sets: WorkoutSet[]; current: number }) {
-  const t = useTheme();
-  return (
-    <View style={styles.dots} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
-      {sets.map((s, i) => (
-        <View
-          key={s.id}
-          style={[
-            styles.dot,
-            i === current && styles.dotOn,
-            { backgroundColor: i === current ? t.primary : s.completed ? t.success : tint(t.text, 0.15) },
-          ]}
-        />
-      ))}
-    </View>
   );
 }
 
@@ -974,6 +967,7 @@ const styles = StyleSheet.create({
   topCount: { fontSize: 12, fontWeight: '700', fontVariant: ['tabular-nums'], minWidth: 30, textAlign: 'right' },
   capsule: { flex: 1, height: 6, borderRadius: 3, overflow: 'hidden' },
   capsuleFill: { height: '100%', borderRadius: 3 },
+  capsulePreview: { position: 'absolute', top: 0, bottom: 0, left: 0, borderRadius: 3 },
   hero: { flex: 1, minHeight: 0, gap: 10 },
   heroTop: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 4 },
   switch: {
@@ -990,9 +984,6 @@ const styles = StyleSheet.create({
   card: { borderRadius: 24, borderWidth: StyleSheet.hairlineWidth, padding: 14 },
   entryHead: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 },
   setLabel: { fontSize: 18, fontWeight: '900', letterSpacing: -0.3 },
-  dots: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  dotOn: { width: 22 },
   pill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, maxWidth: '100%' },
   fieldLabel: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1.2 },
   duration: { minHeight: 44, backgroundColor: 'transparent' },
