@@ -1,6 +1,6 @@
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import { useContext, useState, type ReactNode } from 'react';
+import { createContext, useContext, useState, type ReactNode } from 'react';
 import { Keyboard, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type ViewStyle } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { SafeAreaInsetsContext, type EdgeInsets } from 'react-native-safe-area-context';
@@ -32,9 +32,21 @@ import { MAX_REPS } from '@/lib/wheel';
 import {
   firstOpenStep, formatEntry, formatSets, groupThousands, nextOpenStep, suggestEntry, workoutSteps, workoutVolume, type Step,
 } from '@/lib/workoutMode';
-import { accentGradient, tint, useTheme } from '@/theme';
+import { accentGradient, mix, tint, useTheme } from '@/theme';
 
 const NO_INSETS: EdgeInsets = { top: 0, bottom: 0, left: 0, right: 0 };
+
+/** True inside the set's entry panel, which sits on the theme's accent. */
+const OnAccent = createContext(false);
+
+/** Colors for the entry's controls: light-on-accent inside the panel, the plain card's otherwise. */
+function useInk() {
+  const t = useTheme();
+  const on = t.onPrimary;
+  return useContext(OnAccent)
+    ? { text: on, muted: tint(on, 0.75), faint: tint(on, 0.45), glass: tint(on, 0.14), edge: tint(on, 0.18), button: tint(on, 0.2), pressed: tint(on, 0.32), icon: on }
+    : { text: t.text, muted: t.muted, faint: tint(t.muted, 0.5), glass: tint(t.card, 0.55), edge: tint(t.text, 0.06), button: tint(t.primary, 0.12), pressed: tint(t.primary, 0.24), icon: t.primary };
+}
 
 /**
  * The device's safe-area insets (status bar, notch, home indicator). Read from the app's
@@ -451,6 +463,8 @@ function StepView({
   const switchesDistance = fields.find((f) => DISTANCE_LIKE.includes(FIELDS[f].input));
   // Three tiles share the row, so their numbers are set smaller to fit.
   const compact = fields.length > 2;
+  /** Text on the accent panel the entry sits on. */
+  const on = t.onPrimary;
   const tile = (f: FieldId) => {
     const def = FIELDS[f];
     if (def.input === 'duration') {
@@ -463,21 +477,21 @@ function StepView({
             target={exercise.targetDurationMin}
             onChange={setDurationMin}
             style={styles.duration}
-            textStyle={compact ? styles.durationTextSmall : styles.durationText}
+            textStyle={{ ...(compact ? styles.durationTextSmall : styles.durationText), color: on }}
           />
         </Tile>
       );
     }
     if (def.input === 'difficulty') {
       return (
-        <Tile key={f} label={def.label} unit={<Text style={[styles.unitText, { color: t.muted }]}>/10</Text>}>
+        <Tile key={f} label={def.label} unit={<Text style={[styles.unitText, { color: tint(on, 0.75) }]}>/10</Text>}>
           <DifficultyButton
             label="Difficulty rating"
             title={exercise.exerciseName}
             value={difficulty}
             onChange={setDifficulty}
             style={styles.duration}
-            textStyle={compact ? styles.durationTextSmall : styles.durationText}
+            textStyle={{ ...(compact ? styles.durationTextSmall : styles.durationText), color: on }}
           />
         </Tile>
       );
@@ -519,7 +533,7 @@ function StepView({
         label={def.label}
         unit={f === switchesDistance
           ? <UnitPill label={`${def.label} unit`} unit={unit} onPress={() => setDistanceUnit(otherDistanceUnit(distanceUnit))} />
-          : !!unit && !def.noun && <Text style={[styles.unitText, { color: t.muted }]}>{unit}</Text>}
+          : !!unit && !def.noun && <Text style={[styles.unitText, { color: tint(on, 0.75) }]}>{unit}</Text>}
       >
         <TextInput
           accessibilityLabel={def.label}
@@ -528,8 +542,8 @@ function StepView({
           keyboardType={WHOLE.includes(def.input) ? 'number-pad' : 'decimal-pad'}
           selectTextOnFocus
           placeholder="–"
-          placeholderTextColor={t.muted}
-          style={[styles.tileInput, compact && styles.tileInputSmall, { color: t.text }]}
+          placeholderTextColor={tint(on, 0.45)}
+          style={[styles.tileInput, compact && styles.tileInputSmall, { color: on }]}
         />
       </Tile>
     );
@@ -567,11 +581,14 @@ function StepView({
             upcoming={upcoming}
             onSwitch={onSwitch}
           >
+            {/* The set's entry is the hero of the screen: on the accent, like the day's and the plan's. */}
+            <OnAccent.Provider value>
+              <View style={[styles.entryPanel, { backgroundColor: t.primary, experimental_backgroundImage: accentGradient(t), shadowColor: t.primary }]}>
             <View style={styles.entryHead}>
-              <Text style={[styles.setLabel, { color: t.text }]}>
+              <Text style={[styles.setLabel, { color: on }]}>
                 {isStrength ? `Set ${set.setNumber} of ${exercise.sets.length}` : exercise.categoryKind === 'cardio' ? 'Log your session' : 'Log your practice'}
               </Text>
-              {set.completed && <Pill icon={sym('checkmark.circle.fill', 'check_circle')} fallback="✓" text="Done" color={t.success} />}
+              {set.completed && <Pill icon={sym('checkmark.circle.fill', 'check_circle')} fallback="✓" text="Done" color={on} />}
               <View style={{ flex: 1 }} />
               {isStrength && <SetDots sets={exercise.sets} current={setIndex} />}
               <Pressable
@@ -581,13 +598,13 @@ function StepView({
                 hitSlop={10}
                 style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
               >
-                <Icon name={sym('slider.horizontal.3', 'tune')} size={16} color={t.muted} fallback="⋯" />
+                <Icon name={sym('slider.horizontal.3', 'tune')} size={16} color={tint(on, 0.8)} fallback="⋯" />
               </Pressable>
             </View>
             {last && last.sets.length > 0 && (
               <View style={styles.lastRow}>
-                <Icon name={sym('clock.arrow.circlepath', 'history')} size={11} color={t.muted} fallback="↺" />
-                <Text style={{ color: t.muted, fontSize: 12, fontWeight: '600', flexShrink: 1 }} numberOfLines={1}>
+                <Icon name={sym('clock.arrow.circlepath', 'history')} size={11} color={tint(on, 0.8)} fallback="↺" />
+                <Text style={{ color: tint(on, 0.8), fontSize: 12, fontWeight: '600', flexShrink: 1 }} numberOfLines={1}>
                   Last time: {formatSets(last.sets, fields, units)}
                 </Text>
               </View>
@@ -599,19 +616,22 @@ function StepView({
                 disabled={!onPrevious}
                 onPress={() => onPrevious?.()}
               >
-                <Icon name={sym('chevron.left', 'chevron_left')} size={18} color={t.text} fallback="‹" />
+                <Icon name={sym('chevron.left', 'chevron_left')} size={18} color={on} fallback="‹" />
               </RoundAction>
               <CTA
                 title={set.completed ? 'Save' : 'Done'}
                 label={`${set.completed ? 'Save' : 'Done with'} ${subject}`}
                 icon={sym('checkmark', 'check')}
+                variant="light"
                 onPress={done}
                 style={{ flex: 1 }}
               />
               <RoundAction label={`Skip ${subject}`} onPress={onSkip}>
-                <Text style={{ color: t.text, fontWeight: '700', fontSize: 14 }}>Skip</Text>
+                <Text style={{ color: on, fontWeight: '700', fontSize: 14 }}>Skip</Text>
               </RoundAction>
             </View>
+              </View>
+            </OnAccent.Provider>
           </Hero>
 
         </>
@@ -713,7 +733,7 @@ function Thumb({ exercise, size }: { exercise: Pick<WorkoutExercise, 'exerciseNa
 function RoundAction({
   label, onPress, disabled, children,
 }: { label: string; onPress: () => void; disabled?: boolean; children: ReactNode }) {
-  const t = useTheme();
+  const ink = useInk();
   return (
     <Pressable
       accessibilityRole="button"
@@ -723,7 +743,7 @@ function RoundAction({
       onPress={onPress}
       style={({ pressed }) => [
         styles.roundAction,
-        { backgroundColor: tint(t.card, 0.55), borderColor: tint(t.text, 0.06), opacity: disabled ? 0.35 : 1, transform: [{ scale: pressed ? 0.94 : 1 }] },
+        { backgroundColor: ink.glass, borderColor: ink.edge, opacity: disabled ? 0.35 : 1, transform: [{ scale: pressed ? 0.94 : 1 }] },
       ]}
     >
       {children}
@@ -734,6 +754,7 @@ function RoundAction({
 /** A dot per set: done sets fill green, the current one stretches into a bar. */
 function SetDots({ sets, current }: { sets: WorkoutSet[]; current: number }) {
   const t = useTheme();
+  const ink = useInk();
   return (
     <View style={styles.dots} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
       {sets.map((s, i) => (
@@ -742,7 +763,7 @@ function SetDots({ sets, current }: { sets: WorkoutSet[]; current: number }) {
           style={[
             styles.dot,
             i === current && styles.dotOn,
-            { backgroundColor: i === current ? t.primary : s.completed ? t.success : tint(t.text, 0.15) },
+            { backgroundColor: i === current ? ink.icon : s.completed ? t.success : ink.faint },
           ]}
         />
       ))}
@@ -752,11 +773,11 @@ function SetDots({ sets, current }: { sets: WorkoutSet[]; current: number }) {
 
 /** A see-through panel inside the exercise card, so the card's color shows through. */
 function Tile({ label, unit, children }: { label: string; unit?: ReactNode; children: ReactNode }) {
-  const t = useTheme();
+  const ink = useInk();
   return (
-    <View style={[styles.tile, { backgroundColor: tint(t.card, 0.55), borderColor: tint(t.text, 0.06) }]}>
+    <View style={[styles.tile, { backgroundColor: ink.glass, borderColor: ink.edge }]}>
       <View style={styles.tileHead}>
-        <Text style={[styles.fieldLabel, { color: t.muted }]}>{label}</Text>
+        <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.fieldLabel, styles.tileLabel, { color: ink.muted }]}>{label}</Text>
         {unit}
       </View>
       {children}
@@ -773,7 +794,7 @@ function NumberTile({
   /** Smaller numbers, for three tiles in a row. */
   compact?: boolean;
 }) {
-  const t = useTheme();
+  const ink = useInk();
   const button = (a11y: string, icon: SymbolName, fallback: string, dir: 1 | -1) => (
     <Pressable
       accessibilityRole="button"
@@ -782,10 +803,10 @@ function NumberTile({
       hitSlop={4}
       style={({ pressed }) => [
         styles.tileButton,
-        { backgroundColor: tint(t.primary, pressed ? 0.24 : 0.12), transform: [{ scale: pressed ? 0.94 : 1 }] },
+        { backgroundColor: pressed ? ink.pressed : ink.button, transform: [{ scale: pressed ? 0.94 : 1 }] },
       ]}
     >
-      <Icon name={icon} size={16} color={t.primary} fallback={fallback} />
+      <Icon name={icon} size={16} color={ink.icon} fallback={fallback} />
     </Pressable>
   );
   return (
@@ -797,8 +818,8 @@ function NumberTile({
         keyboardType={integer ? 'number-pad' : 'decimal-pad'}
         selectTextOnFocus
         placeholder="–"
-        placeholderTextColor={tint(t.muted, 0.5)}
-        style={[styles.tileInput, compact && styles.tileInputSmall, { color: t.text }]}
+        placeholderTextColor={ink.faint}
+        style={[styles.tileInput, compact && styles.tileInputSmall, { color: ink.text }]}
       />
       <View style={styles.tileButtons}>
         {button(less, sym('minus', 'remove'), '−', -1)}
@@ -811,7 +832,11 @@ function NumberTile({
 /** The main action: a tall, raised pill. */
 function CTA({
   title, label, icon, onPress, variant = 'primary', style,
-}: { title: string; label?: string; icon?: SymbolName; onPress: () => void; variant?: 'primary' | 'secondary'; style?: ViewStyle }) {
+}: {
+  title: string; label?: string; icon?: SymbolName; onPress: () => void;
+  /** `light` is the bright pill for on top of the accent, like Start workout on the day. */
+  variant?: 'primary' | 'secondary' | 'light'; style?: ViewStyle;
+}) {
   const t = useTheme();
   const primary = variant === 'primary';
   const color = primary ? t.onPrimary : t.primary;
@@ -824,7 +849,9 @@ function CTA({
         styles.cta,
         primary
           ? [styles.ctaRaised, { backgroundColor: t.primary, experimental_backgroundImage: accentGradient(t), shadowColor: t.primary }]
-          : { backgroundColor: tint(t.primary, 0.12) },
+          : variant === 'light'
+            ? [styles.ctaRaised, { backgroundColor: t.onPrimary, shadowColor: '#000000', shadowOpacity: 0.18 }]
+            : { backgroundColor: tint(t.primary, 0.12) },
         { transform: [{ scale: pressed ? 0.97 : 1 }] },
         style,
       ]}
@@ -836,9 +863,9 @@ function CTA({
 }
 
 function Pill({ icon, fallback, text, color }: { icon: SymbolName; fallback: string; text: string; color: string }) {
-  const t = useTheme();
+  const ink = useInk();
   return (
-    <View style={[styles.pill, { backgroundColor: t.surface }]}>
+    <View style={[styles.pill, { backgroundColor: ink.glass }]}>
       <Icon name={icon} size={12} color={color} fallback={fallback} />
       <Text style={{ color, fontSize: 13, fontWeight: '600', flexShrink: 1 }}>{text}</Text>
     </View>
@@ -883,6 +910,8 @@ function FinishView({
   const glass = { bg: tint(t.card, 0.55), border: tint(t.text, 0.06) };
   const done = steps.filter((s) => s.set.completed).length;
   const open = steps.length - done;
+  const on = t.onPrimary;
+  const heroBase = open ? t.primary : t.success;
   // Volume is weight × reps, so it's only shown when something was lifted for reps.
   const lifts = exercises.some((e) => e.categoryKind === 'strength' && e.fields.includes('reps') && e.fields.some((f) => FIELDS[f].input === 'weight'));
   const stats = [
@@ -892,27 +921,35 @@ function FinishView({
   ];
   return (
     <Animated.View entering={FadeInDown.duration(300)} style={styles.fill}>
-      <ScrollView style={styles.fill} contentContainerStyle={{ gap: 16, paddingBottom: 4 }} keyboardShouldPersistTaps="handled">
-        <View style={styles.empty}>
-          <Badge
-            icon={open ? sym('flag.checkered', 'sports_score') : sym('trophy.fill', 'emoji_events')}
-            fallback={open ? '⚑' : '🏆'}
-            color={open ? t.warn : t.success}
-          />
-          <Text style={[styles.title, { color: t.text, textAlign: 'center' }]}>
-            {open ? `${open} ${open === 1 ? 'set' : 'sets'} not done` : 'Workout complete'}
-          </Text>
-          <Text style={{ color: t.muted, textAlign: 'center' }}>
-            {open ? 'Go back for them now, or finish and log them later.' : 'Every set logged. Nice work.'}
-          </Text>
-        </View>
-        <View style={styles.stats}>
-          {stats.map((s) => (
-            <View key={s.label} accessible accessibilityLabel={`${s.label}: ${s.value}`} style={[styles.stat, { backgroundColor: glass.bg, borderColor: glass.border }]}>
-              <Text style={[styles.statValue, { color: t.text }]} numberOfLines={1} adjustsFontSizeToFit>{s.value}</Text>
-              <Text style={[styles.statLabel, { color: t.muted }]}>{s.label}</Text>
-            </View>
-          ))}
+      <ScrollView style={styles.fill} contentContainerStyle={{ gap: 16, paddingTop: 6, paddingBottom: 4 }} keyboardShouldPersistTaps="handled">
+        {/* The result, as a hero like the day's: the success color when everything's done, the accent otherwise. */}
+        <View
+          style={[
+            styles.finishHero,
+            { backgroundColor: heroBase, experimental_backgroundImage: `linear-gradient(135deg, ${heroBase} 0%, ${mix(heroBase, '#000000', 0.25)} 100%)`, shadowColor: heroBase },
+          ]}
+        >
+          <View style={styles.empty}>
+            <Badge
+              icon={open ? sym('flag.checkered', 'sports_score') : sym('trophy.fill', 'emoji_events')}
+              fallback={open ? '⚑' : '🏆'}
+              color={on}
+            />
+            <Text style={[styles.title, { color: on, textAlign: 'center' }]}>
+              {open ? `${open} ${open === 1 ? 'set' : 'sets'} not done` : 'Workout complete'}
+            </Text>
+            <Text style={{ color: tint(on, 0.85), textAlign: 'center' }}>
+              {open ? 'Go back for them now, or finish and log them later.' : 'Every set logged. Nice work.'}
+            </Text>
+          </View>
+          <View style={styles.stats}>
+            {stats.map((s) => (
+              <View key={s.label} accessible accessibilityLabel={`${s.label}: ${s.value}`} style={[styles.stat, { backgroundColor: tint(on, 0.16), borderColor: tint(on, 0.2) }]}>
+                <Text style={[styles.statValue, { color: on }]} numberOfLines={1} adjustsFontSizeToFit>{s.value}</Text>
+                <Text style={[styles.statLabel, { color: tint(on, 0.8) }]} numberOfLines={1} adjustsFontSizeToFit>{s.label}</Text>
+              </View>
+            ))}
+          </View>
         </View>
         <View style={[styles.card, { backgroundColor: glass.bg, borderColor: glass.border, paddingVertical: 6 }]}>
           {exercises.map((e, i) => {
@@ -988,6 +1025,10 @@ const styles = StyleSheet.create({
   eyebrow: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1.2 },
   title: { fontSize: 30, fontWeight: '900', fontStyle: 'italic', letterSpacing: -1 },
   card: { borderRadius: 24, borderWidth: StyleSheet.hairlineWidth, padding: 14 },
+  entryPanel: {
+    borderRadius: 28, padding: 14, gap: 10, marginHorizontal: -4,
+    shadowOpacity: 0.3, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 6,
+  },
   entryHead: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 },
   setLabel: { fontSize: 18, fontWeight: '900', letterSpacing: -0.3 },
   dots: { flexDirection: 'row', alignItems: 'center', gap: 5 },
@@ -1003,6 +1044,8 @@ const styles = StyleSheet.create({
   lastRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: -4, paddingHorizontal: 4 },
   tiles: { flexDirection: 'row', gap: 8 },
   tile: { flex: 1, minWidth: 0, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, padding: 10, gap: 4 },
+  // Shrinks to make room for a unit pill beside it in a narrow tile.
+  tileLabel: { flexShrink: 1 },
   tileHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 20 },
   tileInput: {
     textAlign: 'center', fontSize: 38, fontWeight: '900', letterSpacing: -1.5, fontVariant: ['tabular-nums'], paddingVertical: 0, minHeight: 44,
@@ -1020,6 +1063,10 @@ const styles = StyleSheet.create({
   thumbSmall: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   badgeOuter: { alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
   badgeInner: { alignItems: 'center', justifyContent: 'center' },
+  finishHero: {
+    borderRadius: 28, padding: 16, gap: 6,
+    shadowOpacity: 0.3, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 6,
+  },
   stats: { flexDirection: 'row', gap: 10 },
   stat: { flex: 1, borderRadius: 20, borderWidth: StyleSheet.hairlineWidth, paddingVertical: 14, paddingHorizontal: 10, alignItems: 'center', gap: 2 },
   statValue: { fontSize: 28, fontWeight: '900', fontStyle: 'italic', letterSpacing: -0.5, fontVariant: ['tabular-nums'] },
