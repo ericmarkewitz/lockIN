@@ -4,6 +4,7 @@ import { createGestureController, getByGestureTestId } from 'react-native-gestur
 import { addExercise, listCategoriesWithExercises } from '@/data/exercises';
 import { getPlan, isPlanComplete, setPlanDay } from '@/data/plan';
 import { setDistanceUnit } from '@/data/settings';
+import { todayKey, weekdayOf } from '@/lib/dates';
 import { findByName } from '@/test/helpers';
 import { renderWithDb } from '@/test/render';
 import { createTestDb } from '@/test/testDb';
@@ -443,5 +444,21 @@ describe('PlanEditor', () => {
     for (const field of ['minutes', 'distance', 'distance unit', 'steps']) expect(within(walk).getByLabelText(`1 Walking ${field}`)).toBeTruthy();
   });
 
+
+  it("marks today's day, and sums up the mix of training in the week", async () => {
+    const db = await createTestDb();
+    await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: await findByName(db, 'Squat'), targetSets: 3, targetReps: 5 }] });
+    await setPlanDay(db, 3, { isRest: false, items: [{ exerciseId: await findByName(db, 'Bench Press'), targetSets: 3, targetReps: 5 }] });
+    await setPlanDay(db, 5, { isRest: false, items: [{ exerciseId: await findByName(db, 'Running') }] });
+    await renderWithDb(<PlanEditor onSaved={jest.fn()} />, db);
+    const today = weekdayOf(todayKey());
+    expect(within(await screen.findByTestId(`plan-day-${today}`)).getByText('Today')).toBeTruthy();
+    for (const w of [0, 1, 2, 3, 4, 5, 6].filter((d) => d !== today)) {
+      expect(within(screen.getByTestId(`plan-day-${w}`)).queryByText('Today')).toBeNull();
+    }
+    expect(screen.getByText('Lifts × 2', { includeHiddenElements: true })).toBeTruthy();
+    expect(screen.getByText('Cardio × 1', { includeHiddenElements: true })).toBeTruthy();
+    expect(screen.queryByText(/Mind & Body ×/, { includeHiddenElements: true })).toBeNull();
+  });
 });
 

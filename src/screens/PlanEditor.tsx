@@ -3,11 +3,12 @@ import { Animated, Pressable, StyleSheet, Text, TextInput, View } from 'react-na
 import { ScrollView, type NativeGesture } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AddButton, Button, Eyebrow, Toggle, useRaised } from '@/components/ui';
-import { KindIcon } from '@/components/calendar/KindIcon';
+import { AddButton, Button, Toggle, useRaised } from '@/components/ui';
 import { Icon, sym } from '@/components/Icon';
 import { ExerciseMotionFor } from '@/components/motion/ExerciseMotion';
 import { DragHandle } from '@/components/DragHandle';
+import { DayBadge } from '@/components/plan/DayBadge';
+import { WeekHero } from '@/components/plan/WeekHero';
 import { ExercisePicker } from '@/components/ExercisePicker';
 import { RecordSheet } from '@/components/RecordSheet';
 import { UnitPill } from '@/components/UnitPill';
@@ -23,11 +24,11 @@ import type { CategoryKind, Exercise } from '@/data/types';
 import { refreshUntouchedWorkouts } from '@/data/workouts';
 import { useDb } from '@/db/DbContext';
 import { DAY_NAMES } from '@/lib/calendar';
-import { todayKey } from '@/lib/dates';
+import { todayKey, weekdayOf } from '@/lib/dates';
 import { parseNumber } from '@/lib/numbers';
 import { clampDragOffset, dropIndex, moveItem } from '@/lib/reorder';
 import { MAX_REPS, MAX_SETS, wheelOptions } from '@/lib/wheel';
-import { accentGradient, tint, useTheme } from '@/theme';
+import { tint, useTheme } from '@/theme';
 
 type Draft = {
   key: string; exerciseId: number; name: string; kind: CategoryKind; isCustom: boolean;
@@ -280,23 +281,41 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
   return (
     <KeyboardAvoider>
       <ScrollView testID="plan-scroll" {...keyboardScrollProps} onGestureUpdate_CAN_CAUSE_INFINITE_RERENDER={setScrollGesture} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.wrap} style={{ backgroundColor: t.bg }}>
-        <WeekOverview days={days} />
+        <WeekHero
+          today={weekdayOf(todayKey())}
+          days={days.map((d) => ({ weekday: d.weekday, isRest: d.isRest, kinds: [...new Set(d.items.map((i) => i.kind))] }))}
+        />
         {days.map((d) => (
           <View
             key={d.weekday}
             testID={`plan-day-${d.weekday}`}
             style={[
               styles.day,
-              d.isRest ? { backgroundColor: tint(t.rest, 0.07), borderColor: tint(t.rest, 0.3) } : [{ backgroundColor: t.card, borderColor: t.border }, raised],
+              d.isRest ? { backgroundColor: tint(t.rest, 0.08), borderColor: tint(t.rest, 0.25) } : [{ backgroundColor: t.card, borderColor: t.border }, raised],
             ]}
           >
-            <View style={styles.dayHead}>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.dayName, { color: t.text }]}>{DAY_NAMES[d.weekday]}</Text>
-                <View style={styles.summaryRow}>
-                  {d.isRest && <Icon name={sym('moon.zzz.fill', 'bedtime')} size={12} color={t.rest} fallback="☾" />}
-                  <Text style={[styles.summary, { color: d.isRest ? t.rest : t.muted }]}>{summarize(d)}</Text>
+            {/* A big faded moon fills the corner of a rest day. */}
+            {d.isRest && (
+              <View pointerEvents="none" style={styles.restLayer}>
+                <View style={styles.restMoon}>
+                  <Icon name={sym('moon.stars.fill', 'nights_stay')} size={96} color={tint(t.rest, 0.14)} fallback="" />
                 </View>
+              </View>
+            )}
+            <View style={styles.dayHead}>
+              <DayBadge weekday={d.weekday} state={d.isRest ? 'rest' : d.items.length ? 'training' : 'empty'} />
+              <View style={{ flex: 1, gap: 2 }}>
+                <View style={styles.nameRow}>
+                  <Text style={[styles.dayName, { color: t.text }]}>{DAY_NAMES[d.weekday]}</Text>
+                  {d.weekday === weekdayOf(todayKey()) && (
+                    <View style={[styles.todayTag, { backgroundColor: tint(t.primary, 0.14) }]}>
+                      <Text style={[styles.todayText, { color: t.primary }]}>Today</Text>
+                    </View>
+                  )}
+                </View>
+                <Text style={[styles.summary, { color: d.isRest ? t.rest : t.muted }]}>
+                  {summarize(d)}
+                </Text>
               </View>
               <Text style={[styles.restLabel, { color: t.muted }]}>Rest</Text>
               <Toggle
@@ -330,7 +349,7 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
                       onMoveUp={() => reorder(d.weekday, idx, idx - 1)}
                       onMoveDown={() => reorder(d.weekday, idx, idx + 1)}
                     />
-                    <View style={[styles.thumb, { backgroundColor: t.card }]}>
+                    <View style={[styles.thumb, { backgroundColor: tint(t.primary, 0.1) }]}>
                       {it.isCustom
                         ? <Text style={[styles.thumbInitial, { color: t.primary }]}>{it.name.trim().charAt(0).toUpperCase()}</Text>
                         : <ExerciseMotionFor name={it.name} isCustom={it.isCustom} size={38} />}
@@ -417,54 +436,6 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
   );
 }
 
-/** The week at a glance: one tile per day, lit for training, tinted for rest. */
-function WeekOverview({ days }: { days: DayDraft[] }) {
-  const t = useTheme();
-  const raised = useRaised();
-  const training = days.filter((d) => !d.isRest && d.items.length > 0).length;
-  const rest = days.filter((d) => d.isRest).length;
-  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
-  return (
-    <View
-      accessible
-      accessibilityLabel={`Week: ${plural(training, 'training day')}, ${plural(rest, 'rest day')}`}
-      style={[styles.overview, { backgroundColor: t.card, borderColor: t.border }, raised]}
-    >
-      <View style={styles.overviewTop}>
-        <Text style={[styles.overviewBig, { color: t.text }]}>{training}</Text>
-        <View style={{ flex: 1 }}>
-          <Eyebrow>Training days</Eyebrow>
-          <Text style={{ color: t.muted, fontSize: 13 }}>{plural(rest, 'rest day')}</Text>
-        </View>
-      </View>
-      <View style={styles.tiles}>
-        {days.map((d) => {
-          const lit = !d.isRest && d.items.length > 0;
-          const kind = lit ? d.items[0].kind : null;
-          return (
-            <View
-              key={d.weekday}
-              style={[
-                styles.tile,
-                lit
-                  ? { backgroundColor: t.primary, experimental_backgroundImage: accentGradient(t) }
-                  : { backgroundColor: d.isRest ? tint(t.rest, 0.14) : t.surface },
-              ]}
-            >
-              <Text style={[styles.tileDay, { color: lit ? tint(t.onPrimary, 0.85) : d.isRest ? t.rest : t.muted }]}>
-                {DAY_NAMES[d.weekday].charAt(0)}
-              </Text>
-              {kind ? <KindIcon kind={kind} size={14} color={t.onPrimary} />
-                : d.isRest ? <KindIcon kind="rest" size={14} color={t.rest} />
-                : <Text style={{ color: t.muted, fontWeight: '800' }}>–</Text>}
-            </View>
-          );
-        })}
-      </View>
-    </View>
-  );
-}
-
 /** Sets alone, for a lift that has no reps (a hold, a carry). */
 function SetsField({
   label, title, sets, onChange,
@@ -527,19 +498,18 @@ const styles = StyleSheet.create({
   rowActions: { alignItems: 'center', gap: 4 },
   rowAction: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
   wrap: { padding: 16, gap: 12 },
-  overview: { borderRadius: 24, borderWidth: StyleSheet.hairlineWidth, padding: 16, gap: 14 },
-  overviewTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  overviewBig: { fontSize: 44, fontWeight: '900', fontStyle: 'italic', letterSpacing: -1.5, lineHeight: 48, fontVariant: ['tabular-nums'] },
-  tiles: { flexDirection: 'row', gap: 6 },
-  tile: { flex: 1, aspectRatio: 0.8, borderRadius: 14, alignItems: 'center', justifyContent: 'center', gap: 4 },
-  tileDay: { fontSize: 12, fontWeight: '900', letterSpacing: 0.5 },
   footer: { flexDirection: 'row', gap: 12, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12, borderTopWidth: StyleSheet.hairlineWidth },
   action: { flex: 1, paddingVertical: 15 },
   save: { flex: 2 },
   day: { borderRadius: 24, borderWidth: StyleSheet.hairlineWidth, padding: 14, gap: ROW_GAP },
-  dayHead: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 2 },
+  dayHead: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 2 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  todayTag: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999 },
+  todayText: { fontSize: 11, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.8 },
+  // Clips the moon to the card without clipping the card's shadow.
+  restLayer: { ...StyleSheet.absoluteFill, borderRadius: 24, overflow: 'hidden' },
+  restMoon: { position: 'absolute', right: -22, bottom: -30 },
   dayName: { fontSize: 20, fontWeight: '900', fontStyle: 'italic', letterSpacing: -0.5 },
-  summaryRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   summary: { fontSize: 13, fontWeight: '600' },
   restLabel: { fontSize: 13, fontWeight: '600' },
   dragging: { zIndex: 10, elevation: 6, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
