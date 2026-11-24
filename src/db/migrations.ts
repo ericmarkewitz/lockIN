@@ -301,12 +301,16 @@ const MIGRATIONS: ((db: Db) => Promise<void>)[] = [
     `);
   },
   // Exercises can record more than weight × reps or time and distance: steps, elevation, a count
-  // of runs or routes, a score or a 1–10 difficulty. `fields` lists what an exercise records
-  // (src/data/fields.ts); null keeps its category's default, so nothing changes for existing
-  // exercises. syncCatalog fills it in for the built-ins.
+  // of runs or routes, a score or a 1–10 difficulty. Each `fields` column lists what is recorded
+  // (src/data/fields.ts), and null defers to the next one: a workout's or plan item's own, then
+  // the exercise's default the user chose, then `builtin_fields` (the catalog's, filled in by
+  // syncCatalog), then the category's. Nothing changes for what's already there.
   async (db) => {
     await db.execAsync(`
       ALTER TABLE exercises ADD COLUMN fields TEXT;
+      ALTER TABLE exercises ADD COLUMN builtin_fields TEXT;
+      ALTER TABLE plan_items ADD COLUMN fields TEXT;
+      ALTER TABLE workout_exercises ADD COLUMN fields TEXT;
       ALTER TABLE sets ADD COLUMN count INTEGER;
       ALTER TABLE sets ADD COLUMN elevation REAL;
       ALTER TABLE sets ADD COLUMN score INTEGER;

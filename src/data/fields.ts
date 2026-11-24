@@ -93,6 +93,18 @@ export function parseFields(stored: string | null, kind: CategoryKind): FieldId[
 
 export const serializeFields = (fields: readonly FieldId[]) => fields.join(',');
 
+/**
+ * What something records, from the most specific stored list to the least (a workout's own, then
+ * the exercise's default, then the catalog's), else the category's default.
+ */
+export function resolveFields(kind: CategoryKind, ...stored: (string | null | undefined)[]): FieldId[] {
+  for (const s of stored) {
+    const known = (s ?? '').split(',').filter(isFieldId);
+    if (known.length) return known;
+  }
+  return [...DEFAULT_FIELDS[kind]];
+}
+
 /** Turns `id` on or off. Turning one on replaces any that shares its place; the last one stays on. */
 export function toggleField(fields: readonly FieldId[], id: FieldId, kind: CategoryKind): FieldId[] {
   if (fields.includes(id)) return fields.length > 1 ? fields.filter((f) => f !== id) : [...fields];

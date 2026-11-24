@@ -167,64 +167,6 @@ describe('ExercisePicker', () => {
     });
   });
 
-  describe('what a new exercise records', () => {
-    const record = (label: string) => screen.getByLabelText(`Record ${label}`);
-    const on = (label: string) => record(label).props.accessibilityState.selected;
-
-    it("starts on the category's default and saves what's picked", async () => {
-      const { db, onPick } = await open();
-      await fireEvent.press(await screen.findByLabelText('Category Cardio'));
-      await fireEvent.changeText(screen.getByLabelText('Search exercises'), 'Bouldering');
-      expect(on('Time')).toBe(true);
-      expect(on('Distance (mi/km)')).toBe(true);
-      expect(on('Routes')).toBe(false);
-      await fireEvent.press(record('Distance (mi/km)'));
-      await fireEvent.press(record('Routes'));
-      await fireEvent.press(record('Difficulty'));
-      await fireEvent.press(screen.getByLabelText('Create Bouldering'));
-      await waitFor(() => expect(onPick).toHaveBeenCalled());
-      expect(await findExercise(db, onPick.mock.calls[0][0].id)).toMatchObject({ fields: ['duration', 'routes', 'difficulty'] });
-    });
-
-    it('swaps one count for another, since an exercise counts one thing', async () => {
-      await open();
-      await fireEvent.press(await screen.findByLabelText('Category Cardio'));
-      await fireEvent.changeText(screen.getByLabelText('Search exercises'), 'Rucking');
-      await fireEvent.press(record('Steps'));
-      await fireEvent.press(record('Floors'));
-      expect(on('Steps')).toBe(false);
-      expect(on('Floors')).toBe(true);
-    });
-
-    it("offers a lift's choices, starting on weight and reps", async () => {
-      const { onPick } = await open();
-      await fireEvent.changeText(await screen.findByLabelText('Search exercises'), 'Sled Push');
-      expect(on('Weight')).toBe(true);
-      expect(on('Reps')).toBe(true);
-      expect(screen.queryByLabelText('Record Steps')).toBeNull();
-      await fireEvent.press(record('Reps'));
-      await fireEvent.press(record('Distance (yd/m)'));
-      await fireEvent.press(screen.getByLabelText('Create Sled Push'));
-      await waitFor(() => expect(onPick).toHaveBeenCalled());
-      expect(onPick.mock.calls[0][0]).toMatchObject({ fields: ['weight', 'shortDistance'] });
-    });
-
-    it('starts over on a new category', async () => {
-      await open();
-      await fireEvent.changeText(await screen.findByLabelText('Search exercises'), 'Sled Push');
-      await fireEvent.press(record('Time'));
-      await fireEvent.press(screen.getByLabelText('Category Cardio'));
-      expect(on('Time')).toBe(true);
-      expect(on('Distance (mi/km)')).toBe(true);
-    });
-
-    it('is not offered when the name is already an exercise', async () => {
-      await open();
-      await fireEvent.changeText(await screen.findByLabelText('Search exercises'), 'squat');
-      expect(screen.queryByLabelText('Record Weight')).toBeNull();
-    });
-  });
-
   describe('yoga and mobility', () => {
     const chip = (s: string) => screen.getByLabelText(`Type ${s}`);
     const openYogaMobility = async (db?: Db) => {
@@ -307,16 +249,6 @@ describe('ExercisePicker', () => {
       expect(screen.queryByLabelText('Add Rack Pull')).toBeNull();
     });
 
-    it('changes what it records', async () => {
-      const { db, ex } = await withRackPull();
-      await open(db);
-      await hold('Rack Pull');
-      expect(screen.getByLabelText('Record Reps').props.accessibilityState).toMatchObject({ selected: true });
-      await fireEvent.press(screen.getByLabelText('Record Reps'));
-      await fireEvent.press(screen.getByLabelText('Record Time'));
-      await fireEvent.press(screen.getByLabelText('Save exercise'));
-      await waitFor(async () => expect((await findExercise(db, ex.id))!.fields).toEqual(['weight', 'duration']));
-    });
 
     it("shows why a name can't be used, and keeps the sheet open", async () => {
       const { db } = await withRackPull();

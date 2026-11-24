@@ -1,6 +1,6 @@
 import type { Db } from '@/db/types';
 import { parseDateKey } from '@/lib/dates';
-import { FIELDS, fieldFor, parseFields } from './fields';
+import { FIELDS, fieldFor, resolveFields } from './fields';
 import { LOGGED_SET } from './logged';
 import { getUnits } from './settings';
 import { roundMinutes } from '@/lib/duration';
@@ -51,12 +51,12 @@ type Row = {
   date: string; category: string; subcategory: string | null; exercise: string; set_number: number; reps: number | null;
   weight: number | null; duration_min: number | null; distance: number | null; completed: number; notes: string | null;
   elevation: number | null; count: number | null; score: number | null; difficulty: number | null;
-  fields: string | null; kind: CategoryKind;
+  fields: string | null; exercise_fields: string | null; builtin_fields: string | null; kind: CategoryKind;
 };
 
-/** What a set's count is of ("steps"), from what its exercise records; blank with no count. */
+/** What a set's count is of ("steps"), from what its day recorded; blank with no count. */
 function countedBy(r: Row): string | null {
-  const field = r.count === null ? null : fieldFor(parseFields(r.fields, r.kind), 'count');
+  const field = r.count === null ? null : fieldFor(resolveFields(r.kind, r.fields, r.exercise_fields, r.builtin_fields), 'count');
   return field ? FIELDS[field].noun ?? null : null;
 }
 
@@ -83,7 +83,7 @@ export async function buildExport(
   const data = await db.getAllAsync<Row>(
     `SELECT w.date, c.name AS category, e.subcategory, e.name AS exercise, s.set_number, s.reps, s.weight,
             s.duration_min, s.distance, s.elevation, s.count, s.score, s.difficulty, s.completed, w.notes,
-            e.fields, c.kind
+            we.fields, e.fields AS exercise_fields, e.builtin_fields, c.kind
      FROM sets s
      JOIN workout_exercises we ON we.id = s.workout_exercise_id
      JOIN workouts w ON w.id = we.workout_id

@@ -2,6 +2,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { ChangeRecords } from '@/components/ChangeRecords';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { DragHandle } from '@/components/DragHandle';
 import { ExercisePicker } from '@/components/ExercisePicker';
@@ -47,6 +48,8 @@ export function WorkoutView({ date, onDragChange }: Props) {
     focusedBefore.current = true;
   }, [reload]));
   const [picking, setPicking] = useState(false);
+  /** The exercise whose fields are being changed for this day. */
+  const [changing, setChanging] = useState<WorkoutExercise | null>(null);
   const [removal, setRemoval] = useState<{ title: string; message: string; remove: () => Promise<void> } | null>(null);
   /** A new order shown straight away, while it is saved. */
   const [pendingOrder, setPendingOrder] = useState<number[] | null>(null);
@@ -225,6 +228,15 @@ export function WorkoutView({ date, onDragChange }: Props) {
                   )}
                   <Pressable
                     accessibilityRole="button"
+                    accessibilityLabel={`Change what ${ex.exerciseName} records`}
+                    onPress={() => setChanging(ex)}
+                    hitSlop={8}
+                    style={({ pressed }) => [styles.trash, { opacity: pressed ? 0.5 : 1 }]}
+                  >
+                    <Icon name={sym('slider.horizontal.3', 'tune')} size={16} color={t.muted} fallback="⋯" />
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
                     accessibilityLabel={`Remove ${ex.exerciseName}`}
                     onPress={() => confirmRemoveExercise(ex)}
                     hitSlop={8}
@@ -285,6 +297,7 @@ export function WorkoutView({ date, onDragChange }: Props) {
           </View>
         </>
       )}
+      {changing && <ChangeRecords exercise={changing} onDone={() => { setChanging(null); reload(); }} />}
       <ExercisePicker visible={picking} onClose={() => setPicking(false)} onPick={addEx} onEdited={reload} onRemoved={reload} />
       {removal && (
         <ConfirmDialog

@@ -3,7 +3,7 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react-
 
 import { setDistanceUnit, setWeightUnit } from '@/data/settings';
 import { setPlanDay } from '@/data/plan';
-import { addExercise, listCategoriesWithExercises } from '@/data/exercises';
+import { addExercise, findExercise, listCategoriesWithExercises } from '@/data/exercises';
 import { addExerciseToWorkout, getWorkout, setRestDay, updateSet, ensureWorkout } from '@/data/workouts';
 import { findByName } from '@/test/helpers';
 import { renderWithDb } from '@/test/render';
@@ -544,6 +544,58 @@ describe('WorkoutView', () => {
       const plank = (await getWorkout(db, MON))!.exercises.find((e) => e.exerciseName === 'Weighted Plank')!;
       expect(plank).toMatchObject({ targetSets: 3, targetReps: null });
       expect(plank.sets).toHaveLength(3);
+    });
+  });
+
+  describe('changing what an exercise records', () => {
+    async function walkDay() {
+      const db = await createTestDb();
+      const walk = await findByName(db, 'Walking');
+      await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: walk }] });
+      await renderWithDb(<WorkoutView date={MON} />, db);
+      await fireEvent.press(await screen.findByLabelText('Change what Walking records'));
+      await fireEvent.press(screen.getByLabelText('Record Distance (mi/km)'));
+      await fireEvent.press(screen.getByLabelText('Save Walking'));
+      return { db, walk };
+    }
+
+    it('changes it for the day, and can leave the default alone', async () => {
+      const { db, walk } = await walkDay();
+      expect(await screen.findByText('Make this the default for Walking?')).toBeTruthy();
+      await fireEvent.press(screen.getByText('Just this workout'));
+      await waitFor(() => expect(screen.queryByLabelText('Walking distance')).toBeNull());
+      expect(screen.getByLabelText('Walking steps')).toBeTruthy();
+      expect((await getWorkout(db, MON))!.exercises[0].fields).toEqual(['duration', 'steps']);
+      expect((await findExercise(db, walk))!.fields).toEqual(['duration', 'distance', 'steps']);
+    });
+
+    it('can make it the default for the exercise', async () => {
+      const { db, walk } = await walkDay();
+      await fireEvent.press(await screen.findByText('Make default'));
+      await waitFor(async () => expect((await findExercise(db, walk))!.fields).toEqual(['duration', 'steps']));
+    });
+
+    it("doesn't ask about the default when the day already matches it", async () => {
+      const db = await createTestDb();
+      await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: await findByName(db, 'Walking'), fields: ['duration'] }] });
+      await renderWithDb(<WorkoutView date={MON} />, db);
+      await fireEvent.press(await screen.findByLabelText('Change what Walking records'));
+      await fireEvent.press(screen.getByLabelText('Record Distance (mi/km)'));
+      await fireEvent.press(screen.getByLabelText('Record Steps'));
+      await fireEvent.press(screen.getByLabelText('Save Walking'));
+      expect(await screen.findByLabelText('Walking steps')).toBeTruthy();
+      expect(screen.queryByText(/Make this the default/)).toBeNull();
+    });
+
+    it('changes nothing when cancelled', async () => {
+      const db = await createTestDb();
+      await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: await findByName(db, 'Walking') }] });
+      await renderWithDb(<WorkoutView date={MON} />, db);
+      await fireEvent.press(await screen.findByLabelText('Change what Walking records'));
+      await fireEvent.press(screen.getByLabelText('Record Distance (mi/km)'));
+      await fireEvent.press(screen.getByText('Cancel'));
+      expect(screen.getByLabelText('Walking distance')).toBeTruthy();
+      expect((await getWorkout(db, MON))!.exercises[0].fields).toEqual(['duration', 'distance', 'steps']);
     });
   });
 });

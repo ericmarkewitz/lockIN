@@ -4,12 +4,16 @@ import { useTheme } from '@/theme';
 import { Button } from './ui';
 
 /**
- * Asks before a destructive action. Built on Modal rather than Alert because
- * react-native-web's Alert does nothing, which would leave the action unreachable.
+ * Asks before a destructive action, or (with `tone="primary"`) a choice between two. Built on
+ * Modal rather than Alert because react-native-web's Alert does nothing, which would leave the
+ * action unreachable.
  */
 export function ConfirmDialog({
-  title, message, confirmLabel, onConfirm, onCancel,
-}: { title: string; message: string; confirmLabel: string; onConfirm: () => void; onCancel: () => void }) {
+  title, message, confirmLabel, onConfirm, onCancel, cancelLabel = 'Cancel', tone = 'danger',
+}: {
+  title: string; message: string; confirmLabel: string; onConfirm: () => void; onCancel: () => void;
+  cancelLabel?: string; tone?: 'danger' | 'primary';
+}) {
   const t = useTheme();
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onCancel}>
@@ -19,8 +23,8 @@ export function ConfirmDialog({
           <Text style={[styles.title, { color: t.text }]}>{title}</Text>
           <Text style={{ color: t.muted }}>{message}</Text>
           <View style={styles.actions}>
-            <Button title="Cancel" variant="secondary" onPress={onCancel} style={styles.action} />
-            <Button title={confirmLabel} variant="danger" onPress={onConfirm} style={styles.action} />
+            <Button title={cancelLabel} variant="secondary" onPress={onCancel} style={styles.action} />
+            <Button title={confirmLabel} variant={tone} onPress={onConfirm} style={styles.action} />
           </View>
         </View>
       </View>

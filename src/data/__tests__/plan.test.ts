@@ -1,4 +1,4 @@
-import { addExercise, listCategoriesWithExercises } from '../exercises';
+import { addExercise, listCategoriesWithExercises, setDefaultFields } from '../exercises';
 import { getPlan, isPlanComplete, markPlanComplete, setPlanDay } from '../plan';
 import { findByName } from '@/test/helpers';
 import { createTestDb } from '@/test/testDb';
@@ -86,5 +86,27 @@ describe('plan targets for what an exercise records', () => {
     await setPlanDay(db, 2, { isRest: false, items: [{ exerciseId: walk, targetDurationMin: 30, targetCount: 10000 }] });
     const [item] = (await getPlan(db)).find((d) => d.weekday === 2)!.items;
     expect(item).toMatchObject({ targetDurationMin: 30, targetCount: 10000, fields: ['duration', 'distance', 'steps'] });
+  });
+});
+
+describe('what a plan item records', () => {
+  it('keeps what was picked for it, and otherwise follows the exercise default', async () => {
+    const db = await createTestDb();
+    const walk = await findByName(db, 'Walking');
+    await setPlanDay(db, 2, { isRest: false, items: [{ exerciseId: walk, fields: ['steps', 'duration'] }, { exerciseId: walk }] });
+    const [own, follows] = (await getPlan(db)).find((d) => d.weekday === 2)!.items;
+    expect(own).toMatchObject({ fields: ['duration', 'steps'], ownFields: ['duration', 'steps'] });
+    expect(follows).toMatchObject({ fields: ['duration', 'distance', 'steps'], ownFields: null });
+
+    await setDefaultFields(db, walk, ['duration', 'elevation']);
+    const [stillOwn, followed] = (await getPlan(db)).find((d) => d.weekday === 2)!.items;
+    expect(stillOwn.fields).toEqual(['duration', 'steps']);
+    expect(followed.fields).toEqual(['duration', 'elevation']);
+  });
+
+  it("refuses fields the exercise's category doesn't offer", async () => {
+    const db = await createTestDb();
+    const bench = await findByName(db, 'Bench Press');
+    await expect(setPlanDay(db, 2, { isRest: false, items: [{ exerciseId: bench, fields: ['steps'] }] })).rejects.toThrow('Steps is not available');
   });
 });

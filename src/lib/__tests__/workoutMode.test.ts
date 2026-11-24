@@ -12,7 +12,7 @@ let nextId = 100;
 const ex = (name: string, sets: WorkoutSet[], kind: CategoryKind = 'strength', over: Partial<WorkoutExercise> = {}): WorkoutExercise => ({
   id: nextId++, exerciseId: nextId, exerciseName: name, categoryName: 'Lifts', categoryKind: kind, subcategory: null,
   position: 0, targetSets: sets.length, targetReps: 10, targetDurationMin: null, targetDistance: null, targetCount: null,
-  fields: [...DEFAULT_FIELDS[kind]], hasLoggedSets: false, isCustom: false, sets, ...over,
+  fields: [...DEFAULT_FIELDS[kind]], defaultFields: [...DEFAULT_FIELDS[kind]], hasLoggedSets: false, isCustom: false, sets, ...over,
 });
 
 const units = { weight: 'lb', distance: 'mi' } as const;

@@ -1,6 +1,19 @@
 import {
-  DEFAULT_FIELDS, FIELD_CHOICES, FIELDS, fieldFor, normalizeFields, parseFields, serializeFields, targetKeys, toggleField,
+  DEFAULT_FIELDS, FIELD_CHOICES, FIELDS, fieldFor, normalizeFields, parseFields, resolveFields, serializeFields, targetKeys, toggleField,
 } from '../fields';
+
+describe('resolveFields', () => {
+  it('takes the first stored list given, then falls back to the category default', () => {
+    expect(resolveFields('cardio', 'duration,steps', 'duration,distance,steps')).toEqual(['duration', 'steps']);
+    expect(resolveFields('cardio', null, undefined, 'duration,elevation')).toEqual(['duration', 'elevation']);
+    expect(resolveFields('cardio', null, null)).toEqual(['duration', 'distance']);
+    expect(resolveFields('strength')).toEqual(['weight', 'reps']);
+  });
+
+  it('skips a stored list with nothing it knows', () => {
+    expect(resolveFields('cardio', 'laps', 'duration')).toEqual(['duration']);
+  });
+});
 
 describe('parseFields', () => {
   it("falls back to the category's default when nothing is stored", () => {

@@ -188,7 +188,7 @@ describe('syncCatalog', () => {
 
   describe('fields', () => {
     const fieldsOf = async (db: Db, name: string) =>
-      (await db.getFirstAsync<{ fields: string | null }>('SELECT fields FROM exercises WHERE name = ?', [name]))!.fields;
+      (await db.getFirstAsync<{ builtin_fields: string | null }>('SELECT builtin_fields FROM exercises WHERE name = ?', [name]))!.builtin_fields;
     const withFields = (name: string, fields: FieldId[] | undefined): CatalogCategory[] =>
       CATALOG.map((c) => ({ ...c, exercises: c.exercises.map((e) => (e.name === name ? { ...e, fields } : e)) }));
 
@@ -206,10 +206,17 @@ describe('syncCatalog', () => {
       expect(await fieldsOf(db, 'Running')).toBeNull();
     });
 
+    it("leaves the default the user chose for a built-in alone", async () => {
+      const db = await createTestDb();
+      await db.runAsync("UPDATE exercises SET fields = 'duration,steps' WHERE name = 'Walking'");
+      await syncCatalog(db);
+      expect(await db.getFirstAsync("SELECT fields FROM exercises WHERE name = 'Walking'")).toEqual({ fields: 'duration,steps' });
+    });
+
     it("leaves a custom exercise with a built-in's name alone", async () => {
       const db = await createTestDb();
       await db.runAsync(
-        "INSERT INTO exercises (category_id, name, is_custom, fields) VALUES ((SELECT id FROM categories WHERE name = 'Cardio'), 'rucking', 1, 'duration')",
+        "INSERT INTO exercises (category_id, name, is_custom, builtin_fields) VALUES ((SELECT id FROM categories WHERE name = 'Cardio'), 'rucking', 1, 'duration')",
       );
       await syncCatalog(db, withExtra('Cardio', 'Rucking').map((c) => ({
         ...c, exercises: c.exercises.map((e) => (e.name === 'Rucking' ? { ...e, fields: ['duration', 'distance', 'elevation'] as FieldId[] } : e)),

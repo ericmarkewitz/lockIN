@@ -1,4 +1,4 @@
-import { addExercise, listCategoriesWithExercises } from '../exercises';
+import { addExercise, listCategoriesWithExercises, setDefaultFields } from '../exercises';
 import { getPlan, markPlanComplete, setPlanDay } from '../plan';
 import type { Workout } from '../types';
 import {
@@ -14,6 +14,7 @@ import {
   reorderWorkoutExercises,
   replaceWorkoutExercise,
   setRestDay,
+  setWorkoutExerciseFields,
   updateSet,
 } from '../workouts';
 import { findByName } from '@/test/helpers';
@@ -734,5 +735,45 @@ describe('exercises that record more than weight, reps, time and distance', () =
     const ex = (await ensureWorkout(db, MON)).exercises[0];
     expect(ex).toMatchObject({ fields: ['weight', 'duration'], targetDurationMin: 1 });
     expect(ex.sets.map((s) => s.targetReps)).toEqual([null, null, null]);
+  });
+});
+
+describe('what a day records for an exercise', () => {
+  async function walkPlanned(fields?: ('duration' | 'distance' | 'steps')[]) {
+    const db = await createTestDb();
+    const walk = await findByName(db, 'Walking');
+    await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: walk, fields }] });
+    return { db, walk };
+  }
+
+  it('starts from what the plan item records', async () => {
+    const { db } = await walkPlanned(['duration', 'steps']);
+    expect((await ensureWorkout(db, MON)).exercises[0]).toMatchObject({
+      fields: ['duration', 'steps'], defaultFields: ['duration', 'distance', 'steps'],
+    });
+  });
+
+  it("follows the exercise's default when neither the plan nor the day picked", async () => {
+    const { db, walk } = await walkPlanned();
+    await ensureWorkout(db, MON);
+    await setDefaultFields(db, walk, ['duration', 'steps']);
+    expect((await getWorkout(db, MON))!.exercises[0]).toMatchObject({ fields: ['duration', 'steps'], defaultFields: ['duration', 'steps'] });
+  });
+
+  it('changes it for that day only, keeping the day when the plan changes', async () => {
+    const { db, walk } = await walkPlanned();
+    const we = (await ensureWorkout(db, MON)).exercises[0];
+    await setWorkoutExerciseFields(db, we.id, ['steps', 'duration']);
+    expect((await getWorkout(db, MON))!.exercises[0]).toMatchObject({ fields: ['duration', 'steps'], defaultFields: ['duration', 'distance', 'steps'] });
+    expect((await ensureWorkout(db, '2026-11-09')).exercises[0].fields).toEqual(['duration', 'distance', 'steps']);
+    await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: walk, fields: ['duration'] }] });
+    await refreshUntouchedWorkouts(db, MON);
+    expect((await getWorkout(db, MON))!.exercises[0].fields).toEqual(['duration', 'steps']);
+  });
+
+  it("refuses fields the exercise's category doesn't offer", async () => {
+    const { db } = await walkPlanned();
+    const we = (await ensureWorkout(db, MON)).exercises[0];
+    await expect(setWorkoutExerciseFields(db, we.id, ['reps'])).rejects.toThrow('Reps is not available');
   });
 });

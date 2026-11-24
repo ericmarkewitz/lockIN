@@ -35,16 +35,23 @@ export type Targets = {
   targetCount?: number | null;
 };
 
-export type PlanItemInput = Targets & { exerciseId: number };
+export type PlanItemInput = Targets & {
+  exerciseId: number;
+  /** What this item records; left out or null, the exercise's default. */
+  fields?: readonly FieldId[] | null;
+};
 
-export type PlanItem = PlanItemInput & {
+export type PlanItem = Omit<PlanItemInput, 'fields'> & {
   id: number;
   position: number;
   exerciseName: string;
   isCustom: boolean;
   categoryName: string;
   categoryKind: CategoryKind;
+  /** What it records: its own pick, else the exercise's default. */
   fields: FieldId[];
+  /** What was picked for this item; null follows the exercise's default. */
+  ownFields: FieldId[] | null;
 };
 
 export type PlanDay = { weekday: number; isRest: boolean; items: PlanItem[] };
@@ -86,8 +93,10 @@ export type WorkoutExercise = {
   targetDurationMin: number | null;
   targetDistance: number | null;
   targetCount: number | null;
-  /** What it records, in the order shown. */
+  /** What it records on this day, in the order shown. */
   fields: FieldId[];
+  /** What the exercise records by default, to tell whether this day's differs. */
+  defaultFields: FieldId[];
   hasLoggedSets: boolean;
   /** Added by the user rather than seeded with the app. */
   isCustom: boolean;

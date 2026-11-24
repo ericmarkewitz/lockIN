@@ -1,12 +1,13 @@
 import type { Db } from '@/db/types';
-import { parseFields } from './fields';
+import { normalizeFields, resolveFields, serializeFields } from './fields';
 import type { CategoryKind, PlanDay, PlanItemInput } from './types';
 
 type ItemRow = {
   id: number; weekday: number; exercise_id: number; position: number;
   target_sets: number | null; target_reps: number | null;
   target_duration_min: number | null; target_distance: number | null; target_count: number | null;
-  exercise_name: string; exercise_is_custom: number; exercise_fields: string | null; category_name: string; category_kind: CategoryKind;
+  exercise_name: string; exercise_is_custom: number; category_name: string; category_kind: CategoryKind;
+  fields: string | null; exercise_fields: string | null; exercise_builtin_fields: string | null;
 };
 
 export async function getPlan(db: Db): Promise<PlanDay[]> {
@@ -14,7 +15,8 @@ export async function getPlan(db: Db): Promise<PlanDay[]> {
     'SELECT weekday, is_rest FROM plan_days ORDER BY weekday',
   );
   const items = await db.getAllAsync<ItemRow>(
-    `SELECT p.*, e.name AS exercise_name, e.is_custom AS exercise_is_custom, e.fields AS exercise_fields,
+    `SELECT p.*, e.name AS exercise_name, e.is_custom AS exercise_is_custom,
+       e.fields AS exercise_fields, e.builtin_fields AS exercise_builtin_fields,
        c.name AS category_name, c.kind AS category_kind
      FROM plan_items p JOIN exercises e ON e.id = p.exercise_id JOIN categories c ON c.id = e.category_id
      ORDER BY p.weekday, p.position`,
@@ -37,7 +39,8 @@ export async function getPlan(db: Db): Promise<PlanDay[]> {
         targetDurationMin: i.target_duration_min,
         targetDistance: i.target_distance,
         targetCount: i.target_count,
-        fields: parseFields(i.exercise_fields, i.category_kind),
+        fields: resolveFields(i.category_kind, i.fields, i.exercise_fields, i.exercise_builtin_fields),
+        ownFields: i.fields === null ? null : resolveFields(i.category_kind, i.fields),
       })),
   }));
 }
@@ -49,16 +52,29 @@ export async function setPlanDay(
 ): Promise<void> {
   if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) throw new Error(`Invalid weekday: ${weekday}`);
   if (day.isRest && day.items.length > 0) throw new Error('A rest day cannot have exercises');
+  // Checked first, so a bad item leaves the day as it was.
+  const fields: (string | null)[] = [];
+  for (const it of day.items) {
+    if (!it.fields) {
+      fields.push(null);
+      continue;
+    }
+    const cat = await db.getFirstAsync<{ kind: CategoryKind }>(
+      'SELECT c.kind FROM exercises e JOIN categories c ON c.id = e.category_id WHERE e.id = ?', [it.exerciseId],
+    );
+    if (!cat) throw new Error(`Unknown exercise ${it.exerciseId}`);
+    fields.push(serializeFields(normalizeFields(it.fields, cat.kind)));
+  }
   await db.withTransactionAsync(async () => {
     await db.runAsync('UPDATE plan_days SET is_rest = ? WHERE weekday = ?', [day.isRest ? 1 : 0, weekday]);
     await db.runAsync('DELETE FROM plan_items WHERE weekday = ?', [weekday]);
     for (const [position, it] of day.items.entries()) {
       await db.runAsync(
-        `INSERT INTO plan_items (weekday, exercise_id, position, target_sets, target_reps, target_duration_min, target_distance, target_count)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO plan_items (weekday, exercise_id, position, target_sets, target_reps, target_duration_min, target_distance, target_count, fields)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           weekday, it.exerciseId, position, it.targetSets ?? null, it.targetReps ?? null, it.targetDurationMin ?? null,
-          it.targetDistance ?? null, it.targetCount ?? null,
+          it.targetDistance ?? null, it.targetCount ?? null, fields[position],
         ],
       );
     }

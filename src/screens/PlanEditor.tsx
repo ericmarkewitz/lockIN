@@ -9,6 +9,7 @@ import { Icon, sym } from '@/components/Icon';
 import { ExerciseMotionFor } from '@/components/motion/ExerciseMotion';
 import { DragHandle, HANDLE_SIZE } from '@/components/DragHandle';
 import { ExercisePicker } from '@/components/ExercisePicker';
+import { RecordSheet } from '@/components/RecordSheet';
 import { UnitPill } from '@/components/UnitPill';
 import { KeyboardAvoider, keyboardScrollProps } from '@/components/KeyboardAvoider';
 import { DurationButton } from '@/components/DurationButton';
@@ -29,7 +30,9 @@ import { MAX_REPS, MAX_SETS, wheelOptions } from '@/lib/wheel';
 import { accentGradient, tint, useTheme } from '@/theme';
 
 type Draft = {
-  key: string; exerciseId: number; name: string; kind: CategoryKind; isCustom: boolean; fields: FieldId[];
+  key: string; exerciseId: number; name: string; kind: CategoryKind; isCustom: boolean;
+  /** What it records; `ownFields` is what was picked for it, null following the exercise's default. */
+  fields: FieldId[]; ownFields: FieldId[] | null;
   sets: string; reps: string; duration: string;
   /** Typed in `distanceUnit`. `savedDistance` is the stored miles, kept exactly if the text is left alone. */
   distance: string; distanceUnit: DistanceUnit; savedDistance: number | null;
@@ -73,6 +76,8 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
   // The setting, for exercises added in this session.
   const [distanceUnit, setDistanceUnit] = useState<DistanceUnit>('mi');
   const [pickerFor, setPickerFor] = useState<number | null>(null);
+  /** An exercise picked for a day, waiting on what it should record. */
+  const [adding, setAdding] = useState<{ weekday: number; exercise: Exercise } | null>(null);
   const [saving, setSaving] = useState(false);
   const [drag, setDrag] = useState<{ weekday: number; from: number; over: number; pitch: number } | null>(null);
   const dragRef = useRef(drag);
@@ -94,7 +99,8 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
             weekday: w,
             isRest: d.isRest,
             items: d.items.map((i) => ({
-              key: newKey(), exerciseId: i.exerciseId, name: i.exerciseName, kind: i.categoryKind, isCustom: i.isCustom, fields: i.fields,
+              key: newKey(), exerciseId: i.exerciseId, name: i.exerciseName, kind: i.categoryKind, isCustom: i.isCustom,
+              fields: i.fields, ownFields: i.ownFields,
               sets: txt(i.targetSets), reps: txt(i.targetReps), duration: txt(i.targetDurationMin),
               distance: txt(toDisplayField(distanceField(i.fields) ?? 'distance', i.targetDistance ?? null, { weight: 'lb', distance: unit })),
               distanceUnit: unit, savedDistance: i.targetDistance ?? null, count: txt(i.targetCount),
@@ -150,25 +156,25 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
     return 0;
   };
 
-  const addExercise = (weekday: number, e: Exercise) => {
-    const targets = defaultTargets(e);
+  const addExercise = (weekday: number, e: Exercise, fields: FieldId[]) => {
+    const targets = defaultTargets({ categoryKind: e.categoryKind, fields });
     patchDay(weekday, (d) => ({
       ...d,
       isRest: false,
       items: [...d.items, {
-        key: newKey(), exerciseId: e.id, name: e.name, kind: e.categoryKind, isCustom: e.isCustom, fields: e.fields,
+        key: newKey(), exerciseId: e.id, name: e.name, kind: e.categoryKind, isCustom: e.isCustom, fields, ownFields: fields,
         sets: txt(targets.targetSets), reps: txt(targets.targetReps), duration: '',
         distance: '', distanceUnit, savedDistance: null, count: '',
       }],
     }));
-    setPickerFor(null);
+    setAdding(null);
   };
 
   // Keep unsaved days in step with exercises edited or removed in the picker.
   const patchItems = (fn: (items: Draft[]) => Draft[]) =>
     setDays((ds) => ds && ds.map((d) => ({ ...d, items: fn(d.items) })));
   const renameDrafts = (e: Exercise) =>
-    patchItems((items) => items.map((i) => (i.exerciseId === e.id ? { ...i, name: e.name, fields: e.fields } : i)));
+    patchItems((items) => items.map((i) => (i.exerciseId === e.id ? { ...i, name: e.name, fields: i.ownFields ?? e.fields } : i)));
   const dropDrafts = (id: number) => patchItems((items) => items.filter((i) => i.exerciseId !== id));
 
   const save = async () => {
@@ -179,6 +185,7 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
           isRest: d.isRest,
           items: d.items.map((i) => ({
             exerciseId: i.exerciseId,
+            fields: i.ownFields,
             targetSets: i.kind === 'strength' ? parseNumber(i.sets) : null,
             targetReps: i.kind === 'strength' && i.fields.includes('reps') ? parseNumber(i.reps) : null,
             targetDurationMin: i.fields.includes('duration') ? parseNumber(i.duration) : null,
@@ -349,10 +356,24 @@ export function PlanEditor({ onSaved, onCancel }: { onSaved: () => void; onCance
       <ExercisePicker
         visible={pickerFor !== null}
         onClose={() => setPickerFor(null)}
-        onPick={(e) => pickerFor !== null && addExercise(pickerFor, e)}
+        onPick={(e) => {
+          if (pickerFor !== null) setAdding({ weekday: pickerFor, exercise: e });
+          setPickerFor(null);
+        }}
         onEdited={renameDrafts}
         onRemoved={dropDrafts}
       />
+      {adding && (
+        <RecordSheet
+          exerciseName={adding.exercise.name}
+          kind={adding.exercise.categoryKind}
+          initial={adding.exercise.fields}
+          confirmLabel="Add"
+          confirmA11yLabel={`Add ${adding.exercise.name} to the plan`}
+          onConfirm={(fields) => addExercise(adding.weekday, adding.exercise, fields)}
+          onClose={() => setAdding(null)}
+        />
+      )}
     </KeyboardAvoider>
   );
 }

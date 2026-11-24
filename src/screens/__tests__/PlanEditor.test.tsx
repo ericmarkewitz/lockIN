@@ -16,6 +16,9 @@ const pickTargets = async (field: string, sets: number, reps: number) => {
   await fireEvent.press(screen.getByLabelText('Done'));
 };
 
+/** Adds the exercise just picked, recording what the "What to record" sheet starts on. */
+const confirmRecords = async () => fireEvent.press(await screen.findByLabelText(/ to the plan$/));
+
 describe('PlanEditor', () => {
   it('sums up the week above the days and keeps it in step with edits', async () => {
     const db = await createTestDb();
@@ -42,6 +45,7 @@ describe('PlanEditor', () => {
     await renderWithDb(<PlanEditor onSaved={jest.fn()} />, db);
     await fireEvent.press(await screen.findByLabelText('Add exercise to Monday'));
     await fireEvent.press(await screen.findByLabelText('Add Squat'));
+    await confirmRecords();
     const field = await screen.findByLabelText('1 Squat sets and reps');
     expect(within(field).getByText('3 × 10')).toBeTruthy();
 
@@ -58,6 +62,7 @@ describe('PlanEditor', () => {
     await fireEvent.press(await screen.findByLabelText('Add exercise to Monday'));
     await fireEvent.press(await screen.findByLabelText('Category Cardio'));
     await fireEvent.press(await screen.findByLabelText('Add Running'));
+    await confirmRecords();
     await fireEvent.press(await screen.findByLabelText('1 Running minutes'));
     await fireEvent.press(within(screen.getByLabelText('Hours')).getByText('1'));
     await fireEvent.press(within(screen.getByLabelText('Seconds')).getByText('20'));
@@ -76,6 +81,7 @@ describe('PlanEditor', () => {
     await renderWithDb(<PlanEditor onSaved={onSaved} />, db);
     await fireEvent.press(await screen.findByLabelText('Add exercise to Monday'));
     await fireEvent.press(await screen.findByLabelText('Add Squat'));
+    await confirmRecords();
     await fireEvent.press(await screen.findByLabelText('1 Squat sets and reps'));
     await fireEvent.press(within(screen.getByLabelText('Reps')).getByText('–'));
     await fireEvent.press(screen.getByLabelText('Done'));
@@ -103,6 +109,7 @@ describe('PlanEditor', () => {
     expect(within(screen.getByTestId('plan-day-2')).getByText('Nothing planned')).toBeTruthy();
     await fireEvent.press(screen.getByLabelText('Add exercise to Monday'));
     await fireEvent.press(await screen.findByLabelText('Add Lunge'));
+    await confirmRecords();
     expect(within(screen.getByTestId('plan-day-1')).getByText('2 exercises')).toBeTruthy();
   });
 
@@ -121,11 +128,13 @@ describe('PlanEditor', () => {
 
     await fireEvent.press(await screen.findByLabelText('Add exercise to Monday'));
     await fireEvent.press(await screen.findByLabelText('Add Bench Press'));
+    await confirmRecords();
     await pickTargets('1 Bench Press sets and reps', 4, 6);
 
     await fireEvent.press(screen.getByLabelText('Add exercise to Wednesday'));
     await fireEvent.press(await screen.findByLabelText('Category Cardio'));
     await fireEvent.press(await screen.findByLabelText('Add Running'));
+    await confirmRecords();
     await fireEvent.press(await screen.findByLabelText('3 Running minutes'));
     await fireEvent.press(within(screen.getByLabelText('Minutes')).getByText('30'));
     await fireEvent.press(screen.getByLabelText('Done'));
@@ -148,6 +157,7 @@ describe('PlanEditor', () => {
     await fireEvent.press(await screen.findByLabelText('Add exercise to Friday'));
     await fireEvent.changeText(await screen.findByLabelText('Search exercises'), 'Sled Push');
     await fireEvent.press(screen.getByLabelText('Create Sled Push'));
+    await confirmRecords();
     expect(await screen.findByText('Sled Push')).toBeTruthy();
   });
 
@@ -159,8 +169,10 @@ describe('PlanEditor', () => {
     await renderWithDb(<PlanEditor onSaved={jest.fn()} />, db);
     await fireEvent.press(await screen.findByLabelText('Add exercise to Monday'));
     await fireEvent.press(await screen.findByLabelText('Add Rak Pull'));
+    await confirmRecords();
     await fireEvent.press(screen.getByLabelText('Add exercise to Monday'));
     await fireEvent.press(await screen.findByLabelText('Add Sled Push'));
+    await confirmRecords();
 
     await fireEvent.press(screen.getByLabelText('Add exercise to Tuesday'));
     await fireEvent(await screen.findByLabelText('Add Rak Pull'), 'longPress');
@@ -184,6 +196,7 @@ describe('PlanEditor', () => {
     await renderWithDb(<PlanEditor onSaved={jest.fn()} />, db);
     await fireEvent.press(await screen.findByLabelText('Add exercise to Monday'));
     await fireEvent.press(await screen.findByLabelText('Add Squat'));
+    await confirmRecords();
     await fireEvent.press(await screen.findByLabelText('Remove Squat from Monday'));
     expect(screen.queryByLabelText('Remove Squat from Monday')).toBeNull();
   });
@@ -195,6 +208,7 @@ describe('PlanEditor', () => {
     for (const name of ['Squat', 'Leg Press', 'Lunge']) {
       await fireEvent.press(await screen.findByLabelText('Add exercise to Monday'));
       await fireEvent.press(await screen.findByLabelText(`Add ${name}`));
+      await confirmRecords();
     }
     await pickTargets('1 Lunge sets and reps', 5, 10);
 
@@ -216,6 +230,7 @@ describe('PlanEditor', () => {
     for (const name of ['Squat', 'Lunge']) {
       await fireEvent.press(await screen.findByLabelText('Add exercise to Monday'));
       await fireEvent.press(await screen.findByLabelText(`Add ${name}`));
+      await confirmRecords();
     }
     // Holding the handle stops the scroll view's own gesture from starting.
     const relations = () => (getByGestureTestId('drag-Squat-1') as { gestureRelations?: { blocksHandlers: number[] } }).gestureRelations;
@@ -238,6 +253,7 @@ describe('PlanEditor', () => {
     for (const name of ['Squat', 'Lunge']) {
       await fireEvent.press(await screen.findByLabelText('Add exercise to Monday'));
       await fireEvent.press(await screen.findByLabelText(`Add ${name}`));
+      await confirmRecords();
     }
     await fireEvent(screen.getByLabelText('Reorder Squat on Monday'), 'accessibilityAction', { nativeEvent: { actionName: 'moveUp' } });
     await fireEvent(screen.getByLabelText('Reorder Lunge on Monday'), 'accessibilityAction', { nativeEvent: { actionName: 'moveDown' } });
@@ -341,7 +357,52 @@ describe('PlanEditor', () => {
       await renderWithDb(<PlanEditor onSaved={jest.fn()} />, db);
       await fireEvent.press(await screen.findByLabelText('Add exercise to Monday'));
       await fireEvent.press((await screen.findAllByLabelText('Add Weighted Plank'))[0]);
+      await confirmRecords();
       expect(within(await screen.findByLabelText('1 Weighted Plank sets')).getByText('3 sets')).toBeTruthy();
+    });
+  });
+
+  describe('asking what to record when adding an exercise', () => {
+    async function pickWalking() {
+      const db = await createTestDb();
+      const onSaved = jest.fn();
+      await renderWithDb(<PlanEditor onSaved={onSaved} />, db);
+      await fireEvent.press(await screen.findByLabelText('Add exercise to Monday'));
+      await fireEvent.press(await screen.findByLabelText('Category Cardio'));
+      await fireEvent.press(await screen.findByLabelText('Add Walking'));
+      expect(await screen.findByText('What to record')).toBeTruthy();
+      return { db, onSaved };
+    }
+
+    it("starts on the exercise's default and plans what's picked", async () => {
+      const { db, onSaved } = await pickWalking();
+      expect(screen.getByLabelText('Record Steps').props.accessibilityState).toMatchObject({ selected: true });
+      await fireEvent.press(screen.getByLabelText('Record Distance (mi/km)'));
+      await fireEvent.press(screen.getByLabelText('Add Walking to the plan'));
+      expect(await screen.findByLabelText('1 Walking steps')).toBeTruthy();
+      expect(screen.queryByLabelText('1 Walking distance')).toBeNull();
+      await fireEvent.press(screen.getByText('Save plan'));
+      await waitFor(() => expect(onSaved).toHaveBeenCalled());
+      expect((await getPlan(db)).find((d) => d.weekday === 1)!.items[0]).toMatchObject({ ownFields: ['duration', 'steps'] });
+    });
+
+    it('adds nothing when cancelled', async () => {
+      await pickWalking();
+      await fireEvent.press(screen.getByText('Cancel'));
+      expect(screen.queryByText('What to record')).toBeNull();
+      expect(screen.queryByLabelText('1 Walking minutes')).toBeNull();
+    });
+
+    it('keeps what a saved item records when the plan is opened again', async () => {
+      const db = await createTestDb();
+      await setPlanDay(db, 1, { isRest: false, items: [{ exerciseId: await findByName(db, 'Walking'), fields: ['duration', 'steps'] }] });
+      const onSaved = jest.fn();
+      await renderWithDb(<PlanEditor onSaved={onSaved} />, db);
+      expect(await screen.findByLabelText('1 Walking steps')).toBeTruthy();
+      expect(screen.queryByLabelText('1 Walking distance')).toBeNull();
+      await fireEvent.press(screen.getByText('Save plan'));
+      await waitFor(() => expect(onSaved).toHaveBeenCalled());
+      expect((await getPlan(db)).find((d) => d.weekday === 1)!.items[0].ownFields).toEqual(['duration', 'steps']);
     });
   });
 });

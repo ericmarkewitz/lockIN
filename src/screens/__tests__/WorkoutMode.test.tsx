@@ -373,6 +373,17 @@ describe('WorkoutMode', () => {
       expect((await sets(db))[0]).toMatchObject({ durationMin: 90, count: 11, difficulty: 8 });
     });
 
+    it('changes what the exercise records mid-workout', async () => {
+      const db = await planOne('Walking');
+      expect(screen.queryByLabelText('Elevation')).toBeNull();
+      await fireEvent.press(screen.getByLabelText('Change what Walking records'));
+      await fireEvent.press(screen.getByLabelText('Record Elevation gain'));
+      await fireEvent.press(screen.getByLabelText('Save Walking'));
+      await fireEvent.press(await screen.findByText('Just this workout'));
+      expect(await screen.findByLabelText('Elevation')).toBeTruthy();
+      expect((await getWorkout(db, MON))!.exercises[0].fields).toEqual(['duration', 'distance', 'elevation', 'steps']);
+    });
+
     it('logs elevation in the unit of the distance', async () => {
       const db = await planOne('Hiking');
       expect(screen.getByText('ft')).toBeTruthy();

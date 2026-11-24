@@ -5,6 +5,7 @@ import { Keyboard, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, Vi
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { SafeAreaInsetsContext, type EdgeInsets } from 'react-native-safe-area-context';
 
+import { ChangeRecords } from '@/components/ChangeRecords';
 import { DifficultyButton } from '@/components/DifficultyButton';
 import { DurationButton } from '@/components/DurationButton';
 import { ExerciseMedia } from '@/components/ExerciseMedia';
@@ -83,6 +84,8 @@ export function WorkoutMode({ date }: { date: string }) {
   /** A running rest, and the exercise it followed (to say when the next set is a new lift). */
   const [rest, setRest] = useState<{ endsAt: number; afterExerciseId: number } | null>(null);
   const [switching, setSwitching] = useState(false);
+  /** Changing what the current exercise records for today. */
+  const [changing, setChanging] = useState(false);
 
   if (!data) return <View style={[styles.screen, { backgroundColor: t.bg }]} />;
 
@@ -204,6 +207,7 @@ export function WorkoutMode({ date }: { date: string }) {
                 onPrevious={index > 0 ? () => move(index - 1) : undefined}
                 upcoming={upcoming ?? undefined}
                 onSwitch={() => setSwitching(true)}
+                onChangeRecords={() => setChanging(true)}
               />
             ) : (
               <>
@@ -223,6 +227,7 @@ export function WorkoutMode({ date }: { date: string }) {
         )}
       </View>
       </View>
+      {changing && step && <ChangeRecords exercise={step.exercise} onDone={() => { setChanging(false); reload(); }} />}
       {switching && step && (
         <SwitchSheet
           current={step.exercise}
@@ -360,7 +365,7 @@ function TopBar({
 }
 
 function StepView({
-  step, top, exerciseCount, units, last, rest, onDone, onSkip, onPrevious, upcoming, onSwitch,
+  step, top, exerciseCount, units, last, rest, onDone, onSkip, onPrevious, upcoming, onSwitch, onChangeRecords,
 }: {
   step: Step;
   /** End and progress, drawn as the top row of the card. */
@@ -372,6 +377,8 @@ function StepView({
   upcoming?: WorkoutExercise;
   /** Opens the list of other exercises to do now; absent when there are none left. */
   onSwitch?: () => void;
+  /** Opens what this exercise records today, to change it. */
+  onChangeRecords: () => void;
 }) {
   const t = useTheme();
   const { exercise, set, setIndex } = step;
@@ -567,6 +574,15 @@ function StepView({
               {set.completed && <Pill icon={sym('checkmark.circle.fill', 'check_circle')} fallback="✓" text="Done" color={t.success} />}
               <View style={{ flex: 1 }} />
               {isStrength && <SetDots sets={exercise.sets} current={setIndex} />}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Change what ${exercise.exerciseName} records`}
+                onPress={onChangeRecords}
+                hitSlop={10}
+                style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
+              >
+                <Icon name={sym('slider.horizontal.3', 'tune')} size={16} color={t.muted} fallback="⋯" />
+              </Pressable>
             </View>
             {last && last.sets.length > 0 && (
               <View style={styles.lastRow}>

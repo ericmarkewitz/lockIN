@@ -14,6 +14,12 @@ const CHOICE_LABELS: Partial<Record<FieldId, string>> = {
 
 export const choiceLabel = (id: FieldId) => CHOICE_LABELS[id] ?? FIELDS[id].label;
 
+/** "time, distance and steps". */
+export function describeFields(fields: readonly FieldId[]): string {
+  const names = fields.map((f) => (f === 'duration' ? 'time' : FIELDS[f].label.toLowerCase()));
+  return names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+}
+
 /**
  * What an exercise records, picked from what its kind of category offers. Picking a count
  * (Steps, Routes…) replaces the one picked before, and the last field can't be turned off.

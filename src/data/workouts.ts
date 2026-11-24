@@ -1,6 +1,6 @@
 import { datesInRange, weekdayOf } from '@/lib/dates';
 import type { Db } from '@/db/types';
-import { parseFields } from './fields';
+import { normalizeFields, resolveFields, serializeFields, type FieldId } from './fields';
 import { LOGGED_SET } from './logged';
 import { getPlan, getPlanHistory } from './plan';
 import { DISTANCE_UNITS, getUnits, WEIGHT_UNITS, type DistanceUnit, type WeightUnit } from './settings';
@@ -12,7 +12,7 @@ type WeRow = {
   id: number; exercise_id: number; position: number; target_sets: number | null; target_reps: number | null;
   target_duration_min: number | null; target_distance: number | null; target_count: number | null;
   exercise_name: string; is_custom: number; category_name: string; category_kind: CategoryKind; subcategory: string | null;
-  fields: string | null; has_logged_sets: number;
+  fields: string | null; exercise_fields: string | null; exercise_builtin_fields: string | null; has_logged_sets: number;
 };
 type SetRow = {
   id: number; workout_exercise_id: number; set_number: number; target_reps: number | null; reps: number | null;
@@ -49,7 +49,8 @@ export async function getWorkout(db: Db, date: string): Promise<Workout | null> 
   );
   if (!w) return null;
   const wes = await db.getAllAsync<WeRow>(
-    `SELECT we.*, e.name AS exercise_name, e.is_custom, e.subcategory, e.fields, c.name AS category_name, c.kind AS category_kind,
+    `SELECT we.*, e.name AS exercise_name, e.is_custom, e.subcategory, e.fields AS exercise_fields,
+       e.builtin_fields AS exercise_builtin_fields, c.name AS category_name, c.kind AS category_kind,
        EXISTS (SELECT 1 FROM sets s WHERE s.workout_exercise_id = we.id AND ${LOGGED_SET}) AS has_logged_sets
      FROM workout_exercises we JOIN exercises e ON e.id = we.exercise_id JOIN categories c ON c.id = e.category_id
      WHERE we.workout_id = ? ORDER BY we.position, we.id`,
@@ -73,7 +74,8 @@ export async function getWorkout(db: Db, date: string): Promise<Workout | null> 
     targetDurationMin: we.target_duration_min,
     targetDistance: we.target_distance,
     targetCount: we.target_count,
-    fields: parseFields(we.fields, we.category_kind),
+    fields: resolveFields(we.category_kind, we.fields, we.exercise_fields, we.exercise_builtin_fields),
+    defaultFields: resolveFields(we.category_kind, we.exercise_fields, we.exercise_builtin_fields),
     hasLoggedSets: !!we.has_logged_sets,
     isCustom: !!we.is_custom,
     sets: sets.filter((s) => s.workout_exercise_id === we.id).map(toSet),
@@ -88,6 +90,8 @@ function initialSetCount(kind: CategoryKind, t: Targets): number {
 
 async function insertWorkoutExercise(
   db: Db, workoutId: number, exerciseId: number, position: number, t: Targets,
+  /** What this day records for it, e.g. its plan item's pick; null follows the exercise's default. */
+  fields: readonly FieldId[] | null = null,
 ): Promise<number> {
   const cat = await db.getFirstAsync<{ kind: CategoryKind }>(
     'SELECT c.kind FROM exercises e JOIN categories c ON c.id = e.category_id WHERE e.id = ?',
@@ -95,11 +99,11 @@ async function insertWorkoutExercise(
   );
   if (!cat) throw new Error(`Unknown exercise ${exerciseId}`);
   const { lastInsertRowId } = await db.runAsync(
-    `INSERT INTO workout_exercises (workout_id, exercise_id, position, target_sets, target_reps, target_duration_min, target_distance, target_count)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO workout_exercises (workout_id, exercise_id, position, target_sets, target_reps, target_duration_min, target_distance, target_count, fields)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       workoutId, exerciseId, position, t.targetSets ?? null, t.targetReps ?? null, t.targetDurationMin ?? null,
-      t.targetDistance ?? null, t.targetCount ?? null,
+      t.targetDistance ?? null, t.targetCount ?? null, fields && serializeFields(fields),
     ],
   );
   const n = initialSetCount(cat.kind, t);
@@ -136,7 +140,7 @@ export async function ensureWorkout(db: Db, date: string): Promise<Workout> {
       date, day.isRest ? 1 : 0,
     ]);
     for (const [i, item] of day.items.entries()) {
-      await insertWorkoutExercise(db, lastInsertRowId, item.exerciseId, i, item);
+      await insertWorkoutExercise(db, lastInsertRowId, item.exerciseId, i, item, item.ownFields);
     }
   });
   return (await getWorkout(db, date))!;
@@ -197,6 +201,24 @@ function markCustomizedByExercise(db: Db, workoutExerciseId: number) {
     'UPDATE workouts SET is_customized = 1 WHERE id = (SELECT workout_id FROM workout_exercises WHERE id = ?)',
     [workoutExerciseId],
   );
+}
+
+/**
+ * Changes what a day records for one of its exercises, leaving the exercise's default and the plan
+ * alone. Values already logged are kept. It counts as a change by hand, so plan edits keep it.
+ */
+export async function setWorkoutExerciseFields(db: Db, workoutExerciseId: number, fields: readonly FieldId[]): Promise<void> {
+  const cat = await db.getFirstAsync<{ kind: CategoryKind }>(
+    `SELECT c.kind FROM workout_exercises we JOIN exercises e ON e.id = we.exercise_id
+     JOIN categories c ON c.id = e.category_id WHERE we.id = ?`,
+    [workoutExerciseId],
+  );
+  if (!cat) throw new Error('Exercise not found in this workout');
+  const stored = serializeFields(normalizeFields(fields, cat.kind));
+  await db.withTransactionAsync(async () => {
+    await db.runAsync('UPDATE workout_exercises SET fields = ? WHERE id = ?', [stored, workoutExerciseId]);
+    await markCustomizedByExercise(db, workoutExerciseId);
+  });
 }
 
 /** Strength only: cardio, yoga and mobility log a single entry per exercise. */

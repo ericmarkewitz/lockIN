@@ -21,7 +21,8 @@ const UNDO_V10 = `UPDATE exercises SET name = 'Dumbbell Curl' WHERE name = 'Bice
   UPDATE exercises SET name = 'Barbell Row' WHERE name = 'Bent-Over Row' AND is_custom = 0`;
 
 // v14 runs after every older migration, so each replay below undoes it first.
-const UNDO_V14 = `ALTER TABLE exercises DROP COLUMN fields;
+const UNDO_V14 = `ALTER TABLE exercises DROP COLUMN fields; ALTER TABLE exercises DROP COLUMN builtin_fields;
+  ALTER TABLE plan_items DROP COLUMN fields; ALTER TABLE workout_exercises DROP COLUMN fields;
   ALTER TABLE sets DROP COLUMN count; ALTER TABLE sets DROP COLUMN elevation;
   ALTER TABLE sets DROP COLUMN score; ALTER TABLE sets DROP COLUMN difficulty;
   ALTER TABLE plan_items DROP COLUMN target_count; ALTER TABLE workout_exercises DROP COLUMN target_count`;
@@ -723,7 +724,9 @@ describe('migrations', () => {
 
     it('adds the new set values and count targets', async () => {
       const db = await upgradeFromV13();
-      expect(await columns(db, 'exercises')).toContain('fields');
+      expect(await columns(db, 'exercises')).toEqual(expect.arrayContaining(['fields', 'builtin_fields']));
+      expect(await columns(db, 'plan_items')).toContain('fields');
+      expect(await columns(db, 'workout_exercises')).toContain('fields');
       expect(await columns(db, 'sets')).toEqual(expect.arrayContaining(['count', 'elevation', 'score', 'difficulty']));
       expect(await columns(db, 'plan_items')).toContain('target_count');
       expect(await columns(db, 'workout_exercises')).toContain('target_count');
@@ -738,13 +741,15 @@ describe('migrations', () => {
         );
         await d.runAsync('INSERT INTO sets (workout_exercise_id, set_number, duration_min, distance) VALUES (?, 1, 40, 2)', [we]);
       });
-      expect(await db.getFirstAsync("SELECT fields FROM exercises WHERE name = 'Rucking'")).toEqual({ fields: null });
+      expect(await db.getFirstAsync("SELECT fields, builtin_fields FROM exercises WHERE name = 'Rucking'")).toEqual({ fields: null, builtin_fields: null });
+      expect(await db.getFirstAsync('SELECT fields FROM workout_exercises')).toEqual({ fields: null });
       expect(await db.getFirstAsync('SELECT duration_min, distance, count FROM sets')).toEqual({ duration_min: 40, distance: 2, count: null });
     });
 
     it('gives the built-ins that record something else their fields', async () => {
       const db = await upgradeFromV13();
-      const fields = async (name: string) => (await db.getFirstAsync<{ fields: string | null }>('SELECT fields FROM exercises WHERE name = ?', [name]))!.fields;
+      const fields = async (name: string) =>
+        (await db.getFirstAsync<{ builtin_fields: string | null }>('SELECT builtin_fields FROM exercises WHERE name = ?', [name]))!.builtin_fields;
       expect(await fields('Walking')).toBe('duration,distance,steps');
       expect(await fields('Weighted Plank')).toBe('weight,duration');
       expect(await fields('Bench Press')).toBeNull();

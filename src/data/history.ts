@@ -1,6 +1,6 @@
 import type { Db } from '@/db/types';
 import { estimateOneRepMax } from '@/lib/strength';
-import { parseFields, type FieldId } from './fields';
+import { resolveFields, type FieldId } from './fields';
 import { LOGGED_SET } from './logged';
 import type { CategoryKind } from './types';
 
@@ -39,14 +39,14 @@ export async function listLoggedWorkouts(
 
 export type LoggedExercise = {
   id: number; name: string; kind: CategoryKind; sessions: number; lastDate: string;
-  /** What it records now, which decides how its sessions are summed up. */
+  /** What it records by default now, which decides how its sessions are summed up. */
   fields: FieldId[];
 };
 
 /** Exercises with logged history, most recently performed first. */
 export async function listLoggedExercises(db: Db): Promise<LoggedExercise[]> {
-  const rows = await db.getAllAsync<Omit<LoggedExercise, 'fields'> & { fields: string | null }>(
-    `SELECT e.id, e.name, c.kind, e.fields, COUNT(DISTINCT w.id) AS sessions, MAX(w.date) AS lastDate
+  const rows = await db.getAllAsync<Omit<LoggedExercise, 'fields'> & { fields: string | null; builtin_fields: string | null }>(
+    `SELECT e.id, e.name, c.kind, e.fields, e.builtin_fields, COUNT(DISTINCT w.id) AS sessions, MAX(w.date) AS lastDate
      FROM sets s
      JOIN workout_exercises we ON we.id = s.workout_exercise_id
      JOIN workouts w ON w.id = we.workout_id
@@ -56,7 +56,7 @@ export async function listLoggedExercises(db: Db): Promise<LoggedExercise[]> {
      GROUP BY e.id
      ORDER BY lastDate DESC, e.name`,
   );
-  return rows.map((r) => ({ ...r, fields: parseFields(r.fields, r.kind) }));
+  return rows.map(({ builtin_fields, ...r }) => ({ ...r, fields: resolveFields(r.kind, r.fields, builtin_fields) }));
 }
 
 export type ExerciseSession = {
