@@ -171,6 +171,7 @@ export function WorkoutMode({ date }: { date: string }) {
       exercises={exercises}
       current={step?.exercise.id ?? null}
       onSet={!!step && !step.set.completed}
+      preview={!!step && !step.set.completed && !rest}
       onEnd={() => router.back()}
     />
   );
@@ -336,11 +337,13 @@ function SwitchSheet({
  * "Set 3 of 3" does. On the finish screen it's the sets done.
  */
 function TopBar({
-  steps, exercises, current, onSet, onEnd,
+  steps, exercises, current, onSet, preview, onEnd,
 }: {
   steps: Step[]; exercises: WorkoutExercise[]; current: number | null;
   /** Whether a set not done yet is showing, which then counts as the one you're on. */
   onSet: boolean;
+  /** Whether to show, see-through, how far the current exercise's capsule fills once this set is done. */
+  preview: boolean;
   onEnd: () => void;
 }) {
   const t = useTheme();
@@ -364,7 +367,17 @@ function TopBar({
           const on = e.id === current;
           return (
             <View key={e.id} style={[styles.capsule, { backgroundColor: on ? tint(t.primary, 0.25) : tint(t.text, 0.1) }]}>
-              <View style={[styles.capsuleFill, { width: `${share * 100}%`, backgroundColor: share === 1 ? t.success : t.primary }]} />
+              <View
+                testID={`capsule-fill-${e.exerciseName}`}
+                style={[styles.capsuleFill, { width: `${share * 100}%`, backgroundColor: share === 1 ? t.success : t.primary }]}
+              />
+              {/* The set you're on, see-through: what Done will add. */}
+              {on && preview && (
+                <View
+                  testID="capsule-preview"
+                  style={[styles.capsulePreview, { left: `${share * 100}%`, width: `${100 / e.sets.length}%`, backgroundColor: tint(t.primary, 0.45) }]}
+                />
+              )}
             </View>
           );
         })}
@@ -1011,6 +1024,7 @@ const styles = StyleSheet.create({
   topCount: { fontSize: 12, fontWeight: '700', fontVariant: ['tabular-nums'], minWidth: 30, textAlign: 'right' },
   capsule: { flex: 1, height: 6, borderRadius: 3, overflow: 'hidden' },
   capsuleFill: { height: '100%', borderRadius: 3 },
+  capsulePreview: { position: 'absolute', top: 0, bottom: 0, borderRadius: 3 },
   hero: { flex: 1, minHeight: 0, gap: 10 },
   heroTop: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 4 },
   switch: {
