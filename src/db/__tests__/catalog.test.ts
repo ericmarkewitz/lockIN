@@ -59,7 +59,7 @@ describe('CATALOG', () => {
   });
 
   it.each([
-    ['Lifts', 'Hack Squat', 'Legs'], ['Lifts', 'Kelso Shrug', 'Back'], ['Lifts', 'Dip', 'Chest'],
+    ['Lifts', 'Hack Squat', 'Legs'], ['Lifts', 'Kelso Shrug', 'Back'], ['Lifts', 'Back Extension', 'Back'], ['Lifts', 'Dip', 'Chest'],
     ['Lifts', 'Chest Press', 'Chest'], ['Lifts', 'Seated Shoulder Press', 'Shoulders'],
     ['Lifts', 'Incline Curl', 'Arms'], ['Lifts', 'Hammer Curl', 'Arms'],
     ['Lifts', 'Russian Twist', 'Core'], ['Lifts', 'Crunch', 'Core'], ['Lifts', 'Cable Crunch', 'Core'],

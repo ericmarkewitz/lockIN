@@ -56,7 +56,7 @@ export const CATALOG: CatalogCategory[] = [
       ...lifts('Chest', 'Bench Press', 'Incline Bench Press', ['Close-Grip Bench Press', 'Arms'], 'Pec Fly',
         ['Push-up', 'Arms'], ['Dip', 'Arms'], 'Chest Press'),
       ...lifts('Back', ['Deadlift', 'Legs'], 'Bent-Over Row', ['Pull-up', 'Arms'], 'Lat Pulldown',
-        'Seated Cable Row', 'Chest-Supported Row', ['Lat Pullover', 'Chest'], 'Kelso Shrug'),
+        'Seated Cable Row', 'Chest-Supported Row', ['Lat Pullover', 'Chest'], 'Kelso Shrug', ['Back Extension', 'Legs']),
       ...lifts('Shoulders', 'Overhead Press', 'Lateral Raise', 'Arnold Press', ['Rear Delt Fly', 'Back'],
         ['Face Pull', 'Back'], 'Seated Shoulder Press'),
       ...lifts('Arms', 'Bicep Curl', 'Tricep Pushdown', 'Tricep Extension', 'Skull Crusher',

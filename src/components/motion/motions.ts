@@ -259,6 +259,12 @@ export const MOTIONS: Record<string, Motion> = {
     scene: [line([26.5, 44.5], [38, 33], 3), line([32, 39], [32, FLOOR_Y]), line([24, FLOOR_Y], [40, FLOOR_Y], 2)],
     gear: [disc(at('hand1'), 3)],
   },
+  // On a 45° bench, hips over the pad and heels under the roller, back raised in line with the legs, arms crossed on the chest.
+  'Back Extension': {
+    pose: pose({ hip: [28, 36], torso: 135, arm1: [45, -135], leg1: [-45, -45], leg2: [-42, -42] }),
+    scene: [line([23, 46], [31, 38], 3), line([27, 42], [27, FLOOR_Y]), line([9, 57], [27, FLOOR_Y], 2)],
+    gear: [disc(at('foot1', -1.5, -2), 2)],
+  },
   // Lowered between parallel bars, elbows bent back, knees bent so the feet stay up.
   Dip: {
     pose: pose({ hip: [30, 40], torso: 175, arm1: [-40, 0], leg1: [5, -80], leg2: [8, -75] }),
